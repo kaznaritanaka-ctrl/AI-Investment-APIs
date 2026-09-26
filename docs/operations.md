@@ -1,0 +1,33 @@
+# 自動運転と例外対応
+
+通常: Cronが取得→R2証拠→正規化/検証→private D1→許可済みpublic D1→summary/outboxを実行する。agent_enabled=falseで完走する。価格変化が無くても翌日の観測行を残す。取得していない日を0や前日価格の新観測で埋めない。
+
+取得: sourceごと同時数1、20秒timeout（bodyを含む）、最大3試行、429 Retry-After、有限backoff。30秒を超えるRetry-Afterはその場で待ち続けずnext_attempt_atを記録。403・redirectは追わない。異なる実行スロットでの失敗が続くと24時間のsource circuitを開く。他ソースは続行する。
+
+watchdog: 同日予定runの欠落/未完了を検出。保存済みR2があるrunだけ再処理し、全ソースの再取得はしない。復旧は最大3回。欠測はmissingで残る。watchdog自身と日次Cronの双方が停止したケースはCloudflareのplatform health監視が必要で、外部死活監視は未接続。
+
+通知: summaryはprivate D1へ先に保存。状態・件数に変化があればoutboxを作り、同一状態の重複を抑制する。復旧も状態変化になる。Webhook未設定はnot_configured、失敗はpendingのまま保持、最大3送信試行。Webhook受信側はidempotency-keyで重複を防ぐ。Webhook URL、認証header、応答bodyはログに出さない。通知不達でもsummaryを失わない。
+
+品質: 欠損、未知tier、不正値、選定カタログの不完全性、大きな同条件変化を隔離。元証拠とprivate観測/品質イベントは保持。大幅変化を市場シグナルや誤りと断定しない。APIが前回正常値を返す場合はheld_atによるstale_reasonを表示。古い値は鮮度が回復したように更新しない。
+
+## 再実行と訂正
+
+同じsourceとscheduled_forの再実行は、完了済みならHTTPなしで終了。R2保存後のDB失敗は固定runキーから復旧。訂正は保存済みEvidenceをingestEvidenceへ別parser_versionで渡す。元のobserved_atを維持し、recorded_atを訂正時刻にする。旧行はUPDATE禁止triggerで保護。新しい観測IDから旧IDへsupersedes参照を張る。
+
+再解析も現在の取得/保存/分析権限を確認する。期限切れ、本文削除義務がある証拠は再利用しない。schema修正はテストとレビューを経る。現行public policy版を変更したら旧版をinactiveにし、新版で再審査。ライセンスや公開対象の自動昇格はしない。
+
+## 緊急公開停止
+
+管理者がpublic D1で source_publications の対象sourceを active=0, revoked=1 にし、その後private sourcesのsuspended=1とする。共通関数revokeSourceがこの順序を実装する。公開APIに管理操作口はない。全入力lineageの現在権限を照合するので派生も非表示。Cache-Control: no-storeで古いcacheを設けない。既に利用者が保存したコピーまでは回収できない。
+
+再許可は新policy版による明示レビュー。通常syncでrevokedを解除しない。停止を検証してから物理的な削除や保持義務を判断する。本番SQL操作は対象DBを確認して例外承認の下で実施する。
+
+## 保持・バックアップ・復元
+
+毎回の成功したprivate書込み後、正規化観測と変更イベント、policy版をprivate R2 archiveへ追記する。bodyを含むraw証拠とは別。archiveのSHA-256をR2 metadataに付ける。raw_artifactsのexpires_atはcollectorが削除し、監査metadataは残す。R2 lifecycleは孤立raw/未登録オブジェクトとarchiveの上限も担うため初期設定必須。
+
+D1はCloudflare Time Travel（Free 7日、Paid 30日）を一次復元手段とする。[公式復元資料](https://developers.cloudflare.com/d1/reference/time-travel/)。復元時はまず公開を停止し、対象時刻とDB IDを確認し、別環境で復元検証。private/publicを同じ復元境界へ合わせ、現在の権限設定を再適用してから公開する。古い権限を復元で復活させない。
+
+R2証拠が残る期間はparser再実行で履歴・公開投影を再構築できる。原SQL DB全体をR2から自動リストアするコマンド、archive-onlyの長期一括restoreと大規模移行は後続。現段階で災害復旧訓練済みとは主張しない。
+
+長期D1保存は観測数・indexを含む容量監視が必要。365日を超えるarchive保持や分割移行はrightsと容量を再確認する。削除義務が生じた場合はraw・archive・バックアップ・公開投影をすべて対象にする。

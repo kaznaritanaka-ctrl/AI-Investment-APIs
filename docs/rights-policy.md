@@ -1,0 +1,19 @@
+# 権限ルール
+
+9種類の権限は allowed / denied / review_required / expired。source設定に対象フィールド、条件、判断主体、根拠版、有効期間、保持日数を持つ。既知の明示ライセンスに対する実装ルールであり、新規の許諾をAIが作るものではない。
+
+収集にはautomated_collection、証拠/履歴保存にはprivate_storage、処理にはinternal_analysisが必要。公開にはpublic_display・normalized_redistribution・commercial_redistributionを要求する（将来の有料化でも原権利を失わないよう、初期公開はこの共通部分に限定）。派生は全入力のderived_redistributionも必要。外部LLM送信とraw配信は独立で、初期runtimeにはどちらも実装しない。
+
+ECBは統計ポリシーの原系列・metadata維持・出典表示を適用。併せて著作権条件3の加工明示を確認し、原系列を保持した上で、自前クロスレートと明示した計算・系譜を公開する。ECBの公表クロスとして表示しない。
+
+Models.devは公式サイトのopen-source database表明、API案内、TOML→API生成コード、root MITを合わせて、選定モデルの数値・識別子・条件のみに既知MITルールを適用する。第三者の著作物や直接取得権へ拡張しない。source設定の選定一覧以外、ロゴ、説明文は対象外。MIT通知をAPI metadataと第三者通知に付ける。メーカーの確認済み一次価格ではない。
+
+OpenRouter、GPU候補、将来分野はreview_required・disabled。APIの存在やドキュメントのCCライセンスをレスポンスデータの再配布権に読み替えない。
+
+公開policyの失効はAPI読取時にも判定する。緊急停止はpublic policyを先にinactiveへ変更し、その後private停止と再配信可否を整理する。source由来の派生もlineage判定で非表示。source再許可時は新policy版で再審査し、過去の公開版を自動復活させない。
+
+保持期間は初期の運用上限（ECB証拠365日、Models.dev投影証拠90日）。ライセンスにこの日数の上限があるとの主張ではない。法的な削除義務が発生したら復元用コピーも対象とし、本文を残さない削除監査記録を維持する。
+
+例外承認: 不明ソースの適用範囲の確認、新しい派生対象・取得対象フィールドの追加、有料サービス、本番配信、通知先接続。既知のECB条件に従う自前クロス計算は初期実装に含めた。日常の収集に承認は不要。
+
+policy・endpoint・選定範囲は同じpolicy版のまま書き換えられない。hash不一致は公開停止。初期valid_untilは2026-12-26（運用上の再確認期限でありライセンス自体の失効日の主張ではない）。失効前に根拠を再確認する例外タスクが必要で、放置した場合は自動停止する。

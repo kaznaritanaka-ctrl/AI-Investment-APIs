@@ -1,0 +1,73 @@
+{
+  "source_id": "models_dev",
+  "dataset_type": "ai_api_prices",
+  "operator": "Models.dev community",
+  "source_url": "https://models.dev/",
+  "documentation_url": "https://github.com/anomalyco/models.dev/blob/473c291c9993c0200505f7287bd37836712f4eaf/README.md",
+  "terms_url": "https://github.com/anomalyco/models.dev/blob/473c291c9993c0200505f7287bd37836712f4eaf/LICENSE",
+  "license_url": "https://github.com/anomalyco/models.dev/blob/473c291c9993c0200505f7287bd37836712f4eaf/LICENSE",
+  "endpoint": "https://models.dev/api.json?type=all",
+  "acquisition_method": "official_catalog_json_projected_evidence",
+  "authentication_required": false,
+  "native_currency": "USD",
+  "native_unit": "million_tokens",
+  "geography": [],
+  "native_frequency": "irregular_catalog_updates",
+  "expected_update_calendar": "daily observation; effective price dates unknown",
+  "expected_lag": "unknown",
+  "rights_checked_at": "2026-09-26T18:23:33.000Z",
+  "rights_evidence_ref": "docs/source-register.md#models_dev",
+  "attribution_text": "Models.dev community catalog. Copyright (c) 2025 models.dev. MIT; see /v1/methodology/licenses.",
+  "known_limitations": [
+    "Secondary community catalog, not verified first-party prices.",
+    "Two selected models only.",
+    "No logos, descriptions or provider URLs retained.",
+    "Cannot recover precision already lost in upstream JSON serialization."
+  ],
+  "enabled": true,
+  "adapter": "models_dev",
+  "selection": [
+    "mistral/mistral-large-latest",
+    "mistral/mistral-small-latest"
+  ],
+  "max_bytes": 16000000,
+  "max_records": 2,
+  "policy": {
+    "version": "models_dev-20260927-v2",
+    "rights": {
+      "automated_collection": "allowed",
+      "private_storage": "allowed",
+      "internal_analysis": "allowed",
+      "external_llm_processing": "review_required",
+      "public_display": "allowed",
+      "raw_redistribution": "review_required",
+      "normalized_redistribution": "allowed",
+      "derived_redistribution": "allowed",
+      "commercial_redistribution": "allowed"
+    },
+    "fields": [
+      "mistral/mistral-large-latest and mistral/mistral-small-latest identifiers",
+      "cost numeric tokens and tier conditions",
+      "limit.context",
+      "modalities",
+      "explicit model author"
+    ],
+    "conditions": [
+      "Copyright (c) 2025 models.dev; include MIT notice.",
+      "Generated catalog fields under root MIT only; exclude logos/descriptions.",
+      "No grant for direct provider collection or model weights."
+    ],
+    "valid_from": "2026-09-26T18:23:33.000Z",
+    "valid_until": "2026-12-26T00:00:00.000Z",
+    "retention_days": 90,
+    "retention_limit_days": null,
+    "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
+    "evidence_version": "models.dev git 473c291c9993c0200505f7287bd37836712f4eaf",
+    "evidence_refs": [
+      "https://github.com/anomalyco/models.dev/blob/473c291c9993c0200505f7287bd37836712f4eaf/LICENSE",
+      "https://models.dev/",
+      "https://github.com/anomalyco/models.dev/blob/473c291c9993c0200505f7287bd37836712f4eaf/packages/core/src/generate.ts",
+      "https://github.com/anomalyco/models.dev/blob/473c291c9993c0200505f7287bd37836712f4eaf/packages/web/script/build.ts"
+    ]
+  }
+}

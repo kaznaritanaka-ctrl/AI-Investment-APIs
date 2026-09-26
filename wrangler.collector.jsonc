@@ -1,0 +1,40 @@
+{
+  "name": "ai-investment-collector",
+  "main": "src/collector.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "triggers": {
+    "crons": [
+      "17 18 * * *",
+      "47 18 * * *"
+    ]
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "AGENT_ENABLED": "false",
+    "COLLECTION_CRON": "17 18 * * *",
+    "COLLECTION_HOUR": "18",
+    "COLLECTION_MINUTE": "17"
+  },
+  "d1_databases": [
+    {
+      "binding": "PRIVATE_DB",
+      "database_name": "ai-investment-private",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations/private"
+    },
+    {
+      "binding": "PUBLIC_DB",
+      "database_name": "ai-investment-public",
+      "database_id": "00000000-0000-0000-0000-000000000002",
+      "migrations_dir": "migrations/public"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "EVIDENCE",
+      "bucket_name": "ai-investment-evidence-private"
+    }
+  ]
+}

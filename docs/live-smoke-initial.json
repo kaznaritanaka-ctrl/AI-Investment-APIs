@@ -1,0 +1,27 @@
+{
+  "started_at": "2026-09-26T18:56:25.221Z",
+  "test_kind": "live_source_smoke_with_local_cloudflare_d1_r2",
+  "production_deployed": false,
+  "results": [
+    {
+      "source_id": "ecb",
+      "state": "complete",
+      "http_requests": 1,
+      "observations": 2,
+      "accepted": 2
+    },
+    {
+      "source_id": "models_dev",
+      "state": "quarantined",
+      "http_requests": 1,
+      "observations": 2,
+      "accepted": 0
+    },
+    {
+      "source_id": "openrouter",
+      "state": "policy_skipped",
+      "http_requests": 0
+    }
+  ],
+  "reason": "Initial selected Anthropic IDs absent from current catalog; partial catalog correctly quarantined. Scope revised explicitly to two existing Mistral entries under a new policy version."
+}

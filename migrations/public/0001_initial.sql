@@ -1,0 +1,11 @@
+PRAGMA foreign_keys=ON;
+CREATE TABLE source_publications (source_id TEXT NOT NULL, policy_version TEXT NOT NULL, active INTEGER NOT NULL CHECK(active IN (0,1)), revoked INTEGER NOT NULL DEFAULT 0, derived_allowed INTEGER NOT NULL CHECK(derived_allowed IN (0,1)), valid_from TEXT NOT NULL, valid_until TEXT, held_at TEXT, public_json TEXT NOT NULL, PRIMARY KEY(source_id,policy_version));
+CREATE TABLE publication_batches (batch_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('staging','complete','withdrawn')), created_at TEXT NOT NULL, completed_at TEXT);
+CREATE TABLE published_observations (seq INTEGER PRIMARY KEY AUTOINCREMENT, observation_id TEXT NOT NULL UNIQUE, batch_id TEXT NOT NULL REFERENCES publication_batches, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, dataset TEXT NOT NULL, entity_key TEXT NOT NULL, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, supersedes_observation_id TEXT, derived INTEGER NOT NULL DEFAULT 0, public_json TEXT NOT NULL);
+CREATE INDEX public_dataset_time ON published_observations(dataset,observed_at,seq);
+CREATE INDEX public_entity_time ON published_observations(dataset,entity_key,observed_at DESC,recorded_at DESC);
+CREATE INDEX public_source_policy ON published_observations(source_id,policy_version);
+CREATE TABLE published_lineage (observation_id TEXT NOT NULL REFERENCES published_observations(observation_id), input_observation_id TEXT NOT NULL, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, PRIMARY KEY(observation_id,input_observation_id));
+CREATE INDEX lineage_input_source ON published_lineage(source_id,policy_version);
+CREATE TABLE published_changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE, observation_id TEXT NOT NULL REFERENCES published_observations(observation_id), dataset TEXT NOT NULL, entity_key TEXT NOT NULL, observed_at TEXT NOT NULL, public_json TEXT NOT NULL);
+CREATE INDEX changes_dataset_time ON published_changes(dataset,observed_at,seq);
