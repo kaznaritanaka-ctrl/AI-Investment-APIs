@@ -11,3 +11,7 @@ TARGET休場（土日・元日・Good Friday・Easter Monday・5/1・12/25・12/
 APIのobservationsはリビジョンも含む監査履歴。latestは最新訂正版を返す。as_ofはobserved_atとrecorded_atの両方で切り、当時未認識の後日訂正を混入させない。cursorはpublic seq上限を固定し、新規追加に影響されにくいkeyset pagination。権利取り下げはsnapshotより優先する。
 
 coverageは選定したモデルと通貨に限定。世界市場・需要加重・実取引・稼働率・供給量の指標ではない。GPU料金とトークン料金から利益率や供給過剰を推定しない。
+
+## Phase 2
+
+GPUの定義は[gpu-market-v1](gpu-methodology.md)に分離します。FX/AIの比較条件・隔離基準はそのままです。GPUの実際の値動きと取得障害を分け、unknown、insufficient_data、partialを0にしません。方法IDはAPI/v1/methodology/gpu-market-v1でも返します。

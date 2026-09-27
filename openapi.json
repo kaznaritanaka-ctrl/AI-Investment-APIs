@@ -2,13 +2,1060 @@
   "openapi": "3.1.0",
   "info": {
     "title": "AI Investment APIs",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Research observations, not recommendations. Decimal strings. No universal data license. Public cache disabled for rights revocation."
   },
   "paths": {
+    "/v1/gpu/coverage": {
+      "get": {
+        "summary": "Current search coverage; partial is not inventory zero",
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "dataset",
+            "in": "query",
+            "required": false,
+            "description": "Dataset filter",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "fx",
+                "ai_api_prices",
+                "gpu_rental",
+                "gpu_secondary"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC timestamp; default snapshot minus 30 days",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC timestamp; interval at most 366 days",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum records",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque snapshot keyset cursor; keep filters unchanged, may change limit",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "Exact search scope hash",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; null is not zero.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Coverage"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "snapshot_as_of": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, interval or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching data or resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Read-only endpoint. Empty response body.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "const": "GET, HEAD"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Configured rate limiter rejected request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Public D1 unavailable; private state is not disclosed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/gpu/metrics": {
+      "get": {
+        "summary": "Comparable cohort statistics with sample sizes, exclusions and insufficient_data",
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "sku",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "dataset",
+            "in": "query",
+            "required": false,
+            "description": "Dataset filter",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "fx",
+                "ai_api_prices",
+                "gpu_rental",
+                "gpu_secondary"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC timestamp; default snapshot minus 30 days",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC timestamp; interval at most 366 days",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum records",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque snapshot keyset cursor; keep filters unchanged, may change limit",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "Exact search scope hash",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; null is not zero.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GPUMetric"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "snapshot_as_of": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, interval or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching data or resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Read-only endpoint. Empty response body.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "const": "GET, HEAD"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Configured rate limiter rejected request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Public D1 unavailable; private state is not disclosed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/gpu/comparisons": {
+      "get": {
+        "summary": "Persisted spot, generation and FX-linked JP-US comparisons; may be incomparable",
+        "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "sku",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "dataset",
+            "in": "query",
+            "required": false,
+            "description": "Dataset filter",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "fx",
+                "ai_api_prices",
+                "gpu_rental",
+                "gpu_secondary"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC timestamp; default snapshot minus 30 days",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive UTC timestamp; interval at most 366 days",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum records",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque snapshot keyset cursor; keep filters unchanged, may change limit",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "Exact search scope hash",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; null is not zero.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GPUMetric"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "snapshot_as_of": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, interval or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching data or resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Read-only endpoint. Empty response body.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "const": "GET, HEAD"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Configured rate limiter rejected request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Public D1 unavailable; private state is not disclosed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/gpu/catalog": {
+      "get": {
+        "summary": "Identification dictionary; no market coverage implied",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success; null is not zero.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, interval or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching data or resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Read-only endpoint. Empty response body.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "const": "GET, HEAD"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Configured rate limiter rejected request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Public D1 unavailable; private state is not disclosed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
-        "summary": "Public data availability, not collector operational health",
+        "summary": "Public data and last collector completion; external monitor status explicit",
         "parameters": [],
         "responses": {
           "200": {
@@ -716,6 +1763,106 @@
         "summary": "Append-only observation and correction history",
         "parameters": [
           {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "sku",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "contract",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "condition",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "basis",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
             "name": "dataset",
             "in": "query",
             "required": false,
@@ -724,7 +1871,9 @@
               "type": "string",
               "enum": [
                 "fx",
-                "ai_api_prices"
+                "ai_api_prices",
+                "gpu_rental",
+                "gpu_secondary"
               ]
             }
           },
@@ -976,8 +2125,108 @@
     },
     "/v1/latest": {
       "get": {
-        "summary": "Latest accepted revision per exact series (maximum 100)",
+        "summary": "Latest accepted revision per exact series (maximum 100); GPU only latest complete scope membership",
         "parameters": [
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "sku",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "contract",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "condition",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "basis",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
           {
             "name": "dataset",
             "in": "query",
@@ -987,7 +2236,9 @@
               "type": "string",
               "enum": [
                 "fx",
-                "ai_api_prices"
+                "ai_api_prices",
+                "gpu_rental",
+                "gpu_secondary"
               ]
             }
           },
@@ -1200,6 +2451,106 @@
         "summary": "Same-condition value changes",
         "parameters": [
           {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "sku",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "contract",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "condition",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "basis",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Exact GPU dimension filter; unknown values are not inferred",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
             "name": "dataset",
             "in": "query",
             "required": false,
@@ -1208,7 +2559,9 @@
               "type": "string",
               "enum": [
                 "fx",
-                "ai_api_prices"
+                "ai_api_prices",
+                "gpu_rental",
+                "gpu_secondary"
               ]
             }
           },
@@ -1695,6 +3048,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "gpu-market-v1",
                 "same-series-change-v1",
                 "ecb-original-v1",
                 "fx-cross-v1",
@@ -1890,7 +3244,9 @@
             "type": "string",
             "enum": [
               "fx",
-              "ai_api_prices"
+              "ai_api_prices",
+              "gpu_rental",
+              "gpu_secondary"
             ]
           },
           "schema_version": {
@@ -1963,8 +3319,23 @@
             "enum": [
               "advertised_quote",
               "reference_rate",
-              "derived"
+              "derived",
+              "observed_transaction",
+              "third_party_reported_transaction",
+              "modeled_estimate"
             ]
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "backfill": {
+            "type": "boolean"
+          },
+          "statistical_exclusions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "value": {
             "anyOf": [
@@ -2158,6 +3529,789 @@
                   "billing_notes",
                   "tax_status",
                   "platform_fee_status"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
+                  "offer_id": {
+                    "type": "string"
+                  },
+                  "country": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[A-Z]{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "region": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "region_evidence": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "accelerator_model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "vram_gb": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "form_factor": {
+                    "type": "string",
+                    "enum": [
+                      "SXM",
+                      "PCIe",
+                      "NVL",
+                      "unknown"
+                    ]
+                  },
+                  "interconnect": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "gpu_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "dedicated_or_shared": {
+                    "type": "string",
+                    "enum": [
+                      "dedicated",
+                      "shared",
+                      "unknown"
+                    ]
+                  },
+                  "contract_type": {
+                    "type": "string",
+                    "enum": [
+                      "on_demand",
+                      "spot",
+                      "reserved",
+                      "monthly",
+                      "unknown"
+                    ]
+                  },
+                  "interruptible": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "minimum_term": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "commitment": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "amount_decimal": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "billing_unit": {
+                    "type": "string",
+                    "enum": [
+                      "gpu_hour",
+                      "node_hour",
+                      "second",
+                      "month"
+                    ]
+                  },
+                  "includes_cpu_ram_storage": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "egress_notes": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "tax_status": {
+                    "type": "string",
+                    "enum": [
+                      "included",
+                      "excluded",
+                      "unknown"
+                    ]
+                  },
+                  "availability_status": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "unavailable",
+                      "unknown"
+                    ]
+                  },
+                  "availability_evidence": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "observation_basis": {
+                    "type": "string",
+                    "const": "advertised_quote"
+                  },
+                  "synthetic": {
+                    "type": "boolean"
+                  },
+                  "gpu_sku_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "module_generation": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "system_platform": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "identification_evidence": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "classification_version": {
+                    "type": "string"
+                  },
+                  "classification_status": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "candidate",
+                      "excluded"
+                    ]
+                  },
+                  "exclusion_reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "serving_provider": {
+                    "type": "string"
+                  },
+                  "sale_unit": {
+                    "type": "string",
+                    "enum": [
+                      "single_gpu",
+                      "multi_gpu_lot",
+                      "server",
+                      "rack",
+                      "unknown"
+                    ]
+                  },
+                  "price_scope": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "account_specific",
+                      "promotion",
+                      "unknown"
+                    ]
+                  },
+                  "minimum_gpu_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "network_conditions": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "availability_observed_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "availability_gpu_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "availability_guaranteed": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "origin_source_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "origin_offer_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "secondary_source": {
+                    "type": "boolean"
+                  },
+                  "evidence_pointer": {
+                    "type": "string"
+                  },
+                  "source_effective_date": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source_effective_until_date": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "tax_jurisdiction": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "evidence_grade": {
+                    "type": "string",
+                    "enum": [
+                      "source_reported",
+                      "synthetic"
+                    ]
+                  }
+                },
+                "required": [
+                  "provider",
+                  "offer_id",
+                  "country",
+                  "region",
+                  "region_evidence",
+                  "accelerator_model",
+                  "vram_gb",
+                  "form_factor",
+                  "interconnect",
+                  "gpu_count",
+                  "dedicated_or_shared",
+                  "contract_type",
+                  "interruptible",
+                  "minimum_term",
+                  "commitment",
+                  "amount_decimal",
+                  "currency",
+                  "billing_unit",
+                  "includes_cpu_ram_storage",
+                  "egress_notes",
+                  "tax_status",
+                  "availability_status",
+                  "availability_evidence",
+                  "observation_basis",
+                  "synthetic",
+                  "gpu_sku_id",
+                  "module_generation",
+                  "system_platform",
+                  "identification_evidence",
+                  "classification_version",
+                  "classification_status",
+                  "exclusion_reasons",
+                  "serving_provider",
+                  "sale_unit",
+                  "price_scope",
+                  "minimum_gpu_count",
+                  "network_conditions",
+                  "availability_observed_at",
+                  "availability_gpu_count",
+                  "availability_guaranteed",
+                  "origin_source_id",
+                  "origin_offer_id",
+                  "secondary_source",
+                  "evidence_pointer",
+                  "source_effective_date",
+                  "source_effective_until_date",
+                  "tax_jurisdiction",
+                  "evidence_grade"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "gpu_sku_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "accelerator_model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "vram_gb": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "form_factor": {
+                    "type": "string",
+                    "enum": [
+                      "SXM",
+                      "PCIe",
+                      "NVL",
+                      "unknown"
+                    ]
+                  },
+                  "module_generation": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "system_platform": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "identification_evidence": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "classification_version": {
+                    "type": "string"
+                  },
+                  "classification_status": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "candidate",
+                      "excluded"
+                    ]
+                  },
+                  "exclusion_reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "marketplace": {
+                    "type": "string"
+                  },
+                  "listing_id": {
+                    "type": "string"
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "used",
+                      "refurbished",
+                      "open_box",
+                      "new",
+                      "for_parts",
+                      "unknown"
+                    ]
+                  },
+                  "listing_format": {
+                    "type": "string",
+                    "enum": [
+                      "fixed_price",
+                      "auction",
+                      "best_offer",
+                      "unknown"
+                    ]
+                  },
+                  "sale_unit": {
+                    "type": "string",
+                    "enum": [
+                      "single_gpu",
+                      "multi_gpu_lot",
+                      "server",
+                      "rack",
+                      "unknown"
+                    ]
+                  },
+                  "gpu_count_in_lot": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "quantity_available_reported": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "asking_price": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "shipping_price": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  },
+                  "tax_status": {
+                    "type": "string",
+                    "enum": [
+                      "included",
+                      "excluded",
+                      "unknown"
+                    ]
+                  },
+                  "tax_jurisdiction": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "item_location": {
+                    "type": "object",
+                    "properties": {
+                      "country": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Z]{2}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "evidence": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "country",
+                      "evidence"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "delivery_region": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "warranty_status": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "source_listed_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "first_seen_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "last_seen_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "listing_state": {
+                    "type": "string",
+                    "enum": [
+                      "seen",
+                      "not_seen",
+                      "explicitly_ended",
+                      "explicitly_sold"
+                    ]
+                  },
+                  "observation_basis": {
+                    "type": "string",
+                    "enum": [
+                      "advertised_quote",
+                      "observed_transaction",
+                      "third_party_reported_transaction",
+                      "modeled_estimate"
+                    ]
+                  },
+                  "transaction_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "report_period": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "to": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "sample_count": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to",
+                          "sample_count"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "evidence_grade": {
+                    "type": "string",
+                    "enum": [
+                      "source_reported",
+                      "third_party_report",
+                      "synthetic"
+                    ]
+                  },
+                  "evidence_pointer": {
+                    "type": "string"
+                  },
+                  "origin_source_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "origin_offer_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "secondary_source": {
+                    "type": "boolean"
+                  },
+                  "synthetic": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "gpu_sku_id",
+                  "accelerator_model",
+                  "vram_gb",
+                  "form_factor",
+                  "module_generation",
+                  "system_platform",
+                  "identification_evidence",
+                  "classification_version",
+                  "classification_status",
+                  "exclusion_reasons",
+                  "marketplace",
+                  "listing_id",
+                  "condition",
+                  "listing_format",
+                  "sale_unit",
+                  "gpu_count_in_lot",
+                  "quantity_available_reported",
+                  "asking_price",
+                  "shipping_price",
+                  "currency",
+                  "tax_status",
+                  "tax_jurisdiction",
+                  "item_location",
+                  "delivery_region",
+                  "warranty_status",
+                  "source_listed_at",
+                  "first_seen_at",
+                  "last_seen_at",
+                  "listing_state",
+                  "observation_basis",
+                  "transaction_at",
+                  "report_period",
+                  "evidence_grade",
+                  "evidence_pointer",
+                  "origin_source_id",
+                  "origin_offer_id",
+                  "secondary_source",
+                  "synthetic"
                 ],
                 "additionalProperties": false
               },
@@ -2388,6 +4542,1005 @@
           "stale",
           "stale_reason",
           "fx_reference"
+        ],
+        "additionalProperties": false
+      },
+      "GPURental": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "offer_id": {
+            "type": "string"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region_evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "accelerator_model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vram_gb": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "form_factor": {
+            "type": "string",
+            "enum": [
+              "SXM",
+              "PCIe",
+              "NVL",
+              "unknown"
+            ]
+          },
+          "interconnect": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dedicated_or_shared": {
+            "type": "string",
+            "enum": [
+              "dedicated",
+              "shared",
+              "unknown"
+            ]
+          },
+          "contract_type": {
+            "type": "string",
+            "enum": [
+              "on_demand",
+              "spot",
+              "reserved",
+              "monthly",
+              "unknown"
+            ]
+          },
+          "interruptible": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "minimum_term": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commitment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount_decimal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "billing_unit": {
+            "type": "string",
+            "enum": [
+              "gpu_hour",
+              "node_hour",
+              "second",
+              "month"
+            ]
+          },
+          "includes_cpu_ram_storage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "egress_notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tax_status": {
+            "type": "string",
+            "enum": [
+              "included",
+              "excluded",
+              "unknown"
+            ]
+          },
+          "availability_status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "unknown"
+            ]
+          },
+          "availability_evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observation_basis": {
+            "type": "string",
+            "const": "advertised_quote"
+          },
+          "synthetic": {
+            "type": "boolean"
+          },
+          "gpu_sku_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "module_generation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "system_platform": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identification_evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "classification_version": {
+            "type": "string"
+          },
+          "classification_status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "candidate",
+              "excluded"
+            ]
+          },
+          "exclusion_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "serving_provider": {
+            "type": "string"
+          },
+          "sale_unit": {
+            "type": "string",
+            "enum": [
+              "single_gpu",
+              "multi_gpu_lot",
+              "server",
+              "rack",
+              "unknown"
+            ]
+          },
+          "price_scope": {
+            "type": "string",
+            "enum": [
+              "public",
+              "account_specific",
+              "promotion",
+              "unknown"
+            ]
+          },
+          "minimum_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "network_conditions": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "availability_observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "availability_gpu_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "availability_guaranteed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "origin_source_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_offer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secondary_source": {
+            "type": "boolean"
+          },
+          "evidence_pointer": {
+            "type": "string"
+          },
+          "source_effective_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_effective_until_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tax_jurisdiction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_grade": {
+            "type": "string",
+            "enum": [
+              "source_reported",
+              "synthetic"
+            ]
+          }
+        },
+        "required": [
+          "provider",
+          "offer_id",
+          "country",
+          "region",
+          "region_evidence",
+          "accelerator_model",
+          "vram_gb",
+          "form_factor",
+          "interconnect",
+          "gpu_count",
+          "dedicated_or_shared",
+          "contract_type",
+          "interruptible",
+          "minimum_term",
+          "commitment",
+          "amount_decimal",
+          "currency",
+          "billing_unit",
+          "includes_cpu_ram_storage",
+          "egress_notes",
+          "tax_status",
+          "availability_status",
+          "availability_evidence",
+          "observation_basis",
+          "synthetic",
+          "gpu_sku_id",
+          "module_generation",
+          "system_platform",
+          "identification_evidence",
+          "classification_version",
+          "classification_status",
+          "exclusion_reasons",
+          "serving_provider",
+          "sale_unit",
+          "price_scope",
+          "minimum_gpu_count",
+          "network_conditions",
+          "availability_observed_at",
+          "availability_gpu_count",
+          "availability_guaranteed",
+          "origin_source_id",
+          "origin_offer_id",
+          "secondary_source",
+          "evidence_pointer",
+          "source_effective_date",
+          "source_effective_until_date",
+          "tax_jurisdiction",
+          "evidence_grade"
+        ],
+        "additionalProperties": false
+      },
+      "GPUSecondary": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "gpu_sku_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "accelerator_model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vram_gb": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "form_factor": {
+            "type": "string",
+            "enum": [
+              "SXM",
+              "PCIe",
+              "NVL",
+              "unknown"
+            ]
+          },
+          "module_generation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "system_platform": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identification_evidence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "classification_version": {
+            "type": "string"
+          },
+          "classification_status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "candidate",
+              "excluded"
+            ]
+          },
+          "exclusion_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "marketplace": {
+            "type": "string"
+          },
+          "listing_id": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string",
+            "enum": [
+              "used",
+              "refurbished",
+              "open_box",
+              "new",
+              "for_parts",
+              "unknown"
+            ]
+          },
+          "listing_format": {
+            "type": "string",
+            "enum": [
+              "fixed_price",
+              "auction",
+              "best_offer",
+              "unknown"
+            ]
+          },
+          "sale_unit": {
+            "type": "string",
+            "enum": [
+              "single_gpu",
+              "multi_gpu_lot",
+              "server",
+              "rack",
+              "unknown"
+            ]
+          },
+          "gpu_count_in_lot": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity_available_reported": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "asking_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shipping_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "tax_status": {
+            "type": "string",
+            "enum": [
+              "included",
+              "excluded",
+              "unknown"
+            ]
+          },
+          "tax_jurisdiction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "item_location": {
+            "type": "object",
+            "properties": {
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "evidence": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "country",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          "delivery_region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "warranty_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_listed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "first_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "listing_state": {
+            "type": "string",
+            "enum": [
+              "seen",
+              "not_seen",
+              "explicitly_ended",
+              "explicitly_sold"
+            ]
+          },
+          "observation_basis": {
+            "type": "string",
+            "enum": [
+              "advertised_quote",
+              "observed_transaction",
+              "third_party_reported_transaction",
+              "modeled_estimate"
+            ]
+          },
+          "transaction_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report_period": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "to": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "sample_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "from",
+                  "to",
+                  "sample_count"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_grade": {
+            "type": "string",
+            "enum": [
+              "source_reported",
+              "third_party_report",
+              "synthetic"
+            ]
+          },
+          "evidence_pointer": {
+            "type": "string"
+          },
+          "origin_source_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_offer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secondary_source": {
+            "type": "boolean"
+          },
+          "synthetic": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gpu_sku_id",
+          "accelerator_model",
+          "vram_gb",
+          "form_factor",
+          "module_generation",
+          "system_platform",
+          "identification_evidence",
+          "classification_version",
+          "classification_status",
+          "exclusion_reasons",
+          "marketplace",
+          "listing_id",
+          "condition",
+          "listing_format",
+          "sale_unit",
+          "gpu_count_in_lot",
+          "quantity_available_reported",
+          "asking_price",
+          "shipping_price",
+          "currency",
+          "tax_status",
+          "tax_jurisdiction",
+          "item_location",
+          "delivery_region",
+          "warranty_status",
+          "source_listed_at",
+          "first_seen_at",
+          "last_seen_at",
+          "listing_state",
+          "observation_basis",
+          "transaction_at",
+          "report_period",
+          "evidence_grade",
+          "evidence_pointer",
+          "origin_source_id",
+          "origin_offer_id",
+          "secondary_source",
+          "synthetic"
+        ],
+        "additionalProperties": false
+      },
+      "Coverage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "snapshot_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "dataset": {
+            "type": "string",
+            "enum": [
+              "gpu_rental",
+              "gpu_secondary"
+            ]
+          },
+          "data_origin": {
+            "type": "string",
+            "enum": [
+              "synthetic",
+              "live"
+            ]
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "missing_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observed_offer_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "received_api_records": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "source_reported_total": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "methodology": {
+            "type": "string",
+            "const": "gpu-market-v1"
+          },
+          "market_representative": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "source_id",
+          "dataset",
+          "data_origin",
+          "coverage",
+          "missing_reason",
+          "observed_offer_count",
+          "received_api_records",
+          "source_reported_total",
+          "methodology",
+          "market_representative"
+        ],
+        "additionalProperties": false
+      },
+      "GPUMetric": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "metric_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cohort_summary",
+              "spot_difference",
+              "generation_ratio",
+              "jp_us"
+            ]
+          },
+          "dataset": {
+            "type": "string",
+            "enum": [
+              "gpu_rental",
+              "gpu_secondary"
+            ]
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "sample_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "insufficient_data",
+              "incomparable"
+            ]
+          },
+          "conditions": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "methodology": {
+            "type": "string",
+            "const": "gpu-market-v1"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "median": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "input_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "snapshot_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "observation_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_id": {
+                  "type": "string"
+                },
+                "policy_version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "snapshot_id",
+                "observation_id",
+                "source_id",
+                "policy_version"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "metric_id",
+          "kind",
+          "dataset",
+          "snapshot_id",
+          "sample_count",
+          "status",
+          "conditions",
+          "methodology",
+          "observed_at",
+          "recorded_at",
+          "input_refs"
         ],
         "additionalProperties": false
       }

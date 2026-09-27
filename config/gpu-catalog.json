@@ -1,0 +1,164 @@
+{
+  "version": "20260927.1",
+  "checked_at": "2026-09-27T12:07:26.000Z",
+  "description": "Identity dictionary only; no live market observations implied. Unknown SKU attributes remain null.",
+  "families": [
+    {
+      "model": "B300",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "B200",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "H200",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "H100",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "A100",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "V100",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "L40S",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "L40",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "RTX A6000",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "RTX 6000 Ada",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "RTX PRO 6000",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "MI300X",
+      "vendor": "AMD",
+      "collection_status": "not_connected"
+    }
+  ],
+  "skus": [
+    {
+      "gpu_sku_id": "nvidia-a100-80gb-pcie",
+      "model": "A100",
+      "vram_gb": "80",
+      "form_factor": "PCIe",
+      "module_generation": null,
+      "system_platform": null,
+      "specification_source_ref": "https://www.nvidia.com/en-us/data-center/a100/",
+      "vendor": "NVIDIA",
+      "architecture_family": null,
+      "gpu_count": 1
+    },
+    {
+      "gpu_sku_id": "nvidia-a100-80gb-sxm4",
+      "model": "A100",
+      "vram_gb": "80",
+      "form_factor": "SXM",
+      "module_generation": "SXM4",
+      "system_platform": null,
+      "specification_source_ref": "https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/a100/pdf/nvidia-a100-datasheet-nvidia-us-2188504-web.pdf",
+      "vendor": "NVIDIA",
+      "architecture_family": null,
+      "gpu_count": 1
+    },
+    {
+      "gpu_sku_id": "nvidia-h100-80gb-sxm5",
+      "model": "H100",
+      "vram_gb": "80",
+      "form_factor": "SXM",
+      "module_generation": "SXM5",
+      "system_platform": null,
+      "specification_source_ref": "https://docs.nvidia.com/ai-enterprise/release-8/latest/infra-software/vgpu/reference/hopper-h100.html",
+      "vendor": "NVIDIA",
+      "architecture_family": null,
+      "gpu_count": 1
+    },
+    {
+      "gpu_sku_id": "nvidia-h100-80gb-pcie",
+      "model": "H100",
+      "vram_gb": "80",
+      "form_factor": "PCIe",
+      "module_generation": null,
+      "system_platform": null,
+      "specification_source_ref": "https://docs.nvidia.com/ai-enterprise/release-8/latest/infra-software/vgpu/reference/hopper-h100.html",
+      "vendor": "NVIDIA",
+      "architecture_family": null,
+      "gpu_count": 1
+    },
+    {
+      "gpu_sku_id": "nvidia-h200-141gb-sxm",
+      "model": "H200",
+      "vram_gb": "141",
+      "form_factor": "SXM",
+      "module_generation": null,
+      "system_platform": "HGX",
+      "specification_source_ref": "https://docs.nvidia.com/enterprise-reference-architectures/hgx-ai-factory/latest/components.html",
+      "vendor": "NVIDIA",
+      "architecture_family": null,
+      "gpu_count": 1
+    },
+    {
+      "gpu_sku_id": "nvidia-b200-180gb-sxm",
+      "model": "B200",
+      "vram_gb": "180",
+      "form_factor": "SXM",
+      "module_generation": null,
+      "system_platform": "HGX",
+      "specification_source_ref": "https://docs.nvidia.com/enterprise-reference-architectures/hgx-ai-factory/latest/components.html",
+      "vendor": "NVIDIA",
+      "architecture_family": null,
+      "gpu_count": 1
+    },
+    {
+      "gpu_sku_id": "nvidia-b300-288gb-sxm6",
+      "model": "B300",
+      "vram_gb": "288",
+      "form_factor": "SXM",
+      "module_generation": "SXM6",
+      "system_platform": "HGX",
+      "specification_source_ref": "https://docs.nvidia.com/nim/large-language-models/latest/supported-architectures.html",
+      "vendor": "NVIDIA",
+      "architecture_family": null,
+      "gpu_count": 1
+    }
+  ],
+  "systems": [
+    {
+      "system_id": "gb300-nvl72",
+      "model": "GB300 NVL72",
+      "sale_unit": "rack",
+      "gpu_sku_id": null,
+      "gpu_count": null,
+      "specification_status": "requires_system_specific_review",
+      "reason": "Never classify a rack as one B300 GPU."
+    }
+  ]
+}

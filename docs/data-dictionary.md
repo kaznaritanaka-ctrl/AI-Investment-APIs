@@ -15,3 +15,26 @@ FX: base_currency=EUR、quote_currency、rate_decimal、reference_rate_type=ECB_
 AI API: model_author/model_version/region/service_tier/provider_endpoint_idは不明ならnull。model_idとserving_providerとsourceを別にする。pricing_scope=provider_catalog（OpenRouter一覧fixtureはaggregated_catalog）。componentはinput/output/cache_read/cache_write/reasoning/input_audio/output_audio。通貨USD、Models.devはmillion_tokens、OpenRouter token。tier_conditionsとcache_ttl、tax_status、platform_fee_status、billing_notes、modality、context_limitを残す。未対応tier/課金構造は品質隔離し、無料と推定しない。
 
 GPU型・schema・fixtureは `src/gpu.ts` と `tests/fixtures/gpu.synthetic.json`。country/regionは提供場所の証拠が必要、unknownをUSにしない。advertised_quoteはavailabilityの証拠ではない。
+
+## Phase 2の追加
+
+| 項目/テーブル | 意味 |
+|---|---|
+| gpu_rental / gpu_secondary | レンタル提示額と中古提示額等を別dataset・別domain表で保持 |
+| gpu_sku_id / classification_version | 根拠付き辞書照合。不明はnull/candidate、統計除外理由付き |
+| sale_unit / gpu_count_in_lot | listing/server/rackとGPU台数を区別 |
+| price_scope | public / account_specific / promotion / unknown |
+| observation_basis | advertised_quote / observed_transaction / third_party_reported_transaction / modeled_estimateを区別 |
+| source_effective_date / until_date | 日付精度の有効範囲。UTC時刻を推測しない |
+| scope_hash / scope_json | query/filter/marketplace/sort/分類版/page条件等の固定取得範囲 |
+| snapshot / page / run | 日次実行、検索partitionの集合、ページcheckpoint。partialは0件でない |
+| gpu_snapshot_members | 固定のrecord IDと観測ID、比較cohort、統計適格性・除外理由 |
+| revises_snapshot_id / supersedes_observation_id | 元snapshot/観測を残した訂正関係 |
+| observed_at / recorded_at / backfill | 元資料の取得時刻と今回の知識記録時刻を分離。過去証拠の再解析を当日の新取得とはしない |
+| first_seen_at / last_seen_at | collectorの観測範囲。元の出品開始や滞留期間は推測しない |
+| not_seen | 次回の同一検索範囲で未観測。成約ではない |
+| gpu_metric_lineage | 入力snapshot・source/policy、必要時はFX原観測ID |
+| sample_count / observed_offer_count | 統計適格な独立観測数と観測offer/listing数。GPU市場在庫ではない |
+| availability_evidence | 状態が明示された割合と、その中のavailable割合。稼働率ではない |
+
+/publicのAPI契約は[OpenAPI](../openapi.json)、計算定義は[GPU方法](gpu-methodology.md)。

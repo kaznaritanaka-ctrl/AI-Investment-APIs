@@ -1,3 +1,5 @@
+import { parseGPUProjection } from './gpu-adapters';
+import { isGPU } from './gpu';
 import { parse as parseLossless } from 'lossless-json';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import {
@@ -82,6 +84,8 @@ export async function evidenceFromBody(
   };
 }
 export function parseEvidence(source: Source, evidence: Evidence): Parsed {
+  if (isGPU(source.dataset_type))
+    return { candidates: parseGPUProjection(source, evidence), issues: [] };
   if (source.adapter === 'ecb') return parseECB(evidence.body, source, evidence.observed_at);
   if (source.adapter === 'models_dev') return parseModels(evidence.body, source);
   if (source.adapter === 'openrouter') return parseOpenRouter(evidence.body);
@@ -269,6 +273,7 @@ export function parseOpenRouter(text: string): Parsed {
 }
 export function comparisonKey(c: Candidate): string {
   if (c.dataset === 'fx') return c.entity_key;
+  if (c.dataset !== 'ai_api_prices') throw new Error('use_gpu_comparison');
   const d = c.domain as AIPrice;
   return (
     c.entity_key +

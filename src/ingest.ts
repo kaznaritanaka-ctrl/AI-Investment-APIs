@@ -1,9 +1,16 @@
+import { isGPU } from './gpu';
+import { ingestGPUPage } from './gpu-store';
 import { parseEvidence, comparisonKey } from './adapters';
 import { assertPersistenceAllowed } from './policy';
 import { batches, hash, stable, D } from './util';
 import type { CollectorEnv, Evidence, Observation, Source, AIPrice, FXRate } from './schema';
 import { crossRate } from './fx';
 import { publish, type Change } from './publication';
+function legacyTable(dataset: string) {
+  if (dataset === 'fx') return 'fx_observations';
+  if (dataset === 'ai_api_prices') return 'ai_api_prices';
+  throw new Error('unsupported_legacy_dataset');
+}
 export const PARSER_VERSION = '20260927.1';
 function changedComponents(previous: Observation, current: Observation) {
   if (current.dataset === 'fx')
@@ -14,6 +21,8 @@ function changedComponents(previous: Observation, current: Observation) {
         after: (current.domain as FXRate).rate_decimal,
       },
     ];
+  if (current.dataset !== 'ai_api_prices' || previous.dataset !== 'ai_api_prices')
+    throw new Error('unsupported_legacy_dataset');
   const a = previous.domain as AIPrice,
     b = current.domain as AIPrice;
   return b.price_components.map((c) => ({
@@ -33,6 +42,8 @@ export async function ingestEvidence(
   now: string,
   parser = PARSER_VERSION,
 ) {
+  if (isGPU(s.dataset_type))
+    return ingestGPUPage(env, s, run, scheduled, artifactRef, evidence, now, parser);
   await assertPersistenceAllowed(env, s, now);
   if (evidence.source_id !== s.source_id || (await hash(evidence.body)) !== evidence.evidence_hash)
     throw new Error('evidence_integrity_failure');
@@ -76,7 +87,7 @@ export async function ingestEvidence(
       .first<{ metadata_json: string }>();
     if (existing) {
       const meta = JSON.parse(existing.metadata_json);
-      const table = c.dataset === 'fx' ? 'fx_observations' : 'ai_api_prices';
+      const table = legacyTable(c.dataset);
       const row = await env.PRIVATE_DB.prepare(
         'SELECT domain_json FROM ' + table + ' WHERE observation_id=?',
       )
@@ -93,7 +104,7 @@ export async function ingestEvidence(
       .first<{ metadata_json: string; observation_id: string }>();
     let prior: Observation | null = null;
     if (priorRow) {
-      const table = c.dataset === 'fx' ? 'fx_observations' : 'ai_api_prices';
+      const table = legacyTable(c.dataset);
       const domain = await env.PRIVATE_DB.prepare(
         'SELECT domain_json FROM ' + table + ' WHERE observation_id=?',
       )
@@ -199,7 +210,7 @@ export async function ingestEvidence(
           stable(domain),
         ),
       );
-    } else {
+    } else if (c.dataset === 'ai_api_prices') {
       const d = domain as AIPrice;
       statements.push(
         env.PRIVATE_DB.prepare('INSERT OR IGNORE INTO ai_api_prices VALUES (?,?,?,?)').bind(

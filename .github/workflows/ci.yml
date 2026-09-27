@@ -22,6 +22,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: node scripts/preflight.mjs --allow-unconfigured
       - run: pnpm test
       - run: pnpm test:runtime
       - run: pnpm build

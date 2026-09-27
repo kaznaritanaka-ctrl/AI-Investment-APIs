@@ -1,8 +1,12 @@
-import { URL as NodeURL } from 'node:url';
+import { applyMigrations } from './migrations';
 import { Miniflare, Log, LogLevel } from 'miniflare';
-import { readFile, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import type { CollectorEnv } from '../src/schema';
-export async function localEnv(environment: 'test' | 'development' = 'test', persist?: string) {
+export async function localEnv(
+  environment: 'test' | 'development' = 'test',
+  persist?: string,
+  through = Infinity,
+) {
   if (persist) await mkdir(persist, { recursive: true });
   const mf = new Miniflare({
     cf: false,
@@ -25,17 +29,7 @@ export async function localEnv(environment: 'test' | 'development' = 'test', per
     [env.PRIVATE_DB, 'private'],
     [env.PUBLIC_DB, 'public'],
   ] as const) {
-    const exists = await db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
-      .bind(name === 'private' ? 'sources' : 'source_publications')
-      .first();
-    if (!exists)
-      await db.exec(
-        await readFile(
-          new NodeURL('../migrations/' + name + '/0001_initial.sql', import.meta.url),
-          'utf8',
-        ),
-      );
+    await applyMigrations(db, name, through);
   }
   return { env, mf };
 }

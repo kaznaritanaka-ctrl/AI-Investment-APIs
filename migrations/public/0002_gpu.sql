@@ -1,0 +1,18 @@
+ALTER TABLE published_observations ADD COLUMN snapshot_id TEXT;
+ALTER TABLE published_observations ADD COLUMN gpu_sku_id TEXT;
+ALTER TABLE published_observations ADD COLUMN provider TEXT;
+ALTER TABLE published_observations ADD COLUMN country TEXT;
+ALTER TABLE published_observations ADD COLUMN region TEXT;
+ALTER TABLE published_observations ADD COLUMN contract_type TEXT;
+ALTER TABLE published_observations ADD COLUMN item_condition TEXT;
+ALTER TABLE published_observations ADD COLUMN basis TEXT;
+CREATE INDEX public_gpu_filters ON published_observations(dataset,gpu_sku_id,provider,region,observed_at,seq);
+CREATE INDEX public_snapshot_members ON published_observations(snapshot_id,observation_id);
+ALTER TABLE published_changes ADD COLUMN snapshot_id TEXT;
+ALTER TABLE published_changes ADD COLUMN event_kind TEXT NOT NULL DEFAULT 'price_change';
+CREATE TABLE published_coverage (seq INTEGER PRIMARY KEY AUTOINCREMENT, snapshot_id TEXT UNIQUE NOT NULL, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, dataset TEXT NOT NULL, scope_hash TEXT NOT NULL, state TEXT NOT NULL, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, completed_at TEXT, public_json TEXT NOT NULL);
+CREATE INDEX coverage_scope_time ON published_coverage(source_id,scope_hash,completed_at DESC,seq);
+CREATE TABLE published_gpu_metrics (seq INTEGER PRIMARY KEY AUTOINCREMENT, metric_id TEXT UNIQUE NOT NULL, snapshot_id TEXT NOT NULL, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, dataset TEXT NOT NULL, cohort_key TEXT NOT NULL, gpu_sku_id TEXT, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, state TEXT NOT NULL, public_json TEXT NOT NULL);
+CREATE INDEX gpu_metrics_series ON published_gpu_metrics(dataset,cohort_key,observed_at DESC,seq);
+CREATE TABLE published_metric_lineage (metric_id TEXT NOT NULL REFERENCES published_gpu_metrics(metric_id), input_key TEXT NOT NULL, input_snapshot_id TEXT, input_observation_id TEXT, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, PRIMARY KEY(metric_id,input_key));
+CREATE TABLE public_health (singleton INTEGER PRIMARY KEY CHECK(singleton=1), last_collector_completed_at TEXT, collection_enabled INTEGER NOT NULL, monitor_connected INTEGER NOT NULL DEFAULT 0);

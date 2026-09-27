@@ -13,7 +13,9 @@ const stateDir = resolve(process.env.AI_APIS_LOCAL_STATE_DIR ?? 'work/live/state
 const { env, mf } = await localEnv('development', stateDir);
 const results: unknown[] = [];
 try {
-  for (const source of activeSources) {
+  for (const source of activeSources.filter((s) =>
+    ['fx', 'ai_api_prices'].includes(s.dataset_type),
+  )) {
     const wall = performance.now(),
       cpu = process.cpuUsage();
     let requests = 0;

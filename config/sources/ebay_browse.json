@@ -1,0 +1,100 @@
+{
+  "source_id": "ebay_browse",
+  "dataset_type": "gpu_secondary",
+  "operator": "eBay",
+  "source_url": "https://www.ebay.com/",
+  "documentation_url": "https://developer.ebay.com/api-docs/buy/api-browse.html",
+  "terms_url": "https://developer.ebay.com/join/api-license-agreement",
+  "license_url": null,
+  "endpoint": "https://api.ebay.com/buy/browse/v1/item_summary/search",
+  "acquisition_method": "official_api",
+  "authentication_required": true,
+  "native_currency": null,
+  "native_unit": "listing_ask",
+  "geography": [],
+  "native_frequency": "unknown",
+  "expected_update_calendar": "unknown",
+  "expected_lag": "unknown",
+  "rights_checked_at": "2026-09-27T12:07:26.000Z",
+  "rights_evidence_ref": "docs/gpu-source-review.md#ebay_browse",
+  "attribution_text": "Source: eBay",
+  "known_limitations": [
+    "Not connected. Owner approval, field scope and retention review are required."
+  ],
+  "enabled": false,
+  "adapter": "ebay_browse",
+  "selection": [],
+  "max_bytes": 1000000,
+  "max_records": 50,
+  "policy": {
+    "version": "ebay_browse-20260927-review",
+    "rights": {
+      "automated_collection": "review_required",
+      "private_storage": "review_required",
+      "internal_analysis": "review_required",
+      "external_llm_processing": "review_required",
+      "public_display": "review_required",
+      "raw_redistribution": "review_required",
+      "normalized_redistribution": "review_required",
+      "derived_redistribution": "review_required",
+      "commercial_redistribution": "review_required"
+    },
+    "fields": [
+      "Unapproved field scope"
+    ],
+    "conditions": [
+      "No collection, storage or redistribution before explicit authorization."
+    ],
+    "valid_from": "2026-09-26T18:23:33.000Z",
+    "valid_until": null,
+    "retention_days": 90,
+    "retention_limit_days": null,
+    "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
+    "evidence_version": "Documentation reviewed 2026-09-27; no new rights approved",
+    "evidence_refs": [
+      "https://developer.ebay.com/api-docs/buy/api-browse.html",
+      "https://developer.ebay.com/join/api-license-agreement"
+    ]
+  },
+  "gpu": {
+    "owner_approval_ref": null,
+    "partitions": [
+      {
+        "id": "a100",
+        "query": {
+          "q": "NVIDIA A100",
+          "marketplace": "EBAY_US",
+          "filter": "conditions:{USED},buyingOptions:{FIXED_PRICE}",
+          "sort": "newlyListed"
+        },
+        "models": [
+          "A100"
+        ]
+      },
+      {
+        "id": "h100",
+        "query": {
+          "q": "NVIDIA H100",
+          "marketplace": "EBAY_US",
+          "filter": "conditions:{USED},buyingOptions:{FIXED_PRICE}",
+          "sort": "newlyListed"
+        },
+        "models": [
+          "H100"
+        ]
+      }
+    ],
+    "page_size": 50,
+    "max_pages": 100,
+    "pages_per_invocation": 1,
+    "snapshot_max_age_minutes": 360,
+    "retention": {
+      "evidence_days": null,
+      "archive_days": null,
+      "normalized_days": null,
+      "backup_days": null,
+      "reviewed_ref": null
+    },
+    "region_map": {}
+  }
+}

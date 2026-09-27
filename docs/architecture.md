@@ -24,3 +24,17 @@ API Workerはpublic D1のみをbindし、GET/HEAD以外を拒否する。AI runt
 2026-09-27確認のCloudflare制限: Workers Free CPU 10ms、memory 128MB、D1 50 queries/invocation・500MB/DB、Paid 1000 queries/invocation・10GB/DB、bound parameters 100。カタログの厳密JSON解析はFree CPUに収まると保証しない。クラウドCPU未測定。ローカル実測と本番の適合確認を分け、有料化は別承認。
 
 出典: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)、[D1 limits](https://developers.cloudflare.com/d1/platform/limits/)。GitHub ActionsはCIのみで、本番日次収集はCronを使う。
+
+## Phase 2の追加（2026-09-27）
+
+既存2 Worker / 2 D1 / private R2の構成を維持。source adapterとdataset dispatchを明示し、GPUをAI価格として扱わない。0001不変、0002でobservations.dataset CHECKと関連index/trigger/FKを保って拡張する。
+
+GPUのprivate保存はgpu_snapshots / gpu_pages / gpu_snapshot_members / gpu_rental / gpu_secondary / gpu_lifecycle_events。observationsの共通履歴とderived_observationsを継続使用し、gpu_metric_lineageでsnapshot入力とFX原観測を関連付ける。別の保存基盤は追加しない。
+
+Evidenceは許可した最小投影を先にR2へ固定保存する。page単位で再開し、最大20 SQL文のbatchはレコード境界で区切る。run leaseと永続checkpointで重複を防ぐ。公開priceはsnapshot単位のstaging/complete。private/publicの分散transactionには依存しない。部分取得のcoverageは別の安全なpublic投影とする。
+
+日次CronはFX/AIを処理し、GPU runを登録する。continuationは最終進捗時刻で公平に1source・1pageを再開し、保存済みsnapshotから統計を1cohortずつ確定する。watchdogは保存済み証拠だけを復旧する。6時間内に取れないpageはpartial/expired。新しい取得を過去の観測時刻へ偽装しない。
+
+公開GPU統計はpublished_gpu_metricsとpublished_metric_lineageに投影。全入力policyをread時にも検査する。snapshot membershipは固定され、訂正は別snapshot/observationとして追加。as_ofはrecorded/completed時刻を越える情報を返さない。public healthは最終collector完了時刻だけを投影し、外部監視の未接続を明示する。
+
+詳細は[gpu-methodology](gpu-methodology.md)、[runbook](cloudflare-runbook.md)、[P2計画](phase2-plan.md)。

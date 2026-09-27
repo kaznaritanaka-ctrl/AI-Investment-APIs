@@ -22,7 +22,8 @@
   "attribution_text": "Runpod",
   "known_limitations": [
     "Automated access and systematic compilation restrictions need API-scope review.",
-    "Secure/Community, host, GPU-count conditions must remain separate."
+    "Secure/Community, host, GPU-count conditions must remain separate.",
+    "Phase 2: official GraphQL Bearer authentication and gpuTypes price fields reviewed; region-specific comparable offer adapter remains unimplemented. No rights approved."
   ],
   "enabled": false,
   "adapter": "candidate",

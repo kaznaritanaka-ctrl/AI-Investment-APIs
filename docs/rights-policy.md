@@ -17,3 +17,13 @@ OpenRouter、GPU候補、将来分野はreview_required・disabled。APIの存�
 例外承認: 不明ソースの適用範囲の確認、新しい派生対象・取得対象フィールドの追加、有料サービス、本番配信、通知先接続。既知のECB条件に従う自前クロス計算は初期実装に含めた。日常の収集に承認は不要。
 
 policy・endpoint・選定範囲は同じpolicy版のまま書き換えられない。hash不一致は公開停止。初期valid_untilは2026-12-26（運用上の再確認期限でありライセンス自体の失効日の主張ではない）。失効前に根拠を再確認する例外タスクが必要で、放置した場合は自動停止する。
+
+## Phase 2の追加gate
+
+GPUは既存9区分に加え、owner_approval_ref、gpu_projection_v1のfield承認、retention.reviewed_refとevidence/archive/normalized/backupの個別日数を要求する。認証があること、公開APIであること、内部保存であることは許諾の代わりにしない。今回の新規sourceにallowedを付与していない。
+
+private-onlyは取得/保存/内部分析だけの許可で個別運転でき、public表示/再配布・派生gateを別に適用する。アカウント固有価格はpublic観測・統計から除く。出品IDの保持も用途許諾の対象であり、hashなら自由とは考えない。
+
+証拠とarchiveはsource別expiryとR2 lifecycle、正規化履歴は小さい削除単位の自動retention、バックアップはD1 Time Travelと復元手順を確認する。sourceの保持上限がある場合normalized＋backupも上限内とする。期限切れsnapshotは先にpublicをwithdrawし、関連派生値・差分・private行を段階的に削除する。保持削除はappend-onlyの訂正原則とは別の許諾義務であり、残存snapshotはpurged状態として記録する。
+
+権利停止は原価格だけでなく、入力snapshot/FXのpolicyに依存する指標も非公開にする。AIへソース原文を渡す例外処理は未実装で、external_llm_processingの許可を推測しない。

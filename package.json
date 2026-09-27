@@ -1,6 +1,6 @@
 {
   "name": "ai-investment-apis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,10 @@
     "smoke:live": "node scripts/run.mjs live --allow-network",
     "dev": "node scripts/run.mjs dev",
     "cost": "node scripts/cost-model.mjs",
-    "test:runtime": "node scripts/run.mjs runtime"
+    "test:runtime": "node scripts/run.mjs runtime",
+    "preflight": "node scripts/preflight.mjs",
+    "preflight:cloudflare": "node scripts/preflight.mjs --cloudflare-read-only",
+    "deploy:plan": "node scripts/preflight.mjs --plan"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",
