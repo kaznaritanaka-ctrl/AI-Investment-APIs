@@ -1,0 +1,59 @@
+{
+  "source_id": "ccir",
+  "dataset_type": "gpu_secondary",
+  "operator": "CCIR",
+  "source_url": "https://ccir.io/hardware",
+  "documentation_url": "https://ccir.io/hardware",
+  "terms_url": "https://ccir.io/hardware",
+  "license_url": null,
+  "endpoint": null,
+  "acquisition_method": "unconfirmed",
+  "authentication_required": false,
+  "native_currency": null,
+  "native_unit": null,
+  "geography": [],
+  "native_frequency": "unknown",
+  "expected_update_calendar": "unknown",
+  "expected_lag": "unknown",
+  "rights_checked_at": "2026-09-27T12:07:26.000Z",
+  "rights_evidence_ref": "docs/gpu-source-review.md#ccir",
+  "attribution_text": "Source: CCIR",
+  "known_limitations": [
+    "Not connected. Owner approval, field scope and retention review are required."
+  ],
+  "enabled": false,
+  "adapter": "candidate",
+  "selection": [],
+  "max_bytes": 1000000,
+  "max_records": 100,
+  "policy": {
+    "version": "ccir-20260927-review",
+    "rights": {
+      "automated_collection": "review_required",
+      "private_storage": "review_required",
+      "internal_analysis": "review_required",
+      "external_llm_processing": "review_required",
+      "public_display": "review_required",
+      "raw_redistribution": "review_required",
+      "normalized_redistribution": "review_required",
+      "derived_redistribution": "review_required",
+      "commercial_redistribution": "review_required"
+    },
+    "fields": [
+      "Unapproved field scope"
+    ],
+    "conditions": [
+      "No collection, storage or redistribution before explicit authorization."
+    ],
+    "valid_from": "2026-09-26T18:23:33.000Z",
+    "valid_until": null,
+    "retention_days": 90,
+    "retention_limit_days": null,
+    "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
+    "evidence_version": "Documentation reviewed 2026-09-27; no new rights approved",
+    "evidence_refs": [
+      "https://ccir.io/hardware",
+      "https://ccir.io/hardware"
+    ]
+  }
+}

@@ -32,3 +32,12 @@ assert(existsSync('pnpm-lock.yaml'));
 console.log(
   'Boundary/config checks passed: public DB only, source grants, no fixture import, no automatic deployment.',
 );
+
+if (JSON.parse(read('config/deployment.json')).stage === 'bootstrap') {
+  assert.deepEqual(collector.triggers.crons, []);
+  assert.equal(collector.vars.COLLECTION_ENABLED, 'false');
+}
+assert(!collector.routes?.length);
+assert(!Object.keys(api.vars ?? {}).some((k) => /SECRET|TOKEN|KEY|PRIVATE/.test(k)));
+assert(read('scripts/run.mjs').includes('--dry-run'));
+assert(!read('.github/workflows/ci.yml').includes('deploy --'));

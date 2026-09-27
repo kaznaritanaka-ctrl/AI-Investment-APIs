@@ -44,3 +44,9 @@ GPU型・adapter interfaceは src/gpu.ts。入力はpolicy版、証拠、提供�
 ## 後続台帳
 
 memory / electricity / rates_credit / capex_utilization / gpu_index は候補名のみ。operatorやendpointを捏造せずnull/未選定。権限9区分すべてreview_required、disabled。HBMの日次spot、GPU先物の実在/開始日/清算指数は未確認。報道値、推定、契約、実取引、提示を区別してから追加する。
+
+## Phase 2追補（2026-09-27）
+
+[GPU調査台帳](gpu-source-review.md)が最新のGPU確認結果です。Lambda/さくらのadapterを準備し、eBay Browse/Price of Compute/CCIRを登録しました。Runpod/Highresoはcandidateです。GPUの9権利区分は全件review_required、enabled=false。日本地域のさくら接続コードはsynthetic検証のみで、実接続済みではありません。
+
+GPU各sourceのowner承認、4種retention、利用目的、認証とproduction用途審査は別欄として設定します。FX/AIの既存許諾は変更していません。Phase 1のlive結果を今回の検証実績として再利用しません。

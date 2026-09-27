@@ -1,3 +1,5 @@
+import { isGPU } from './gpu';
+import { collectGPU } from './gpu-pipeline';
 import type { CollectorEnv, Source } from './schema';
 import { syncSource } from './publication';
 import { stable, hash, errorCode } from './util';
@@ -134,6 +136,10 @@ export async function watchdog(env: CollectorEnv, sources: Source[], slot: strin
       }
       if (['complete', 'quarantined', 'policy_skipped'].includes(row.state)) {
         results.push({ source_id: s.source_id, run_id: run, state: row.state });
+        continue;
+      }
+      if (isGPU(s.dataset_type)) {
+        results.push(await collectGPU(env, s, slot, { now: () => now, savedOnly: true }));
         continue;
       }
       // Recovery only from saved evidence. Never refetch every source from a watchdog.

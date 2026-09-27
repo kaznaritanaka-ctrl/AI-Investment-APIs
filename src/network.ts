@@ -1,4 +1,5 @@
-import type { Source } from './schema';
+import type { Source, CollectorEnv } from './schema';
+import { gpuRequestPlan, EBAY_OAUTH, type Partition, type RequestPlan } from './request-plan';
 import { canCollect } from './policy';
 export type Attempt = {
   attempt: number;
@@ -46,6 +47,10 @@ export async function fetchSource(
   if (!source.endpoint || fixedEndpoints[source.adapter] !== source.endpoint)
     throw new FetchFailure('endpoint_not_allowed');
   if (source.authentication_required) throw new FetchFailure('authentication_not_configured');
+  return fetchBounded(source, { url: source.endpoint, method: 'GET', headers: {} }, opt);
+}
+async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptions = {}) {
+  const now = opt.now ?? (() => new Date().toISOString());
   const fetcher = opt.fetcher ?? fetch,
     sleep = opt.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -59,11 +64,18 @@ export async function fetchSource(
       const headers = new Headers({
         accept: source.adapter === 'ecb' ? 'application/xml' : 'application/json',
       });
+      for (const [key, value] of Object.entries(plan.headers)) headers.set(key, value);
       if (opt.validators?.etag) headers.set('If-None-Match', opt.validators.etag);
       if (opt.validators?.last_modified)
         headers.set('If-Modified-Since', opt.validators.last_modified);
       const response = await untilAborted(
-        fetcher(source.endpoint, { headers, signal: controller.signal, redirect: 'manual' }),
+        fetcher(plan.url, {
+          method: plan.method,
+          body: plan.body,
+          headers,
+          signal: controller.signal,
+          redirect: 'manual',
+        }),
         controller.signal,
       );
       status = response.status;
@@ -164,4 +176,63 @@ export async function fetchSource(
     }
   }
   throw new FetchFailure('attempts_exhausted');
+}
+
+const oauthCache = new WeakMap<CollectorEnv, { access_token: string; expires_at: number }>();
+export async function fetchGPURequest(
+  s: Source,
+  env: CollectorEnv,
+  p: Partition,
+  page: number,
+  scheduled: string,
+  opt: NetworkOptions = {},
+) {
+  const now = opt.now ?? (() => new Date().toISOString());
+  if (!canCollect(s, now())) throw new FetchFailure('policy_blocked');
+  const plan = gpuRequestPlan(s, p, page, scheduled);
+  if (s.adapter === 'lambda') {
+    if (!env.LAMBDA_API_KEY) throw new FetchFailure('authentication_not_configured');
+    plan.headers.Authorization = 'Bearer ' + env.LAMBDA_API_KEY;
+  } else if (s.adapter === 'sakura_dok') {
+    if (!env.SAKURA_ACCESS_TOKEN || !env.SAKURA_ACCESS_SECRET)
+      throw new FetchFailure('authentication_not_configured');
+    plan.headers.Authorization =
+      'Basic ' + btoa(env.SAKURA_ACCESS_TOKEN + ':' + env.SAKURA_ACCESS_SECRET);
+  } else if (s.adapter === 'ebay_browse') {
+    if (!env.EBAY_CLIENT_ID || !env.EBAY_CLIENT_SECRET)
+      throw new FetchFailure('authentication_not_configured');
+    let token = oauthCache.get(env);
+    if (!token || token.expires_at <= Date.parse(now()) + 60000) {
+      const response = await fetchBounded(
+        { ...s, max_bytes: 65536 },
+        {
+          url: EBAY_OAUTH,
+          method: 'POST',
+          headers: {
+            Authorization: 'Basic ' + btoa(env.EBAY_CLIENT_ID + ':' + env.EBAY_CLIENT_SECRET),
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope',
+        },
+        opt,
+      );
+      const body = JSON.parse(response.text);
+      if (
+        typeof body.access_token !== 'string' ||
+        !Number.isFinite(body.expires_in) ||
+        body.expires_in <= 0
+      )
+        throw new FetchFailure('oauth_response_invalid');
+      token = {
+        access_token: body.access_token,
+        expires_at: Date.parse(now()) + body.expires_in * 1000,
+      };
+      oauthCache.set(env, token);
+    }
+    plan.headers.Authorization = 'Bearer ' + token.access_token;
+  }
+  // No response-supplied URL or credential is ever followed.
+  const response = await fetchBounded(s, plan, opt);
+  if (response.status === 304) throw new FetchFailure('gpu_unexpected_304');
+  return response;
 }

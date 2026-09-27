@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "account_id": null,
+  "zone_id": null,
+  "owned_domain": null,
+  "workers_plan": null,
+  "workers_plan_evidence_ref": null,
+  "notification_destination_configured": false,
+  "external_monitor_evidence_ref": null,
+  "deployment_controller": "manual_wrangler",
+  "deployment_approval_ref": null,
+  "cron_enable_approval_ref": null,
+  "retention_review_ref": null,
+  "d1_time_travel_days": null,
+  "stage": "bootstrap",
+  "public_approval_ref": null,
+  "legacy_retention": {
+    "ecb": {
+      "evidence_days": 365,
+      "archive_days": 365
+    },
+    "models_dev": {
+      "evidence_days": 90,
+      "archive_days": 365
+    }
+  }
+}

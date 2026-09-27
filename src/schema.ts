@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { GPURental, GPUSecondary } from './gpu';
 
 export const Rights = z.enum(['allowed', 'denied', 'review_required', 'expired']);
 export const rightsKeys = [
@@ -31,6 +32,41 @@ export const PolicySchema = z
     evidence_refs: z.array(z.string()).min(1),
   })
   .strict();
+
+export const GPUConfigSchema = z
+  .object({
+    owner_approval_ref: z.string().nullable(),
+    partitions: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(/^[a-z0-9_-]+$/),
+            query: z.record(z.string(), z.string()),
+            models: z.array(z.string()),
+          })
+          .strict(),
+      )
+      .max(16),
+    page_size: z.number().int().min(1).max(100),
+    max_pages: z.number().int().min(1).max(200),
+    pages_per_invocation: z.number().int().min(1).max(4),
+    snapshot_max_age_minutes: z.number().int().min(1).max(360),
+    retention: z
+      .object({
+        evidence_days: z.number().int().positive().nullable(),
+        archive_days: z.number().int().positive().nullable(),
+        normalized_days: z.number().int().positive().nullable(),
+        backup_days: z.number().int().positive().nullable(),
+        reviewed_ref: z.string().nullable(),
+      })
+      .strict(),
+    region_map: z.record(
+      z.string(),
+      z.object({ country: z.string().regex(/^[A-Z]{2}$/), evidence_ref: z.string() }).strict(),
+    ),
+  })
+  .strict();
+
 export const SourceSchema = z
   .object({
     source_id: z.string().regex(/^[a-z0-9_-]+$/),
@@ -38,6 +74,7 @@ export const SourceSchema = z
       'fx',
       'ai_api_prices',
       'gpu_rental',
+      'gpu_secondary',
       'memory',
       'electricity',
       'rates_credit',
@@ -63,7 +100,17 @@ export const SourceSchema = z
     attribution_text: z.string(),
     known_limitations: z.array(z.string()),
     enabled: z.boolean(),
-    adapter: z.enum(['ecb', 'models_dev', 'openrouter', 'candidate']),
+    adapter: z.enum([
+      'ecb',
+      'models_dev',
+      'openrouter',
+      'candidate',
+      'lambda',
+      'sakura_dok',
+      'ebay_browse',
+      'price_of_compute',
+    ]),
+    gpu: GPUConfigSchema.optional(),
     selection: z.array(z.string()),
     max_bytes: z.number().int().positive().max(32000000),
     max_records: z.number().int().positive().max(100),
@@ -123,18 +170,34 @@ export const FXSchema = z
 export type AIPrice = z.infer<typeof AISchema>;
 export type FXRate = z.infer<typeof FXSchema>;
 export type Candidate = {
-  dataset: 'fx' | 'ai_api_prices';
+  dataset: 'fx' | 'ai_api_prices' | 'gpu_rental' | 'gpu_secondary';
   entity_key: string;
   source_record_key: string;
   source_date: string | null;
   source_published_at: string | null;
   source_effective_at: string | null;
-  observation_basis: 'reference_rate' | 'advertised_quote';
+  observation_basis:
+    | 'reference_rate'
+    | 'advertised_quote'
+    | 'observed_transaction'
+    | 'third_party_reported_transaction'
+    | 'modeled_estimate';
   quality_flags: string[];
-  domain: AIPrice | FXRate;
+  domain: AIPrice | FXRate | GPURental | GPUSecondary;
 };
 export type Evidence = {
-  format: 'ecb_xml' | 'models_projection_v1' | 'openrouter_synthetic';
+  format: 'ecb_xml' | 'models_projection_v1' | 'openrouter_synthetic' | 'gpu_projection_v1';
+  gpu_page?: {
+    snapshot_id: string;
+    partition_id: string;
+    scope_hash: string;
+    page_number: number;
+    next_page: number | null;
+    reported_total: number | null;
+    received_count: number;
+    complete: boolean;
+    issues: string[];
+  };
   body: string;
   observed_at: string;
   response_status: number;
@@ -163,6 +226,8 @@ export type Observation = Candidate & {
   collector_version: string;
   parser_version: string;
   schema_version: '1';
+  snapshot_id?: string;
+  backfill?: boolean;
   data_origin: 'synthetic' | 'live';
   quality_status: 'accepted' | 'quarantined';
   supersedes_observation_id: string | null;
@@ -177,4 +242,12 @@ export type CollectorEnv = {
   COLLECTION_CRON?: string;
   COLLECTION_HOUR?: string;
   COLLECTION_MINUTE?: string;
+  COLLECTION_ENABLED?: string;
+  WATCHDOG_CRON?: string;
+  GPU_RESUME_CRON?: string;
+  LAMBDA_API_KEY?: string;
+  SAKURA_ACCESS_TOKEN?: string;
+  SAKURA_ACCESS_SECRET?: string;
+  EBAY_CLIENT_ID?: string;
+  EBAY_CLIENT_SECRET?: string;
 };

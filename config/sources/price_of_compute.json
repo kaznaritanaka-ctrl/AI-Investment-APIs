@@ -1,0 +1,104 @@
+{
+  "source_id": "price_of_compute",
+  "dataset_type": "gpu_rental",
+  "operator": "Price of Compute",
+  "source_url": "https://www.priceofcompute.com/",
+  "documentation_url": "https://www.priceofcompute.com/api",
+  "terms_url": "https://www.priceofcompute.com/api",
+  "license_url": null,
+  "endpoint": "https://priceofcompute.com/api/v1/prices/",
+  "acquisition_method": "official_api",
+  "authentication_required": false,
+  "native_currency": null,
+  "native_unit": null,
+  "geography": [],
+  "native_frequency": "unknown",
+  "expected_update_calendar": "unknown",
+  "expected_lag": "unknown",
+  "rights_checked_at": "2026-09-27T12:07:26.000Z",
+  "rights_evidence_ref": "docs/gpu-source-review.md#price_of_compute",
+  "attribution_text": "Source: Price of Compute",
+  "known_limitations": [
+    "Not connected. Owner approval, field scope and retention review are required."
+  ],
+  "enabled": false,
+  "adapter": "price_of_compute",
+  "selection": [],
+  "max_bytes": 1000000,
+  "max_records": 50,
+  "policy": {
+    "version": "price_of_compute-20260927-review",
+    "rights": {
+      "automated_collection": "review_required",
+      "private_storage": "review_required",
+      "internal_analysis": "review_required",
+      "external_llm_processing": "review_required",
+      "public_display": "review_required",
+      "raw_redistribution": "review_required",
+      "normalized_redistribution": "review_required",
+      "derived_redistribution": "review_required",
+      "commercial_redistribution": "review_required"
+    },
+    "fields": [
+      "Unapproved field scope"
+    ],
+    "conditions": [
+      "No collection, storage or redistribution before explicit authorization."
+    ],
+    "valid_from": "2026-09-26T18:23:33.000Z",
+    "valid_until": null,
+    "retention_days": 90,
+    "retention_limit_days": null,
+    "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
+    "evidence_version": "Documentation reviewed 2026-09-27; no new rights approved",
+    "evidence_refs": [
+      "https://www.priceofcompute.com/api",
+      "https://www.priceofcompute.com/api"
+    ]
+  },
+  "gpu": {
+    "owner_approval_ref": null,
+    "partitions": [
+      {
+        "id": "h100-sxm",
+        "query": {
+          "sku": "h100-sxm"
+        },
+        "models": []
+      },
+      {
+        "id": "a100-pcie-80gb",
+        "query": {
+          "sku": "a100-pcie-80gb"
+        },
+        "models": []
+      },
+      {
+        "id": "b200",
+        "query": {
+          "sku": "b200"
+        },
+        "models": []
+      },
+      {
+        "id": "b300",
+        "query": {
+          "sku": "b300"
+        },
+        "models": []
+      }
+    ],
+    "page_size": 50,
+    "max_pages": 1,
+    "pages_per_invocation": 1,
+    "snapshot_max_age_minutes": 360,
+    "retention": {
+      "evidence_days": null,
+      "archive_days": null,
+      "normalized_days": null,
+      "backup_days": null,
+      "reviewed_ref": null
+    },
+    "region_map": {}
+  }
+}

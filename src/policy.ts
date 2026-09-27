@@ -1,4 +1,30 @@
 import type { Source } from './schema';
+export function gpuAuthorizationReady(s: Source) {
+  if (!['gpu_rental', 'gpu_secondary'].includes(s.dataset_type)) return true;
+  const g = s.gpu;
+  if (
+    !g?.owner_approval_ref ||
+    !g.retention.reviewed_ref ||
+    !s.policy.fields.includes('gpu_projection_v1')
+  )
+    return false;
+  if (
+    s.policy.retention_limit_days &&
+    g.retention.normalized_days &&
+    g.retention.backup_days &&
+    g.retention.normalized_days + g.retention.backup_days > s.policy.retention_limit_days
+  )
+    return false;
+  return [
+    g.retention.evidence_days,
+    g.retention.archive_days,
+    g.retention.normalized_days,
+    g.retention.backup_days,
+  ].every(
+    (n) =>
+      n !== null && n > 0 && (!s.policy.retention_limit_days || n <= s.policy.retention_limit_days),
+  );
+}
 export function validPolicy(source: Source, now: string): boolean {
   const p = source.policy;
   return source.enabled && now >= p.valid_from && (!p.valid_until || now < p.valid_until);
@@ -6,6 +32,7 @@ export function validPolicy(source: Source, now: string): boolean {
 export function canCollect(source: Source, now: string): boolean {
   return (
     validPolicy(source, now) &&
+    gpuAuthorizationReady(source) &&
     ['automated_collection', 'private_storage', 'internal_analysis'].every(
       (k) => source.policy.rights[k as keyof typeof source.policy.rights] === 'allowed',
     )

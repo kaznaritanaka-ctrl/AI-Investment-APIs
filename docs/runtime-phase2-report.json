@@ -1,0 +1,20 @@
+{
+  "test_kind": "synthetic_workerd_scale",
+  "finished_at": "2026-09-27T13:37:32.807Z",
+  "observations": 1051,
+  "pages": 22,
+  "invocations": 23,
+  "max_batch": 20,
+  "max_sql_statements_per_invocation": 236,
+  "max_d1_calls_per_invocation": 45,
+  "total_r2_operations": 88,
+  "mock_http_requests": 44,
+  "max_response_bytes": 12340,
+  "rows_read_with_metadata": 46555,
+  "rows_written_with_metadata": 20494,
+  "d1_metadata_incomplete": true,
+  "local_workerd_elapsed_ms": 2453,
+  "cloud_workers_cpu_measured": false,
+  "production_deployed": false,
+  "external_data_requests": 0
+}

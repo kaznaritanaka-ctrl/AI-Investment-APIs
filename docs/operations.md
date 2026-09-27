@@ -31,3 +31,15 @@ D1はCloudflare Time Travel（Free 7日、Paid 30日）を一次復元手段と�
 R2証拠が残る期間はparser再実行で履歴・公開投影を再構築できる。原SQL DB全体をR2から自動リストアするコマンド、archive-onlyの長期一括restoreと大規模移行は後続。現段階で災害復旧訓練済みとは主張しない。
 
 長期D1保存は観測数・indexを含む容量監視が必要。365日を超えるarchive保持や分割移行はrightsと容量を再確認する。削除義務が生じた場合はraw・archive・バックアップ・公開投影をすべて対象にする。
+
+## Phase 2の運用
+
+初期状態はCron停止です。[Cloudflare runbook](cloudflare-runbook.md)の承認・preflight後だけ有効化します。GPUは日次runを自動登録し、continuationが1source・1pageを再開します。認証失効・403・長い429は理由と再試行時刻を保存し、他のsourceは継続します。page上限・capture window超過はpartialとして残し、CSVへ戻しません。
+
+public/v1/gpu/coverageでscopeと欠測理由を確認します。partialの間は新snapshotのpriceを公開しません。最新の完全snapshotを履歴として保持し、last observedが古い場合のfreshnessを返します。通常の大幅変動に手動承認は不要です。単位/lot/契約変更等の判断不能な例外だけreviewします。
+
+GPU訂正の内部入口はsrc/gpu-corrections.tsのcorrectGPUPageです。保存済み証拠、元snapshot、異なるparser版、review_ref、現在recorded_atを指定して1pageずつ再解析します。HTTP操作口はありません。元観測・membershipを変更せず、新snapshot/観測とsupersedesを追加します。失効・期限切れ証拠・policy不一致は使えません。古い実データを新規取得する一般backfillは未実装です。
+
+正規化retentionは1回につき1source/snapshot、最大50行を削除し、先にpublicをwithdrawします。raw/archiveのexpiry処理とsource別R2 lifecycleを併用します。大量削除の遅れが許諾期限を超えないよう、開始前のretention/capture容量審査で余裕を持たせます。復元時は公開停止→現行policy/retentionの適用→検証→再公開です。
+
+healthのlast_collector_completed_atはcollector処理が最後まで走った時刻で、全source成功や市場正常を保証しません。monitor_connected=0は外部監視未接続です。通知Webhook未設定は既存outboxにpendingで保存し、送信済みとはしません。collector自体が起動しない障害の検出には外部read-only監視を別途接続します。

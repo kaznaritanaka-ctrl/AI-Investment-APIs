@@ -1,3 +1,4 @@
+import { gpuAPI } from './gpu-api';
 import { visibleSQL, visibleJoin, MIT_NOTICE } from './publication';
 import { freshness } from './fx';
 import { hash, stable, isoTime } from './util';
@@ -24,9 +25,44 @@ function allowedParams(url: URL, allowed: string[]) {
   for (const k of url.searchParams.keys())
     assert(allowed.includes(k) && url.searchParams.getAll(k).length === 1);
 }
+const gpuFilterKeys = [
+  'source',
+  'sku',
+  'provider',
+  'country',
+  'region',
+  'contract',
+  'condition',
+  'basis',
+  'snapshot',
+];
+function gpuFilters(url: URL, prefix: string) {
+  const columns: Record<string, string> = {
+    source: 'source_id',
+    sku: 'gpu_sku_id',
+    provider: 'provider',
+    country: 'country',
+    region: 'region',
+    contract: 'contract_type',
+    condition: 'item_condition',
+    basis: 'basis',
+    snapshot: 'snapshot_id',
+  };
+  const filters: string[] = [],
+    values: string[] = [];
+  for (const key of gpuFilterKeys) {
+    const value = url.searchParams.get(key);
+    if (value !== null) {
+      assert(value.length > 0 && value.length <= 160);
+      filters.push(prefix + columns[key] + '=?');
+      values.push(value);
+    }
+  }
+  return { filters, values };
+}
 function dataset(url: URL) {
   const v = url.searchParams.get('dataset');
-  assert(v === null || ['fx', 'ai_api_prices'].includes(v));
+  assert(v === null || ['fx', 'ai_api_prices', 'gpu_rental', 'gpu_secondary'].includes(v));
   return v;
 }
 const encode = (o: unknown) =>
@@ -79,6 +115,7 @@ export async function handle(
       ).success
     )
       return error('rate_limited', 429);
+    if (path.startsWith('/v1/gpu/')) return await gpuAPI(url, env, now);
     if (path === '/openapi.json') return json(openapi);
     if (path === '/llms.txt')
       return new Response(
@@ -115,12 +152,23 @@ export async function handle(
       )
         .bind(now, now, now, now)
         .all();
+      const health =
+        path === '/health'
+          ? await env.PUBLIC_DB.prepare(
+              'SELECT last_collector_completed_at,collection_enabled,monitor_connected FROM public_health WHERE singleton=1',
+            ).first()
+          : null;
       return json(
         path === '/health'
           ? {
               status: rows.results.length ? 'public_data_available' : 'no_public_data',
               environment: env.ENVIRONMENT ?? 'unknown',
               datasets: rows.results,
+              collector: health ?? {
+                last_collector_completed_at: null,
+                collection_enabled: 0,
+                monitor_connected: 0,
+              },
             }
           : { schema_version: '1', data: rows.results },
       );
@@ -151,11 +199,14 @@ export async function handle(
         : error('no_observation_at_requested_time', 404);
     }
     if (path === '/v1/latest') {
-      allowedParams(url, ['dataset', 'entity']);
+      let asOf = url.searchParams.get('as_of') ?? now;
+      assert(isoTime(asOf) && Date.parse(asOf) <= Date.parse(now));
+      asOf = new Date(asOf).toISOString();
+      allowedParams(url, ['dataset', 'entity', 'as_of', ...gpuFilterKeys]);
       const ds = dataset(url),
         entity = url.searchParams.get('entity');
       assert(!entity || entity.length <= 300);
-      const values: unknown[] = [now, now, now, now, now, now, now],
+      const values: unknown[] = [now, now, now, now, asOf, asOf, asOf, asOf],
         filters: string[] = [];
       if (ds) {
         filters.push('dataset=?');
@@ -165,13 +216,16 @@ export async function handle(
         filters.push('entity_key=?');
         values.push(entity);
       }
+      const gf = gpuFilters(url, '');
+      filters.push(...gf.filters);
+      values.push(...gf.values);
       // Resolve supersession before entity filtering: a corrected condition may change its series key.
       const rows = await env.PUBLIC_DB.prepare(
-        'WITH eligible AS (SELECT o.observation_id,o.supersedes_observation_id,o.dataset,o.entity_key,o.observed_at,o.recorded_at,o.seq,o.public_json,p.held_at' +
+        'WITH eligible AS (SELECT o.observation_id,o.supersedes_observation_id,o.dataset,o.entity_key,o.source_id,o.snapshot_id,o.gpu_sku_id,o.provider,o.country,o.region,o.contract_type,o.item_condition,o.basis,o.observed_at,o.recorded_at,o.seq,o.public_json,p.held_at' +
           visibleJoin +
           'WHERE ' +
           visibleSQL +
-          ' AND o.observed_at<=? AND o.recorded_at<=? AND b.completed_at<=?), current AS (SELECT e.*,ROW_NUMBER() OVER(PARTITION BY e.dataset,e.entity_key ORDER BY e.observed_at DESC,e.recorded_at DESC,e.seq DESC) AS rn FROM eligible e WHERE NOT EXISTS (SELECT 1 FROM eligible n WHERE n.supersedes_observation_id=e.observation_id)) SELECT public_json,held_at FROM current WHERE rn=1' +
+          " AND o.observed_at<=? AND o.recorded_at<=? AND b.completed_at<=? AND (o.snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_coverage gc JOIN published_coverage newer ON newer.source_id=gc.source_id AND newer.scope_hash=gc.scope_hash WHERE gc.snapshot_id=o.snapshot_id AND newer.state='complete' AND newer.completed_at>gc.completed_at AND newer.completed_at<=?))), current AS (SELECT e.*,ROW_NUMBER() OVER(PARTITION BY e.dataset,e.source_id,e.entity_key ORDER BY e.observed_at DESC,e.recorded_at DESC,e.seq DESC) AS rn FROM eligible e WHERE NOT EXISTS (SELECT 1 FROM eligible n WHERE n.supersedes_observation_id=e.observation_id)) SELECT public_json,held_at FROM current WHERE rn=1" +
           (filters.length ? ' AND ' + filters.join(' AND ') : '') +
           ' ORDER BY dataset,entity_key LIMIT 100',
       )
@@ -180,12 +234,21 @@ export async function handle(
       return rows.results.length
         ? json({
             schema_version: '1',
-            data: rows.results.map((r) => decorate(r.public_json, now, r.held_at)),
+            data: rows.results.map((r) => decorate(r.public_json, asOf, r.held_at)),
           })
         : error('no_observation', 404);
     }
     if (path === '/v1/observations' || path === '/v1/changes') {
-      allowedParams(url, ['dataset', 'entity', 'from', 'to', 'cursor', 'limit']);
+      allowedParams(url, [
+        'dataset',
+        'entity',
+        'from',
+        'to',
+        'cursor',
+        'limit',
+        'as_of',
+        ...gpuFilterKeys,
+      ]);
       const kind = path.endsWith('changes') ? 'changes' : 'observations',
         ds = dataset(url),
         entity = url.searchParams.get('entity');
@@ -196,8 +259,12 @@ export async function handle(
       assert(limit >= 1 && limit <= 100);
       const token = url.searchParams.get('cursor'),
         cursor = token ? decode(token) : null;
-      const asOf = (cursor?.as_of as string) ?? now;
-      assert(typeof asOf === 'string' && isoTime(asOf) && asOf <= now, 'invalid_cursor');
+      let asOf = (cursor?.as_of as string) ?? url.searchParams.get('as_of') ?? now;
+      assert(
+        typeof asOf === 'string' && isoTime(asOf) && Date.parse(asOf) <= Date.parse(now),
+        'invalid_cursor',
+      );
+      asOf = new Date(asOf).toISOString();
       let from =
           url.searchParams.get('from') ?? new Date(Date.parse(asOf) - 30 * 86400000).toISOString(),
         to = url.searchParams.get('to') ?? asOf;
@@ -209,7 +276,18 @@ export async function handle(
       );
       from = new Date(from).toISOString();
       to = new Date(to).toISOString();
-      const fingerprint = await hash(stable({ kind, ds, entity, from, to }));
+      const fingerprint = await hash(
+        stable({
+          kind,
+          ds,
+          entity,
+          from,
+          to,
+          asOf,
+          requested_as_of: url.searchParams.get('as_of'),
+          gpu: gpuFilters(url, 'o.'),
+        }),
+      );
       const after = cursor?.after ?? 0,
         snapshot = cursor?.snapshot ?? (await visibleMax(env, kind));
       assert(
@@ -231,7 +309,10 @@ export async function handle(
         filters.push('o.entity_key=?');
         values.push(entity);
       }
-      if (kind === 'changes') values.push(now, now);
+      const gf = gpuFilters(url, 'o.');
+      filters.push(...gf.filters);
+      values.push(...gf.values);
+      if (kind === 'changes') values.push(now, now, asOf);
       values.push(limit + 1);
       const sql =
         'SELECT ' +
@@ -256,7 +337,7 @@ export async function handle(
         '.observed_at<=? AND b.completed_at<=?' +
         (filters.length ? ' AND ' + filters.join(' AND ') : '') +
         (kind === 'changes'
-          ? " AND p.derived_allowed=1 AND pp.active=1 AND pp.revoked=0 AND pp.derived_allowed=1 AND pp.valid_from<=? AND (pp.valid_until IS NULL OR pp.valid_until>?) AND pb.state='complete'"
+          ? " AND p.derived_allowed=1 AND pp.active=1 AND pp.revoked=0 AND pp.derived_allowed=1 AND pp.valid_from<=? AND (pp.valid_until IS NULL OR pp.valid_until>?) AND pb.state='complete' AND (c.snapshot_id IS NULL OR EXISTS(SELECT 1 FROM published_coverage cg WHERE cg.snapshot_id=c.snapshot_id AND cg.state='complete' AND cg.completed_at<=?))"
           : '') +
         ' ORDER BY ' +
         alias +

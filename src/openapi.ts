@@ -1,9 +1,10 @@
+import { GPURentalSchema, GPUSecondarySchema } from './gpu';
 import { z } from 'zod';
 import { AISchema, DecimalString } from './schema';
 export const PublicObservationSchema = z.object({
   observation_id: z.string(),
   entity_key: z.string(),
-  dataset: z.enum(['fx', 'ai_api_prices']),
+  dataset: z.enum(['fx', 'ai_api_prices', 'gpu_rental', 'gpu_secondary']),
   schema_version: z.literal('1'),
   dataset_version: z.string(),
   data_origin: z.enum(['live', 'synthetic']),
@@ -14,9 +15,21 @@ export const PublicObservationSchema = z.object({
   source_published_at: z.iso.datetime().nullable(),
   source_effective_at: z.iso.datetime().nullable(),
   supersedes_observation_id: z.string().nullable(),
-  observation_basis: z.enum(['advertised_quote', 'reference_rate', 'derived']),
+  observation_basis: z.enum([
+    'advertised_quote',
+    'reference_rate',
+    'derived',
+    'observed_transaction',
+    'third_party_reported_transaction',
+    'modeled_estimate',
+  ]),
+  snapshot_id: z.string().optional(),
+  backfill: z.boolean().optional(),
+  statistical_exclusions: z.array(z.string()).optional(),
   value: z.union([
     AISchema,
+    GPURentalSchema,
+    GPUSecondarySchema,
     z.object({
       base_currency: z.string(),
       quote_currency: z.string(),
@@ -58,6 +71,15 @@ export const PublicObservationSchema = z.object({
   lineage: z.array(z.string()).optional(),
 });
 export const methodology = {
+  'gpu-market-v1': {
+    id: 'gpu-market-v1',
+    description:
+      'Observed search scope only. Separate rental and secondary asks. Decimal type-7 quantiles, matched-offer median ratios, exact UTC-date 7/30/90 references; no interpolation. Partial coverage is not zero. Disappearance is not sale. Availability evidence is not utilization. Unknown identity/conditions and secondary-source duplication are explicitly excluded. Comparisons retain both conditions and FX input IDs; net-tax quotes only for JP-US. First seen age is collector history, not listing age.',
+    capture:
+      'Daily run / partition / immutable page / snapshot. Complete pagination required before public prices; current partial coverage is reported separately.',
+    lineage:
+      'Immutable snapshot membership plus all input source-policy versions; FX uses original EUR quote observation IDs no later than both quotes, same source date and maximum four-day age.',
+  },
   'same-series-change-v1': {
     id: 'same-series-change-v1',
     description:
@@ -99,8 +121,35 @@ const query = (name: string, schema: unknown, description: string) => ({
   description,
   schema,
 });
+const gpuFilters = [
+  'source',
+  'sku',
+  'provider',
+  'country',
+  'region',
+  'contract',
+  'condition',
+  'basis',
+  'snapshot',
+].map((name) =>
+  query(
+    name,
+    { type: 'string', maxLength: 160 },
+    'Exact GPU dimension filter; unknown values are not inferred',
+  ),
+);
 const common = [
-  query('dataset', { type: 'string', enum: ['fx', 'ai_api_prices'] }, 'Dataset filter'),
+  query(
+    'as_of',
+    { type: 'string', format: 'date-time' },
+    'Knowledge cutoff; current rights still apply',
+  ),
+  ...gpuFilters,
+  query(
+    'dataset',
+    { type: 'string', enum: ['fx', 'ai_api_prices', 'gpu_rental', 'gpu_secondary'] },
+    'Dataset filter',
+  ),
   query(
     'entity',
     { type: 'string', maxLength: 300 },
@@ -167,17 +216,92 @@ const operation = (summary: string, parameters: unknown[], schema: unknown) => (
   },
 });
 const generic = { type: 'object' };
+export const CoverageSchema = z.object({
+  snapshot_id: z.string(),
+  source_id: z.string(),
+  dataset: z.enum(['gpu_rental', 'gpu_secondary']),
+  data_origin: z.enum(['synthetic', 'live']),
+  coverage: z.enum(['complete', 'partial']),
+  missing_reason: z.string().nullable(),
+  observed_offer_count: z.number().int().nonnegative(),
+  received_api_records: z.number().int().nonnegative(),
+  source_reported_total: z.number().int().nonnegative().nullable(),
+  methodology: z.literal('gpu-market-v1'),
+  market_representative: z.literal(false),
+});
+export const GPUMetricSchema = z.object({
+  metric_id: z.string(),
+  kind: z.enum(['cohort_summary', 'spot_difference', 'generation_ratio', 'jp_us']),
+  dataset: z.enum(['gpu_rental', 'gpu_secondary']),
+  snapshot_id: z.string(),
+  sample_count: z.number().int().nonnegative(),
+  status: z.enum(['ok', 'insufficient_data', 'incomparable']),
+  conditions: z.record(z.string(), z.unknown()),
+  methodology: z.literal('gpu-market-v1'),
+  observed_at: z.iso.datetime(),
+  recorded_at: z.iso.datetime(),
+  median: DecimalString.nullable().optional(),
+  ratio: DecimalString.nullable().optional(),
+  input_refs: z.array(
+    z.object({
+      snapshot_id: z.string().nullable(),
+      observation_id: z.string().nullable(),
+      source_id: z.string(),
+      policy_version: z.string(),
+    }),
+  ),
+});
+const gpuHistory = history
+  .filter((p) =>
+    ['dataset', 'source', 'sku', 'from', 'to', 'limit', 'cursor', 'as_of'].includes(p.name),
+  )
+  .concat([query('scope', { type: 'string', maxLength: 160 }, 'Exact search scope hash')]);
+const gpuArray = (schema: string) => ({
+  ...arraySchema,
+  properties: {
+    ...arraySchema.properties,
+    data: { type: 'array', items: { $ref: '#/components/schemas/' + schema } },
+  },
+});
 export const openapi = {
   openapi: '3.1.0',
   info: {
     title: 'AI Investment APIs',
-    version: '0.1.0',
+    version: '0.2.0',
     description:
       'Research observations, not recommendations. Decimal strings. No universal data license. Public cache disabled for rights revocation.',
   },
   paths: {
+    '/v1/gpu/coverage': {
+      get: operation(
+        'Current search coverage; partial is not inventory zero',
+        gpuHistory.filter((p) => p.name !== 'sku'),
+        gpuArray('Coverage'),
+      ),
+    },
+    '/v1/gpu/metrics': {
+      get: operation(
+        'Comparable cohort statistics with sample sizes, exclusions and insufficient_data',
+        gpuHistory,
+        gpuArray('GPUMetric'),
+      ),
+    },
+    '/v1/gpu/comparisons': {
+      get: operation(
+        'Persisted spot, generation and FX-linked JP-US comparisons; may be incomparable',
+        gpuHistory,
+        gpuArray('GPUMetric'),
+      ),
+    },
+    '/v1/gpu/catalog': {
+      get: operation('Identification dictionary; no market coverage implied', [], generic),
+    },
     '/health': {
-      get: operation('Public data availability, not collector operational health', [], generic),
+      get: operation(
+        'Public data and last collector completion; external monitor status explicit',
+        [],
+        generic,
+      ),
     },
     '/openapi.json': { get: operation('This OpenAPI contract', [], generic) },
     '/llms.txt': {
@@ -198,7 +322,7 @@ export const openapi = {
     },
     '/v1/latest': {
       get: operation(
-        'Latest accepted revision per exact series (maximum 100)',
+        'Latest accepted revision per exact series (maximum 100); GPU only latest complete scope membership',
         common,
         arraySchema,
       ),
@@ -268,6 +392,12 @@ export const openapi = {
     },
   },
   components: {
-    schemas: { Observation: z.toJSONSchema(PublicObservationSchema, { target: 'draft-2020-12' }) },
+    schemas: {
+      Observation: z.toJSONSchema(PublicObservationSchema, { target: 'draft-2020-12' }),
+      GPURental: z.toJSONSchema(GPURentalSchema),
+      GPUSecondary: z.toJSONSchema(GPUSecondarySchema),
+      Coverage: z.toJSONSchema(CoverageSchema),
+      GPUMetric: z.toJSONSchema(GPUMetricSchema),
+    },
   },
 };

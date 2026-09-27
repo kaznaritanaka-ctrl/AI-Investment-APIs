@@ -1,11 +1,11 @@
-# 範囲
+# 実装範囲と後続作業
 
-Phase 0: ソース台帳、権利9区分、構成、辞書、方法、コスト・運用設計。
+Phase 0/1: FX・AI API価格、出典/権利、証拠、履歴、private/public分離、API、CIを維持。
 
-Phase 1: ECB原系列とModels.dev選定価格、証拠投影、訂正付き履歴、品質隔離、公開DB分離、API、ローカルCloudflare D1/R2試験、opt-in live smoke、CI。OpenRouterはsyntheticのみ。
+Phase 2: GPUレンタルと中古提示価格の縦の実装、bounded pagination、complete/partial、差分・訂正、統計、FX系譜付き比較、bootstrap/preflightを追加。合成検証と実稼働を区別する。実ソースは全停止。
 
-Phase 2準備: GPU型、adapter契約、synthetic fixture、日米4候補。GPUの実取得・価格配信は行わない。既存のGPU Rental Priceリポジトリとは接続・改変しない。
+残る接続作業: source別許諾・認証、Runpodの地域別条件を再現するadapter、Highresoと日本中古の正規feed、CCIRの許諾済み機械feed、過去系列の新規backfill、実CloudflareでのCPU/請求計測、通知・外部監視。本番公開とCronは別承認。
 
-後続候補（全てdisabled・review_required）: メモリーHBM/DRAM（契約/推定/報道を分離し日次spot系列を創作しない）、電力（負値が有効な市場を考慮）、金利/信用スプレッド、設備投資/稼働率（公表遅延と改定を保持）、GPU先物/指数（実在商品・清算仕様・権利を再確認）。
+DC・電力・供給網はschemaと調査手順のみ。[後続設計](dc-supply-chain-schema.md)を参照。大量企業crawler、AIバブル指数、売買シグナル、根拠のない過剰供給スコアは作らない。
 
-後続: 本番リソース接続とクラウド実測、ソース範囲追加、専門判断を伴う権利確認、アラート受信先、長期アーカイブの容量別分割。AI修復runtime、課金、MCP、売買機能、ダッシュボードは未実装。
+数千件/多数cohortが6時間capture枠とD1予算を超える実測が出た場合は、Queues/Workflowsの必要性、費用、lease、DLQ、公開完了条件をADRで比較する。上限だけ増やしたり、手動CSVへ戻したりしない。

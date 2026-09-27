@@ -27,6 +27,7 @@ export async function syncSource(env: CollectorEnv, s: Source, now: string) {
         adapter: s.adapter,
         endpoint: s.endpoint,
         selection: s.selection,
+        ...(s.gpu ? { gpu: s.gpu } : {}),
       }),
     );
   const old = await env.PRIVATE_DB.prepare(
@@ -83,6 +84,7 @@ export function publicObservation(o: Observation, s: Source, batch: string) {
     schema_version: '1',
     dataset_version: batch,
     observed_at: o.observed_at,
+    ...(o.backfill !== undefined ? { backfill: o.backfill } : {}),
     source_date: o.source_date,
     source_published_at: o.source_published_at,
     source_effective_at: o.source_effective_at,
@@ -91,16 +93,21 @@ export function publicObservation(o: Observation, s: Source, batch: string) {
     supersedes_observation_id: o.supersedes_observation_id,
     observation_basis: o.observation_basis,
     value: o.domain,
-    currency: o.dataset === 'fx' ? null : 'USD',
+    currency: 'currency' in o.domain ? o.domain.currency : null,
     unit: o.dataset === 'fx' ? 'quote_currency_per_EUR' : 'component_specific',
     source: {
       source_id: s.source_id,
       source_url: s.source_url,
       operator: s.operator,
-      secondary: s.adapter === 'models_dev',
+      secondary: s.adapter === 'models_dev' || s.adapter === 'price_of_compute',
     },
     attribution: s.attribution_text,
-    methodology: o.dataset === 'fx' ? 'ecb-original-v1' : 'api-catalog-v1',
+    methodology:
+      o.dataset === 'fx'
+        ? 'ecb-original-v1'
+        : o.dataset === 'ai_api_prices'
+          ? 'api-catalog-v1'
+          : 'gpu-market-v1',
     quality_status: o.quality_status,
     quality_flags: o.quality_flags,
     coverage: { selection: s.selection, market_representative: false },
@@ -261,6 +268,6 @@ export async function publish(
 }
 // All API data paths share this condition, including changes/latest/health/FX.
 export const visibleSQL =
-  "b.state='complete' AND p.active=1 AND p.revoked=0 AND p.valid_from<=? AND (p.valid_until IS NULL OR p.valid_until>?) AND (o.derived=0 OR p.derived_allowed=1) AND NOT EXISTS (SELECT 1 FROM published_lineage l LEFT JOIN source_publications ip ON ip.source_id=l.source_id AND ip.policy_version=l.policy_version WHERE l.observation_id=o.observation_id AND (ip.source_id IS NULL OR ip.active<>1 OR ip.revoked=1 OR ip.derived_allowed<>1 OR ip.valid_from>? OR (ip.valid_until IS NOT NULL AND ip.valid_until<=?)))";
+  "(o.snapshot_id IS NULL OR EXISTS(SELECT 1 FROM published_coverage gc WHERE gc.snapshot_id=o.snapshot_id AND gc.state='complete')) AND b.state='complete' AND p.active=1 AND p.revoked=0 AND p.valid_from<=? AND (p.valid_until IS NULL OR p.valid_until>?) AND (o.derived=0 OR p.derived_allowed=1) AND NOT EXISTS (SELECT 1 FROM published_lineage l LEFT JOIN source_publications ip ON ip.source_id=l.source_id AND ip.policy_version=l.policy_version WHERE l.observation_id=o.observation_id AND (ip.source_id IS NULL OR ip.active<>1 OR ip.revoked=1 OR ip.derived_allowed<>1 OR ip.valid_from>? OR (ip.valid_until IS NOT NULL AND ip.valid_until<=?)))";
 export const visibleJoin =
   ' FROM published_observations o JOIN publication_batches b ON o.batch_id=b.batch_id JOIN source_publications p ON o.source_id=p.source_id AND o.policy_version=p.policy_version ';
