@@ -1,0 +1,61 @@
+{
+  "source_id": "gpusoroban",
+  "dataset_type": "gpu_rental",
+  "operator": "Highreso",
+  "source_url": "https://soroban.highreso.jp/",
+  "documentation_url": "https://soroban.highreso.jp/article/article-002",
+  "terms_url": "https://soroban.highreso.jp/terms",
+  "license_url": null,
+  "endpoint": null,
+  "acquisition_method": "not_enabled",
+  "authentication_required": null,
+  "native_currency": "JPY",
+  "native_unit": null,
+  "geography": [
+    "JP/Ishikawa (service-level statement)"
+  ],
+  "native_frequency": "unknown",
+  "expected_update_calendar": "unknown",
+  "expected_lag": "unknown",
+  "rights_checked_at": "2026-09-26T18:23:33.000Z",
+  "rights_evidence_ref": "docs/source-register.md#gpusoroban",
+  "attribution_text": "Highreso",
+  "known_limitations": [
+    "Per-offer region and official machine price feed unverified.",
+    "Terms 2025-12-01; historical pricing rights unresolved."
+  ],
+  "enabled": false,
+  "adapter": "candidate",
+  "selection": [],
+  "max_bytes": 1000000,
+  "max_records": 100,
+  "policy": {
+    "version": "gpusoroban-20260927-v1",
+    "rights": {
+      "automated_collection": "review_required",
+      "private_storage": "review_required",
+      "internal_analysis": "review_required",
+      "external_llm_processing": "review_required",
+      "public_display": "review_required",
+      "raw_redistribution": "review_required",
+      "normalized_redistribution": "review_required",
+      "derived_redistribution": "review_required",
+      "commercial_redistribution": "review_required"
+    },
+    "fields": [
+      "none"
+    ],
+    "conditions": [
+      "No collection until rights are confirmed."
+    ],
+    "valid_from": "2026-09-26T18:23:33.000Z",
+    "valid_until": "2026-12-26T00:00:00.000Z",
+    "retention_days": 90,
+    "retention_limit_days": null,
+    "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
+    "evidence_version": "2026-09-27 research",
+    "evidence_refs": [
+      "docs/source-register.md#gpusoroban"
+    ]
+  }
+}

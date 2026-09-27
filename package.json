@@ -1,0 +1,35 @@
+{
+  "name": "ai-investment-apis",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node scripts/run.mjs check",
+    "test": "node scripts/run.mjs test",
+    "build": "node scripts/run.mjs build",
+    "smoke:live": "node scripts/run.mjs live --allow-network",
+    "dev": "node scripts/run.mjs dev",
+    "cost": "node scripts/cost-model.mjs",
+    "test:runtime": "node scripts/run.mjs runtime"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0",
+    "fast-xml-parser": "^5.11.1",
+    "lossless-json": "^4.3.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260925.2",
+    "@types/node": "^26.6.2",
+    "esbuild": "0.28.1",
+    "miniflare": "4.20260730.0",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "wrangler": "^4.140.0"
+  },
+  "packageManager": "pnpm@11.19.0"
+}

@@ -1,0 +1,1 @@
+{"synthetic":true,"lab":{"models":{"model-a":{"cost":{"input":1.25,"output":5,"cache_read":0},"limit":{"context":200000},"modalities":{"input":["text"],"output":["text"]}}}}}

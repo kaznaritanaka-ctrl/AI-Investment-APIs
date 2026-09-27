@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "dataset_type": {
+      "type": "string",
+      "enum": [
+        "fx",
+        "ai_api_prices",
+        "gpu_rental",
+        "memory",
+        "electricity",
+        "rates_credit",
+        "capex_utilization",
+        "gpu_index"
+      ]
+    },
+    "operator": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "documentation_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "terms_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "license_url": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "endpoint": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "acquisition_method": {
+      "type": "string"
+    },
+    "authentication_required": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "native_currency": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "native_unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "geography": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "native_frequency": {
+      "type": "string"
+    },
+    "expected_update_calendar": {
+      "type": "string"
+    },
+    "expected_lag": {
+      "type": "string"
+    },
+    "rights_checked_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+    },
+    "rights_evidence_ref": {
+      "type": "string"
+    },
+    "attribution_text": {
+      "type": "string"
+    },
+    "known_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "adapter": {
+      "type": "string",
+      "enum": [
+        "ecb",
+        "models_dev",
+        "openrouter",
+        "candidate"
+      ]
+    },
+    "selection": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "max_bytes": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 32000000
+    },
+    "max_records": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 100
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rights": {
+          "type": "object",
+          "properties": {
+            "automated_collection": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "private_storage": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "internal_analysis": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "external_llm_processing": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "public_display": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "raw_redistribution": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "normalized_redistribution": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "derived_redistribution": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            },
+            "commercial_redistribution": {
+              "type": "string",
+              "enum": [
+                "allowed",
+                "denied",
+                "review_required",
+                "expired"
+              ]
+            }
+          },
+          "required": [
+            "automated_collection",
+            "private_storage",
+            "internal_analysis",
+            "external_llm_processing",
+            "public_display",
+            "raw_redistribution",
+            "normalized_redistribution",
+            "derived_redistribution",
+            "commercial_redistribution"
+          ],
+          "additionalProperties": false
+        },
+        "fields": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "valid_from": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "valid_until": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retention_days": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 3650
+        },
+        "retention_limit_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decision_actor": {
+          "type": "string"
+        },
+        "evidence_version": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "rights",
+        "fields",
+        "conditions",
+        "valid_from",
+        "valid_until",
+        "retention_days",
+        "retention_limit_days",
+        "decision_actor",
+        "evidence_version",
+        "evidence_refs"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "source_id",
+    "dataset_type",
+    "operator",
+    "source_url",
+    "documentation_url",
+    "terms_url",
+    "license_url",
+    "endpoint",
+    "acquisition_method",
+    "authentication_required",
+    "native_currency",
+    "native_unit",
+    "geography",
+    "native_frequency",
+    "expected_update_calendar",
+    "expected_lag",
+    "rights_checked_at",
+    "rights_evidence_ref",
+    "attribution_text",
+    "known_limitations",
+    "enabled",
+    "adapter",
+    "selection",
+    "max_bytes",
+    "max_records",
+    "policy"
+  ],
+  "additionalProperties": false
+}

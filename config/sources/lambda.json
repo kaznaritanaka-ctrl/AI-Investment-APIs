@@ -1,0 +1,63 @@
+{
+  "source_id": "lambda",
+  "dataset_type": "gpu_rental",
+  "operator": "Lambda",
+  "source_url": "https://lambda.ai/",
+  "documentation_url": "https://docs.lambda.ai/public-cloud/cloud-api/",
+  "terms_url": "https://lambda.ai/legal/terms-of-service",
+  "license_url": null,
+  "endpoint": "https://cloud.lambda.ai/api/v1/instance-types",
+  "acquisition_method": "not_enabled",
+  "authentication_required": true,
+  "native_currency": "USD",
+  "native_unit": "instance_hour",
+  "geography": [
+    "US/us-east-1",
+    "US/us-west-1"
+  ],
+  "native_frequency": "unknown",
+  "expected_update_calendar": "unknown",
+  "expected_lag": "unknown",
+  "rights_checked_at": "2026-09-26T18:23:33.000Z",
+  "rights_evidence_ref": "docs/source-register.md#lambda",
+  "attribution_text": "Lambda",
+  "known_limitations": [
+    "Official region mapping Virginia/California, availability per type.",
+    "Cloud terms apply to API key; history redistribution unresolved.",
+    "No instance launches."
+  ],
+  "enabled": false,
+  "adapter": "candidate",
+  "selection": [],
+  "max_bytes": 1000000,
+  "max_records": 100,
+  "policy": {
+    "version": "lambda-20260927-v1",
+    "rights": {
+      "automated_collection": "review_required",
+      "private_storage": "review_required",
+      "internal_analysis": "review_required",
+      "external_llm_processing": "review_required",
+      "public_display": "review_required",
+      "raw_redistribution": "review_required",
+      "normalized_redistribution": "review_required",
+      "derived_redistribution": "review_required",
+      "commercial_redistribution": "review_required"
+    },
+    "fields": [
+      "none"
+    ],
+    "conditions": [
+      "No collection until rights are confirmed."
+    ],
+    "valid_from": "2026-09-26T18:23:33.000Z",
+    "valid_until": "2026-12-26T00:00:00.000Z",
+    "retention_days": 90,
+    "retention_limit_days": null,
+    "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
+    "evidence_version": "2026-09-27 research",
+    "evidence_refs": [
+      "docs/source-register.md#lambda"
+    ]
+  }
+}
