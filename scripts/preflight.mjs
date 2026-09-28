@@ -146,14 +146,29 @@ if (args.includes('--cloudflare-read-only')) {
         'collector_required_secret_names',
         (r) => Array.isArray(r) && secretNames.every((name) => r.some((x) => x.name === name)),
       );
+      const manualFreeEvidence =
+        d.workers_plan === 'free' &&
+        typeof d.workers_plan_evidence_ref === 'string' &&
+        d.workers_plan_evidence_ref.trim().length > 0;
       await get(
         base + '/subscriptions',
         'workers_plan',
         (r) =>
           Array.isArray(r) &&
-          r.some((x) => /workers/i.test(x.rate_plan?.id ?? '') && d.workers_plan === 'paid'),
+          (r.some((x) => /workers/i.test(x.rate_plan?.id ?? ''))
+            ? d.workers_plan === 'paid'
+            : manualFreeEvidence),
       );
-      // An absent subscription is not interpreted as a confirmed free plan.
+      const planCheck = checks.at(-1);
+      if (d.workers_plan === 'free')
+        Object.assign(planCheck, {
+          verification_method: 'manual_evidence',
+          evidence_ref: manualFreeEvidence ? d.workers_plan_evidence_ref : null,
+          api_verifiable: false,
+          subscription_api_role: 'check_for_conflicting_workers_subscription',
+        });
+      else if (d.workers_plan === 'paid') planCheck.verification_method = 'subscription_api';
+      // No Workers subscription is only a consistency check, never evidence of Free by itself.
     }
     report.cloud_checks = checks;
   }
