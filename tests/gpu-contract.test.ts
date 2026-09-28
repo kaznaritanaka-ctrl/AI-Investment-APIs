@@ -217,7 +217,14 @@ it('stops missing authentication, 403 and long Retry-After safely without follow
   ).rejects.toMatchObject({ retry_at: '2026-10-03T19:17:00.000Z' });
 });
 it('fails offline preflight on placeholders, mismatched accounts, Cron activation and unreviewed retention', () => {
-  const report = inspectPreflight(deployment, collector, apiConfig, sources, {});
+  const placeholderCollector = structuredClone(collector),
+    placeholderAPI = structuredClone(apiConfig),
+    privatePlaceholder = '00000000-0000-0000-0000-000000000001',
+    publicPlaceholder = '00000000-0000-0000-0000-000000000002';
+  for (const db of placeholderCollector.d1_databases)
+    db.database_id = db.binding === 'PRIVATE_DB' ? privatePlaceholder : publicPlaceholder;
+  for (const db of placeholderAPI.d1_databases) db.database_id = publicPlaceholder;
+  const report = inspectPreflight(deployment, placeholderCollector, placeholderAPI, sources, {});
   expect(report.static_valid).toBe(true);
   expect(report.ready).toBe(false);
   expect(report.blockers).toContain('d1_ids_placeholder');
