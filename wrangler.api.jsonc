@@ -11,7 +11,7 @@
     {
       "binding": "PUBLIC_DB",
       "database_name": "ai-investment-public",
-      "database_id": "00000000-0000-0000-0000-000000000002",
+      "database_id": "cf0f6bf8-142a-4c48-8468-4f9a5b1a42b3",
       "migrations_dir": "migrations/public"
     }
   ],
