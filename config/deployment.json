@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "account_id": null,
-  "zone_id": null,
-  "owned_domain": null,
+"account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+"zone_id": "5ad88b02e5049369c3551ea8ebfabac0",
+"owned_domain": "ai-investment-research.net",
   "workers_plan": null,
   "workers_plan_evidence_ref": null,
   "notification_destination_configured": false,
