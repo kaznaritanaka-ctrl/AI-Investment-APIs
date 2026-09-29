@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-"account_id": "0f9bb71bb987011462a91596f7cc9e6f",
-"zone_id": "5ad88b02e5049369c3551ea8ebfabac0",
-"owned_domain": "ai-investment-research.net",
+  "account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+  "zone_id": "5ad88b02e5049369c3551ea8ebfabac0",
+  "owned_domain": "ai-investment-research.net",
   "workers_plan": "free",
   "d1_time_travel_days": 7,
   "workers_plan_evidence_ref": "Cloudflare Workers dashboard 2026-09-28: Free plan, 100,000 requests/day limit shown",
@@ -10,7 +10,7 @@
   "external_monitor_evidence_ref": null,
   "deployment_controller": "manual_wrangler",
   "deployment_approval_ref": "Owner approved bootstrap deployment 2026-09-29 after tests, migrations, Cloudflare resource verification and retention review",
-  "cron_enable_approval_ref = "...2026-09-29..."
+  "cron_enable_approval_ref": "Owner approved initial production collection 2026-09-29 for currently enabled sources",
   "retention_review_ref": "Manual review 2026-09-29: R2 evidence/ecb/ 365d, evidence/models_dev/ 90d, archive/ 365d",
   "stage": "enabled",
   "public_approval_ref": "Owner approved public API at api.ai-investment-research.net 2026-09-29",
