@@ -6,13 +6,13 @@
   "workers_dev": false,
   "preview_urls": false,
   "triggers": {
-    "crons": []
+    "crons": ["17 18 * * *", "47 18 * * *", "*/5 18-23 * * *"]
   },
   "vars": {
     "ENVIRONMENT": "production",
     "AGENT_ENABLED": "false",
     "COLLECTION_CRON": "17 18 * * *",
-    "COLLECTION_ENABLED": "false",
+    "COLLECTION_ENABLED": "true",
     "WATCHDOG_CRON": "47 18 * * *",
     "GPU_RESUME_CRON": "*/5 18-23 * * *"
   },

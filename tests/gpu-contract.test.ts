@@ -230,9 +230,13 @@ it('fails offline preflight on placeholders, mismatched accounts, Cron activatio
   expect(report.blockers).toContain('d1_ids_placeholder');
   expect(
     inspectPreflight(
-      deployment,
-      { ...collector, triggers: { crons: ['17 18 * * *'] } },
-      apiConfig,
+      { ...deployment, stage: 'bootstrap' },
+      {
+        ...collector,
+        vars: { ...collector.vars, COLLECTION_ENABLED: 'false' },
+        triggers: { crons: ['17 18 * * *'] },
+      },
+      { ...apiConfig, routes: [] },
       sources,
     ).errors,
   ).toContain('bootstrap_cron_not_stopped');
