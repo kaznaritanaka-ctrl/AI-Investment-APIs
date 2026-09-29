@@ -9,7 +9,7 @@
   "notification_destination_configured": false,
   "external_monitor_evidence_ref": null,
   "deployment_controller": "manual_wrangler",
-  "deployment_approval_ref": null,
+  "deployment_approval_ref": "Owner approved bootstrap deployment 2026-09-29 after tests, migrations, Cloudflare resource verification and retention review",
   "cron_enable_approval_ref": null,
   "retention_review_ref": "Manual review 2026-09-29: R2 evidence/ecb/ 365d, evidence/models_dev/ 90d, archive/ 365d",
   "stage": "bootstrap",
