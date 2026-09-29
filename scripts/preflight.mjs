@@ -7,8 +7,18 @@ const d = read('config/deployment.json'),
   sources = readdirSync('config/sources')
     .filter((x) => x.endsWith('.json'))
     .map((x) => read('config/sources/' + x));
-const report = inspectPreflight(d, c, a, sources, process.env),
-  args = process.argv.slice(2);
+const args = process.argv.slice(2);
+const proposalIndex = args.indexOf('--proposal');
+if (proposalIndex >= 0) {
+  if (args.includes('--cloudflare-read-only'))
+    throw new Error('proposal_preflight_is_offline_only');
+  const proposal = read(args[proposalIndex + 1]);
+  const index = sources.findIndex((s) => s.source_id === proposal.source_id);
+  if (index < 0) throw new Error('proposal_source_not_registered');
+  sources[index] = { ...proposal, enabled: true }; // Hypothetical activation only; never writes source settings.
+}
+const report = inspectPreflight(d, c, a, sources, process.env);
+if (proposalIndex >= 0) report.proposal_evaluation = true;
 if (args.includes('--cloudflare-read-only')) {
   report.mode = 'cloudflare_read_only';
   if (
@@ -100,6 +110,9 @@ if (args.includes('--cloudflare-read-only')) {
                       (s.gpu?.retention[
                         prefix === 'evidence/' ? 'evidence_days' : 'archive_days'
                       ] ??
+                        s.models?.retention[
+                          prefix === 'evidence/' ? 'evidence_days' : 'archive_days'
+                        ] ??
                         d.legacy_retention?.[s.source_id]?.[
                           prefix === 'evidence/' ? 'evidence_days' : 'archive_days'
                         ] ??
@@ -181,10 +194,14 @@ if (args.includes('--plan'))
     steps: [
       'Confirm target account, existing resources, source grants and all retention classes.',
       'Run reviewed forward migrations on private/public D1 after backup verification.',
-      'Deploy collector with COLLECTION_ENABLED=false and crons=[]; no route.',
+      d.stage === 'bootstrap'
+        ? 'Deploy collector with COLLECTION_ENABLED=false and crons=[]; no route.'
+        : 'Preserve the existing stage, COLLECTION_ENABLED, Cron, routes and owner approvals; do not reapply bootstrap settings.',
       'Deploy API only after separate public-domain approval; PUBLIC_DB binding only.',
       'Verify health, canary and external monitor.',
-      'After explicit Cron approval, update this same Wrangler collector config and deploy once.',
+      d.stage === 'enabled'
+        ? 'Keep the currently approved Cron unchanged. Expansion grants require separate review before source activation.'
+        : 'After explicit Cron approval, update this same Wrangler collector config and deploy once.',
     ],
     commands: [
       'pnpm check',

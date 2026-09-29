@@ -3,6 +3,8 @@ import { activeSources } from './sources';
 import { collectAll } from './pipeline';
 import { resumeGPURuns, queueGPURuns } from './gpu-pipeline';
 import { expireGPUData } from './gpu-retention';
+import { resumeModelRuns } from './models-pipeline';
+import { expireModels } from './models-retention';
 import { recordSummary, deliverNotifications, watchdog, expireEvidence } from './operations';
 export default {
   async scheduled(controller: ScheduledController, env: CollectorEnv, _ctx: ExecutionContext) {
@@ -19,9 +21,14 @@ export default {
         )),
         ...(await queueGPURuns(env, activeSources, slot, now)),
       ];
-    else if (controller.cron === env.GPU_RESUME_CRON)
-      results = await resumeGPURuns(env, activeSources, now);
-    else if (controller.cron === env.WATCHDOG_CRON) {
+    else if (controller.cron === env.GPU_RESUME_CRON) {
+      // Retention uses a separate continuation slot from model ingestion.
+      const retired = await expireModels(env, activeSources, now);
+      results = [
+        ...(retired ? [] : await resumeModelRuns(env, activeSources, now)),
+        ...(await resumeGPURuns(env, activeSources, now)),
+      ];
+    } else if (controller.cron === env.WATCHDOG_CRON) {
       const parts = env.COLLECTION_CRON?.split(' ');
       if (!parts || parts.length !== 5 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1]))
         throw new Error('invalid_collection_cron');

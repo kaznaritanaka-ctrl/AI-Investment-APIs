@@ -38,3 +38,28 @@ GPU型・schema・fixtureは `src/gpu.ts` と `tests/fixtures/gpu.synthetic.json
 | availability_evidence | 状態が明示された割合と、その中のavailable割合。稼働率ではない |
 
 /publicのAPI契約は[OpenAPI](../openapi.json)、計算定義は[GPU方法](gpu-methodology.md)。
+
+## Models.dev catalog / lifecycle（P0）
+
+| 項目 | 意味 |
+|---|---|
+| ai_model_catalog | provider endpointの掲載観測。型検証済みdomainを専用表へ保存 |
+| model_snapshots | run/policy/parser別snapshot。scope、complete_capture、stage/cursor、件数、expiry、訂正元を保存 |
+| model_snapshot_members | catalog/price observation ID、価格適格性、component数、モデル初観測を固定 |
+| model_events | 初回baseline・再観測・新規掲載・再出現・not_seen・metadata/明示mapping/価格条件/価格の変更 |
+| model_snapshot_id | 共通observations/public observationとcatalog snapshotの関連。GPU snapshot_idと別 |
+| first_model_observed_at | 同じsource/policyの保持済み履歴（partialを含む）でのモデル初観測。release日ではない |
+| first_seen_at | 従来どおり同じ内容の初記録時刻。モデル初観測へ意味変更しない |
+| model_author / serving_provider | 明示canonical_model_idのlab識別子と、実際の提供経路を別保存。前者不明ならnull |
+| provider_endpoint_id | ソースの明示model ID。任意URLや推測したendpointではない |
+| canonical_model_id / mapping_basis / mapping_version | ソース由来の識別関係。モデル自動統合をしない。切替はsource_mapping_changed |
+| identifier_kind / model_version | 現仕様でalias/固定versionの根拠を確定できないためunknown/null。名前で推定しない |
+| context_limit / max_input / max_output | 明示されたtoken数の十進整数文字列。不明はnull・理由付き |
+| release_date / upstream_updated_date / source_status | ソースの日付精度（YYYY-MMも保持）とalpha/beta/deprecated。価格適用日へ流用しない |
+| availability / region / service_tier | この投影ではunknown/null。掲載を利用可能性の実測としない |
+| price_state | reported / zero_unverified / missing / unknown / unsupported / free_confirmedを区別。このadapterは無料根拠を持たないのでfree_confirmedを生成しない |
+| source_path / pricing_mode / tier_conditions | 元料金項目の位置・明示modeラベル・exact context条件。batch/priorityを推定で作らない |
+| context_over_200k | 上流互換alias。名称から200k境界と推定せず、明示tiersと一致する場合だけ二重計上を避ける |
+| capture_complete / price_quarantined_count | 列挙の完全性と価格品質を独立報告。未対応priceでも識別できたcatalogは残す |
+
+価格は元のUSD/million_tokensを保持。0は原値として記録し、zero_unverifiedを伴う。無料ランキング・単位換算・全市場最低価格の派生APIは追加していません。価格系列の条件にはprovider、endpoint、canonical mapping、version、region、tier、modality、context、原単位、componentの条件/modeを含め、amount/stateのみを比較対象にします。not_seenは提供終了ではありません。

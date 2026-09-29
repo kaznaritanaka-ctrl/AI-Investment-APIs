@@ -38,3 +38,13 @@ Evidenceは許可した最小投影を先にR2へ固定保存する。page単位
 公開GPU統計はpublished_gpu_metricsとpublished_metric_lineageに投影。全入力policyをread時にも検査する。snapshot membershipは固定され、訂正は別snapshot/observationとして追加。as_ofはrecorded/completed時刻を越える情報を返さない。public healthは最終collector完了時刻だけを投影し、外部監視の未接続を明示する。
 
 詳細は[gpu-methodology](gpu-methodology.md)、[runbook](cloudflare-runbook.md)、[P2計画](phase2-plan.md)。
+
+## P0 Models.dev拡張（2026-09-30）
+
+作業開始時のdefault branchはmain、HEADは25f4983158d11dafcac32b9c52ea3e3936d0f651。作業ツリーを確認してcodex/models-catalog-historyを作成しました。既存stage=enabled・3 Cron・独自domain・2 D1/private R2を維持し、Adminリポジトリは変更しません。
+
+`Source.models` があるsourceだけを新しいboundedパイプラインへdispatchします。未設定の既存ECB/Models.devは旧経路です。0003だけでobservationsのdataset CHECK、catalog domain、snapshot/membership/event、public投影を追加。raw全体の永続化や汎用EAV化はありません。
+
+日次intakeでカタログ全体を最大16 MB・有限retryで1回取得し、承認provider/fieldだけ投影します。既存continuation Cronで25モデルずつ保存、50件ずつnot_seen処理、件数照合、公開確定を進めます。lease・checkpoint・固定証拠キーで再実行可能。原JSONの解析はintakeに残り、投影JSONも各再開時に解析するため、SQL分割だけでCPU問題を解決したとは扱いません。
+
+public snapshotはstaging中非表示、完全取得と価格適格性を分けます。partial coverageのみ理由付きで公開可能。catalog/価格/eventは現在の権利と入力lineage、expiry、公開完了時刻を検査します。詳細・制限・計測は[Models設計](models-expansion.md)、有効化は[専用手順](models-enablement.md)。

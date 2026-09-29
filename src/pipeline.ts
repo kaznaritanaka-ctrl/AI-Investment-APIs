@@ -1,4 +1,5 @@
 import { isGPU } from './gpu';
+import { collectModels } from './models-pipeline';
 import { collectGPU } from './gpu-pipeline';
 import type { CollectorEnv, Source, Evidence } from './schema';
 import { canCollect, assertPersistenceAllowed } from './policy';
@@ -38,6 +39,7 @@ export async function collectSource(
   scheduled: string,
   opt: CollectOptions = {},
 ): Promise<RunResult> {
+  if (s.models) return collectModels(env, s, scheduled, opt);
   if (isGPU(s.dataset_type)) return collectGPU(env, s, scheduled, opt);
   const now = opt.now ?? (() => new Date().toISOString()),
     run = await hash(s.source_id + '|' + scheduled),

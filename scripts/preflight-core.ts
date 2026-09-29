@@ -122,6 +122,42 @@ export function inspectPreflight(
         require(s.gpu.retention.normalized_days + s.gpu.retention.backup_days <=
           s.policy.retention_limit_days, s.source_id + ':total_retention_exceeds_grant');
     }
+    if (s.models) {
+      const m = s.models,
+        grant = s.policy.models_scope;
+      require(deployment.workers_plan === 'paid', s.source_id +
+        ':models_parse_and_d1_budget_requires_confirmed_paid_plan');
+      require(m.owner_approval_ref, s.source_id + ':models_owner_approval_missing');
+      require(m.runtime_review_ref, s.source_id + ':models_runtime_unreviewed');
+      require(m.retention.reviewed_ref, s.source_id + ':models_retention_unreviewed');
+      require(grant &&
+        m.providers.every((p: string) => grant.providers.includes(p)) &&
+        m.fields.every((f: string) => grant.fields.includes(f)), s.source_id +
+        ':models_scope_not_approved');
+      require(s.policy.fields.includes('models_projection_v2'), s.source_id +
+        ':models_projection_not_approved');
+      require(m.retention.backup_days >= deployment.d1_time_travel_days, s.source_id +
+        ':models_backup_exceeds_grant');
+      if (m.models_per_invocation > 25 || m.max_components > 64)
+        errors.push(s.source_id + ':models_invocation_budget_exceeded');
+      // Intake + ingest + worst-case disappearance + finalize + steady-state retention.
+      const slots =
+        2 +
+        Math.ceil(m.max_models / m.models_per_invocation) +
+        Math.ceil(m.max_models / 50) +
+        Math.ceil(m.max_models / 25) +
+        2;
+      require(slots <= 72, s.source_id +
+        ':models_daily_capacity_exceeds_existing_72_continuations');
+      require(!sources.some((x) => x.enabled && x.gpu), s.source_id +
+        ':shared_gpu_models_budget_requires_separate_review');
+      if (s.policy.retention_limit_days)
+        require(Math.max(
+          m.retention.evidence_days,
+          m.retention.archive_days,
+          m.retention.normalized_days + m.retention.backup_days,
+        ) <= s.policy.retention_limit_days, s.source_id + ':models_retention_exceeds_grant');
+    }
   }
   return {
     mode: 'offline',

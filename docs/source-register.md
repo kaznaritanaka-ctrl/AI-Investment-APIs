@@ -50,3 +50,17 @@ memory / electricity / rates_credit / capex_utilization / gpu_index は候補名
 [GPU調査台帳](gpu-source-review.md)が最新のGPU確認結果です。Lambda/さくらのadapterを準備し、eBay Browse/Price of Compute/CCIRを登録しました。Runpod/Highresoはcandidateです。GPUの9権利区分は全件review_required、enabled=false。日本地域のさくら接続コードはsynthetic検証のみで、実接続済みではありません。
 
 GPU各sourceのowner承認、4種retention、利用目的、認証とproduction用途審査は別欄として設定します。FX/AIの既存許諾は変更していません。Phase 1のlive結果を今回の検証実績として再利用しません。
+
+## P0拡張追補（2026-09-30 JST）
+
+Models.devの現在の生成仕様・MIT・provider設定をcommit `747925c4fb0142db3e508cac02202c2748a34cf0` で再調査しました。確認範囲はソースコード・仕様で、拡張価格カタログのlive収集成功ではありません。[根拠とfield案](models-expansion.md#policy-proposal)、[承認待ち設定](../config/proposals/models_dev.v3.json)を参照してください。
+
+| source / scope | 接続コード・synthetic | 認証 | 権利・有効化 | 今回のlive / 本番 |
+|---|---|---|---|---|
+| ECB既存2原系列 | 既存実装・回帰試験 | 不要 | 既存enabled・grant維持 | 未実行 / 稼働未検証 |
+| Models.dev Mistral既存2モデル | 旧経路維持・回帰試験 | 不要 | v2 enabled・grant維持 | 未実行 / 稼働未検証 |
+| Models.dev openai/anthropic/google/xai/mistral | catalog/価格/履歴/coverage実装、50/250/1000合成試験 | 不要 | v3提案、provider/field/9区分/retention・実行予算の承認待ち | 未実行 / deploy・拡張開始待ち |
+| Lambda / さくら / eBay / Price of Compute | 既存Phase 2 adapter・回帰試験 | 既存台帳のSecret名参照、今回値の確認なし | disabled、権利待ち維持 | 未実行 / 未開始 |
+| Runpod / Highreso / CCIR | 既存候補・調査のみ | 未確定 | disabled、仕様/権利待ち | 未実行 / 未開始 |
+
+後続分野を重複台帳や大量のdisabledファイルとして増やしません。P1のrate limit/tierは公開条件とアカウント固有枠を分離、agent/tool価格はrequest・時間・storage単位の拡張が必要です。P2メモリーは規格/spot/contract/retailと利用契約、電力はEIA等の正式仕様・キー・改定履歴、benchmarkは版・測定条件・データ配布権を確認してから接続します。今回それらの最新権利調査・adapter追加は未実施です。P3金利/信用/DC案件も既存候補のままです。これらをP0の実装・レビューの前提にはしません。

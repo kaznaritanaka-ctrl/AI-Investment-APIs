@@ -17,3 +17,6 @@
 - Bootstrap means explicit crons=[] and COLLECTION_ENABLED=false. Wrangler is the only Cron controller; CI never deploys.
 - GPU continuation runs resume a daily search; they are not repeated market snapshots. Enforce 50-record pages and one page per invocation in deployment preflight.
 - Run check/test/test:runtime/build, offline preflight, and generated schema checks. Runtime tests include 1051 synthetic listings; live acquisition requires explicit opt-in and reviewed rights.
+- Models.dev provider expansion is an unapproved proposal in config/proposals, never an implicit replacement for config/sources/models_dev.json. Preserve policy v2 and existing enabled Cron/domain settings until separately approved.
+- Read docs/models-expansion.md and docs/models-enablement.md for P0 changes. Provider/field scope, original units, per-model price quarantine and complete-snapshot absence semantics are mandatory. Source zero is not confirmed free.
+- Preserve applied 0001/0002 migrations. Models use forward 0003 migrations, bounded checkpoints, private-only support, current input-rights checks, and separate evidence/archive/normalized/backup retention. Synthetic 50/250/1000 model tests do not prove Free-plan or production capacity.

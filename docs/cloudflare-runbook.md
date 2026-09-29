@@ -1,12 +1,12 @@
 # Cloudflare初期設定・デプロイ手順
 
-このPRはローカル実装です。本番リソースの存在・ID・プラン・ドメイン・通知先を確認できていません。アカウントと所有ドメインを取得済みであることはユーザーから確認済みです。値を推測して埋めず、既存リソースを先に照合します。
+2026-09-30のP0作業では既存設定を維持しています。Account/zone/D1 ID・所有domain・Workers Freeの手動確認根拠が設定されています。クラウド実環境はこの作業で照会していないため、本番稼働は未検証です。値を推測して追加しません。Models.dev拡張の適用順序は[専用手順](models-enablement.md)です。
 
-## 現在の停止状態
+## 現在の設定と実環境の区別
 
-collectorはworkers.dev/preview/HTTP routeなし、triggers.crons=[]、COLLECTION_ENABLED=falseです。APIもrouteなしです。公開WorkerのbindingはPUBLIC_DBとrate limiterだけです。private D1/R2/取得Secretsはcollector側だけです。
+collectorはworkers.dev/preview/HTTP routeなし、COLLECTION_ENABLED=true、既存3 Cronです。APIはapi.ai-investment-research.netのcustom domainを持ちます。公開WorkerのbindingはPUBLIC_DBとrate limiterだけです。private D1/R2/取得Secretsはcollector側だけです。
 
-config/deployment.jsonはstage=bootstrap、実Account ID/zone/domain/Workers plan/backup retention/approval refはnullです。D1 IDは明確なplaceholderのままです。pnpm buildは常に2 WorkerのWrangler dry-runです。GitHub ActionsはCI専用、Cloudflare Git連携による二重deployは使いません。
+config/deployment.jsonはstage=enabled、plan=free、Time Travel=7日で、過去の公開・初回収集の承認refがあります。設定済みD1 IDをplaceholderへ戻しません。pnpm buildは常に2 WorkerのWrangler dry-runです。GitHub ActionsはCI専用、Cloudflare Git連携による二重deployは使いません。
 
 ## ローカルで安全に実行できる検査
 
@@ -31,13 +31,15 @@ pnpm preflight:cloudflare -- --read-only は対象accountとCLOUDFLARE_API_TOKEN
 
 このタスクでは実行していません。Cloudflare API応答形の実アカウント検証、CPU計測、既存migrationの一致確認は設定後の作業です。
 
-## 承認後に行う順序（このタスクでは未実行）
+## 新規bootstrap環境専用の順序（既存enabled環境へ再適用しない）
 
 1. 対象account/既存D1/R2とバックアップ復元手順を確認し、sourceごとのretentionが復元後も適用されることを確認。
 2. private/publicそれぞれに0002を前進適用。0001を書き換えません。Wrangler migrations applyを対象config・DB名・remote指定で実行するのはDB変更承認後だけです。
 3. collectorをCron空配列・内部gate falseのまま一度deploy。Secrets、R2非公開、healthを検証。
 4. 公開承認後stage=publishedとし、APIだけにapi.<確認済み所有domain>のcustom_domain routeを設定。ダミーIPのAレコードは作りません。collectorは引き続き停止。
 5. 夜間の継続取得を別承認後、stage=enabled、COLLECTION_ENABLED=true、WranglerのcronsにCOLLECTION_CRON/WATCHDOG_CRON/GPU_RESUME_CRONの3式を登録し、collectorを一度deploy。
+
+上記は新規作成時の説明です。現行環境へのP0適用では両DBの0003を前進適用し、既存Cron・domain・gateを保ってWorkerを更新します。権利変更・remote migration・deployはそれぞれ別承認です。
 
 COLLECTION_CRON=17 18 * * *（JST翌03:17）、WATCHDOG_CRON=47 18 * * *（翌03:47）。GPU_RESUME_CRON=*/5 18-23 * * *は同じ日次runを1pageずつ再開する候補設定です。新しい市場snapshotを5分ごとに作りません。監視・失敗復旧・保持期限処理もこの枠で決定的に動きます。
 

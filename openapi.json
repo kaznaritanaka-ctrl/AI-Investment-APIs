@@ -2,10 +2,524 @@
   "openapi": "3.1.0",
   "info": {
     "title": "AI Investment APIs",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Research observations, not recommendations. Decimal strings. No universal data license. Public cache disabled for rights revocation."
   },
   "paths": {
+    "/v1/models/coverage": {
+      "get": {
+        "summary": "Model catalog snapshots; capture completeness is separate from price eligibility",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Source ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "Exact provider/field/policy/parser scope",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Snapshot ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum records",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque snapshot keyset cursor; keep filters unchanged, may change limit",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; null is not zero.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ModelCoverage"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "snapshot_as_of": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, interval or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching data or resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Read-only endpoint. Empty response body.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "const": "GET, HEAD"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Configured rate limiter rejected request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Public D1 unavailable; private state is not disclosed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models/events": {
+      "get": {
+        "summary": "Baseline, reobservation, first seen, reappearance, not seen, metadata, mapping, deprecation and price history with current input rights",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Source ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "Exact scope",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Snapshot ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "description": "Knowledge cutoff; current rights still apply",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum records",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque snapshot keyset cursor; keep filters unchanged, may change limit",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success; null is not zero.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "schema_version",
+                    "data"
+                  ],
+                  "properties": {
+                    "schema_version": {
+                      "const": "1"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ModelEvent"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "snapshot_as_of": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filters, interval or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No matching data or resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Read-only endpoint. Empty response body.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "const": "GET, HEAD"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Configured rate limiter rejected request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Public D1 unavailable; private state is not disclosed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/gpu/coverage": {
       "get": {
         "summary": "Current search coverage; partial is not inventory zero",
@@ -34,12 +548,13 @@
             "name": "dataset",
             "in": "query",
             "required": false,
-            "description": "Dataset filter",
+            "description": "Dataset filter. ai_model_catalog is opt-in to preserve default legacy price clients.",
             "schema": {
               "type": "string",
               "enum": [
                 "fx",
                 "ai_api_prices",
+                "ai_model_catalog",
                 "gpu_rental",
                 "gpu_secondary"
               ]
@@ -329,12 +844,13 @@
             "name": "dataset",
             "in": "query",
             "required": false,
-            "description": "Dataset filter",
+            "description": "Dataset filter. ai_model_catalog is opt-in to preserve default legacy price clients.",
             "schema": {
               "type": "string",
               "enum": [
                 "fx",
                 "ai_api_prices",
+                "ai_model_catalog",
                 "gpu_rental",
                 "gpu_secondary"
               ]
@@ -624,12 +1140,13 @@
             "name": "dataset",
             "in": "query",
             "required": false,
-            "description": "Dataset filter",
+            "description": "Dataset filter. ai_model_catalog is opt-in to preserve default legacy price clients.",
             "schema": {
               "type": "string",
               "enum": [
                 "fx",
                 "ai_api_prices",
+                "ai_model_catalog",
                 "gpu_rental",
                 "gpu_secondary"
               ]
@@ -1863,15 +2380,26 @@
             }
           },
           {
+            "name": "model_snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Exact Models.dev snapshot ID",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
             "name": "dataset",
             "in": "query",
             "required": false,
-            "description": "Dataset filter",
+            "description": "Dataset filter. ai_model_catalog is opt-in to preserve default legacy price clients.",
             "schema": {
               "type": "string",
               "enum": [
                 "fx",
                 "ai_api_prices",
+                "ai_model_catalog",
                 "gpu_rental",
                 "gpu_secondary"
               ]
@@ -2125,7 +2653,7 @@
     },
     "/v1/latest": {
       "get": {
-        "summary": "Latest accepted revision per exact series (maximum 100); GPU only latest complete scope membership",
+        "summary": "Latest accepted revision per exact series (maximum 100); GPU and model catalogs use latest complete scope membership",
         "parameters": [
           {
             "name": "as_of",
@@ -2228,15 +2756,26 @@
             }
           },
           {
+            "name": "model_snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Exact Models.dev snapshot ID",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
             "name": "dataset",
             "in": "query",
             "required": false,
-            "description": "Dataset filter",
+            "description": "Dataset filter. ai_model_catalog is opt-in to preserve default legacy price clients.",
             "schema": {
               "type": "string",
               "enum": [
                 "fx",
                 "ai_api_prices",
+                "ai_model_catalog",
                 "gpu_rental",
                 "gpu_secondary"
               ]
@@ -2551,15 +3090,26 @@
             }
           },
           {
+            "name": "model_snapshot",
+            "in": "query",
+            "required": false,
+            "description": "Exact Models.dev snapshot ID",
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            }
+          },
+          {
             "name": "dataset",
             "in": "query",
             "required": false,
-            "description": "Dataset filter",
+            "description": "Dataset filter. ai_model_catalog is opt-in to preserve default legacy price clients.",
             "schema": {
               "type": "string",
               "enum": [
                 "fx",
                 "ai_api_prices",
+                "ai_model_catalog",
                 "gpu_rental",
                 "gpu_secondary"
               ]
@@ -3048,6 +3598,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "models-catalog-v1",
                 "gpu-market-v1",
                 "same-series-change-v1",
                 "ecb-original-v1",
@@ -3245,6 +3796,7 @@
             "enum": [
               "fx",
               "ai_api_prices",
+              "ai_model_catalog",
               "gpu_rental",
               "gpu_secondary"
             ]
@@ -3319,6 +3871,7 @@
             "enum": [
               "advertised_quote",
               "reference_rate",
+              "catalog_listing",
               "derived",
               "observed_transaction",
               "third_party_reported_transaction",
@@ -3327,6 +3880,14 @@
           },
           "snapshot_id": {
             "type": "string"
+          },
+          "model_snapshot_id": {
+            "type": "string"
+          },
+          "first_model_observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
           },
           "backfill": {
             "type": "boolean"
@@ -3485,6 +4046,32 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "price_state": {
+                          "type": "string",
+                          "enum": [
+                            "reported",
+                            "zero_unverified",
+                            "missing",
+                            "unknown",
+                            "unsupported",
+                            "free_confirmed"
+                          ]
+                        },
+                        "free_evidence_ref": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "source_path": {
+                          "type": "string"
+                        },
+                        "pricing_mode": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -3529,6 +4116,262 @@
                   "billing_notes",
                   "tax_status",
                   "platform_fee_status"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "model_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "serving_provider": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "provider_endpoint_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "model_author": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "model_version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "identifier_kind": {
+                    "type": "string",
+                    "const": "unknown"
+                  },
+                  "canonical_model_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "mapping_basis": {
+                    "type": "string",
+                    "enum": [
+                      "source_canonical_model_id",
+                      "not_provided"
+                    ]
+                  },
+                  "mapping_version": {
+                    "type": "string",
+                    "const": "models-canonical-v1"
+                  },
+                  "context_limit": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "max_input": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "max_output": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^(0|[1-9]\\d*)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "modality": {
+                    "type": "object",
+                    "properties": {
+                      "input": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "output": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "input",
+                      "output"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "capabilities": {
+                    "type": "object",
+                    "properties": {
+                      "reasoning": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "tool_call": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "structured_output": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "attachment": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "temperature": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "reasoning",
+                      "tool_call",
+                      "structured_output",
+                      "attachment",
+                      "temperature"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "release_date": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}(-\\d{2})?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "upstream_updated_date": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}(-\\d{2})?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source_status": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "alpha",
+                          "beta",
+                          "deprecated"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "availability": {
+                    "type": "string",
+                    "const": "unknown"
+                  },
+                  "pricing_scope": {
+                    "type": "string",
+                    "const": "provider_catalog"
+                  },
+                  "region": {
+                    "type": "null"
+                  },
+                  "service_tier": {
+                    "type": "null"
+                  },
+                  "missing_reasons": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "enum": [
+                        "not_provided",
+                        "not_in_policy",
+                        "invalid_source_value",
+                        "not_established_by_catalog"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "model_id",
+                  "serving_provider",
+                  "provider_endpoint_id",
+                  "model_author",
+                  "model_version",
+                  "identifier_kind",
+                  "canonical_model_id",
+                  "mapping_basis",
+                  "mapping_version",
+                  "context_limit",
+                  "max_input",
+                  "max_output",
+                  "modality",
+                  "capabilities",
+                  "release_date",
+                  "upstream_updated_date",
+                  "source_status",
+                  "availability",
+                  "pricing_scope",
+                  "region",
+                  "service_tier",
+                  "missing_reasons"
                 ],
                 "additionalProperties": false
               },
@@ -4542,6 +5385,712 @@
           "stale",
           "stale_reason",
           "fx_reference"
+        ],
+        "additionalProperties": false
+      },
+      "ModelCatalog": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180
+          },
+          "serving_provider": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "provider_endpoint_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 180
+          },
+          "model_author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "identifier_kind": {
+            "type": "string",
+            "const": "unknown"
+          },
+          "canonical_model_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mapping_basis": {
+            "type": "string",
+            "enum": [
+              "source_canonical_model_id",
+              "not_provided"
+            ]
+          },
+          "mapping_version": {
+            "type": "string",
+            "const": "models-canonical-v1"
+          },
+          "context_limit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_input": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_output": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9]\\d*)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modality": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "output": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "additionalProperties": false
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "reasoning": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "tool_call": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "structured_output": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "attachment": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "temperature": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "reasoning",
+              "tool_call",
+              "structured_output",
+              "attachment",
+              "temperature"
+            ],
+            "additionalProperties": false
+          },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}(-\\d{2})?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upstream_updated_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}(-\\d{2})?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "alpha",
+                  "beta",
+                  "deprecated"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "availability": {
+            "type": "string",
+            "const": "unknown"
+          },
+          "pricing_scope": {
+            "type": "string",
+            "const": "provider_catalog"
+          },
+          "region": {
+            "type": "null"
+          },
+          "service_tier": {
+            "type": "null"
+          },
+          "missing_reasons": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "not_provided",
+                "not_in_policy",
+                "invalid_source_value",
+                "not_established_by_catalog"
+              ]
+            }
+          }
+        },
+        "required": [
+          "model_id",
+          "serving_provider",
+          "provider_endpoint_id",
+          "model_author",
+          "model_version",
+          "identifier_kind",
+          "canonical_model_id",
+          "mapping_basis",
+          "mapping_version",
+          "context_limit",
+          "max_input",
+          "max_output",
+          "modality",
+          "capabilities",
+          "release_date",
+          "upstream_updated_date",
+          "source_status",
+          "availability",
+          "pricing_scope",
+          "region",
+          "service_tier",
+          "missing_reasons"
+        ],
+        "additionalProperties": false
+      },
+      "ModelCoverage": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "1"
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "rights_version": {
+            "type": "string"
+          },
+          "dataset": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "string",
+                "const": "ai_model_catalog"
+              },
+              {
+                "type": "string",
+                "const": "ai_api_prices"
+              }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "scope_hash": {
+            "type": "string"
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "id",
+                "canonical_model_id",
+                "limit.context",
+                "limit.input",
+                "limit.output",
+                "modalities.input",
+                "modalities.output",
+                "reasoning",
+                "tool_call",
+                "structured_output",
+                "attachment",
+                "temperature",
+                "release_date",
+                "last_updated",
+                "status",
+                "cost",
+                "experimental.modes.cost"
+              ]
+            }
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "capture_complete": {
+            "type": "boolean"
+          },
+          "enumerated_model_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "model_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "price_observation_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "price_component_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "price_quarantined_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "data_origin": {
+            "type": "string",
+            "enum": [
+              "live",
+              "synthetic"
+            ]
+          },
+          "basis": {
+            "type": "string",
+            "const": "secondary_community_catalog"
+          },
+          "availability_verified": {
+            "type": "boolean",
+            "const": false
+          },
+          "market_representative": {
+            "type": "boolean",
+            "const": false
+          },
+          "attribution": {
+            "type": "string"
+          },
+          "reuse": {
+            "type": "object",
+            "properties": {
+              "license_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "conditions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "notice": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "license_url",
+              "conditions",
+              "notice"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "schema_version",
+          "snapshot_id",
+          "source_id",
+          "rights_version",
+          "dataset",
+          "scope_hash",
+          "providers",
+          "fields",
+          "observed_at",
+          "recorded_at",
+          "completed_at",
+          "state",
+          "capture_complete",
+          "enumerated_model_count",
+          "model_count",
+          "price_observation_count",
+          "price_component_count",
+          "price_quarantined_count",
+          "reasons",
+          "data_origin",
+          "basis",
+          "availability_verified",
+          "market_representative",
+          "attribution",
+          "reuse"
+        ],
+        "additionalProperties": false
+      },
+      "ModelEvent": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string"
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "record_key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "baseline_seen",
+              "first_seen",
+              "observed_again",
+              "reappeared",
+              "not_seen",
+              "metadata_changed",
+              "source_mapping_changed",
+              "source_deprecated",
+              "price_conditions_changed",
+              "price_changed"
+            ]
+          },
+          "observation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "previous_observation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "release_inferred": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "release_inferred"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "fields"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "before": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "after": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "automatic_merge": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "before",
+                  "after",
+                  "automatic_merge"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "availability": {
+                    "type": "string",
+                    "const": "unknown"
+                  }
+                },
+                "required": [
+                  "availability"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "price_direction": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "price_direction"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "component": {
+                          "type": "string"
+                        },
+                        "before": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "after": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "component",
+                        "before",
+                        "after"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "components"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "scope_hash": {
+                    "type": "string"
+                  },
+                  "availability": {
+                    "type": "string",
+                    "const": "unknown"
+                  },
+                  "deprecation_inferred": {
+                    "type": "boolean",
+                    "const": false
+                  }
+                },
+                "required": [
+                  "scope_hash",
+                  "availability",
+                  "deprecation_inferred"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "methodology": {
+            "type": "string",
+            "const": "models-catalog-v1"
+          },
+          "attribution": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "reuse": {
+            "type": "object",
+            "properties": {
+              "license_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "conditions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "notice": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "license_url",
+              "conditions",
+              "notice"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "event_id",
+          "snapshot_id",
+          "record_key",
+          "kind",
+          "observation_id",
+          "previous_observation_id",
+          "observed_at",
+          "recorded_at",
+          "details",
+          "methodology",
+          "attribution",
+          "source_id",
+          "reuse"
         ],
         "additionalProperties": false
       },

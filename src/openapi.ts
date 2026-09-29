@@ -1,10 +1,11 @@
 import { GPURentalSchema, GPUSecondarySchema } from './gpu';
 import { z } from 'zod';
 import { AISchema, DecimalString } from './schema';
+import { ModelCatalogSchema, ModelCoverageSchema, ModelEventSchema } from './models-schema';
 export const PublicObservationSchema = z.object({
   observation_id: z.string(),
   entity_key: z.string(),
-  dataset: z.enum(['fx', 'ai_api_prices', 'gpu_rental', 'gpu_secondary']),
+  dataset: z.enum(['fx', 'ai_api_prices', 'ai_model_catalog', 'gpu_rental', 'gpu_secondary']),
   schema_version: z.literal('1'),
   dataset_version: z.string(),
   data_origin: z.enum(['live', 'synthetic']),
@@ -18,16 +19,20 @@ export const PublicObservationSchema = z.object({
   observation_basis: z.enum([
     'advertised_quote',
     'reference_rate',
+    'catalog_listing',
     'derived',
     'observed_transaction',
     'third_party_reported_transaction',
     'modeled_estimate',
   ]),
   snapshot_id: z.string().optional(),
+  model_snapshot_id: z.string().optional(),
+  first_model_observed_at: z.iso.datetime().optional(),
   backfill: z.boolean().optional(),
   statistical_exclusions: z.array(z.string()).optional(),
   value: z.union([
     AISchema,
+    ModelCatalogSchema,
     GPURentalSchema,
     GPUSecondarySchema,
     z.object({
@@ -71,6 +76,15 @@ export const PublicObservationSchema = z.object({
   lineage: z.array(z.string()).optional(),
 });
 export const methodology = {
+  'models-catalog-v1': {
+    id: 'models-catalog-v1',
+    description:
+      'Provider-scoped secondary community catalog. Baseline and first observation are not releases. Not-seen requires two complete identical scopes and is not deprecation. Source canonical linkage is versioned without automatic model merging; alias/fixed version remains unknown unless established. Price eligibility is separate from membership.',
+    history:
+      'Daily immutable observations, bounded checkpoint replay, explicit reviewed reanalysis and public completion cutoff. Current rights and input lineage apply to events.',
+    prices:
+      'Original USD/million_tokens. Retain exact context-tier labels and experimental mode labels, not assumed batch/priority semantics. Unknown structures quarantine only that price. Source zero is zero_unverified, never free_confirmed. No unit conversion or derived ranking is published.',
+  },
   'gpu-market-v1': {
     id: 'gpu-market-v1',
     description:
@@ -145,10 +159,14 @@ const common = [
     'Knowledge cutoff; current rights still apply',
   ),
   ...gpuFilters,
+  query('model_snapshot', { type: 'string', maxLength: 160 }, 'Exact Models.dev snapshot ID'),
   query(
     'dataset',
-    { type: 'string', enum: ['fx', 'ai_api_prices', 'gpu_rental', 'gpu_secondary'] },
-    'Dataset filter',
+    {
+      type: 'string',
+      enum: ['fx', 'ai_api_prices', 'ai_model_catalog', 'gpu_rental', 'gpu_secondary'],
+    },
+    'Dataset filter. ai_model_catalog is opt-in to preserve default legacy price clients.',
   ),
   query(
     'entity',
@@ -267,11 +285,35 @@ export const openapi = {
   openapi: '3.1.0',
   info: {
     title: 'AI Investment APIs',
-    version: '0.2.0',
+    version: '0.3.0',
     description:
       'Research observations, not recommendations. Decimal strings. No universal data license. Public cache disabled for rights revocation.',
   },
   paths: {
+    '/v1/models/coverage': {
+      get: operation(
+        'Model catalog snapshots; capture completeness is separate from price eligibility',
+        [
+          query('source', { type: 'string' }, 'Source ID'),
+          query('scope', { type: 'string' }, 'Exact provider/field/policy/parser scope'),
+          query('snapshot', { type: 'string' }, 'Snapshot ID'),
+          ...history.filter((p) => ['as_of', 'limit', 'cursor'].includes(p.name)),
+        ],
+        gpuArray('ModelCoverage'),
+      ),
+    },
+    '/v1/models/events': {
+      get: operation(
+        'Baseline, reobservation, first seen, reappearance, not seen, metadata, mapping, deprecation and price history with current input rights',
+        [
+          query('source', { type: 'string' }, 'Source ID'),
+          query('scope', { type: 'string' }, 'Exact scope'),
+          query('snapshot', { type: 'string' }, 'Snapshot ID'),
+          ...history.filter((p) => ['as_of', 'limit', 'cursor'].includes(p.name)),
+        ],
+        gpuArray('ModelEvent'),
+      ),
+    },
     '/v1/gpu/coverage': {
       get: operation(
         'Current search coverage; partial is not inventory zero',
@@ -322,7 +364,7 @@ export const openapi = {
     },
     '/v1/latest': {
       get: operation(
-        'Latest accepted revision per exact series (maximum 100); GPU only latest complete scope membership',
+        'Latest accepted revision per exact series (maximum 100); GPU and model catalogs use latest complete scope membership',
         common,
         arraySchema,
       ),
@@ -394,6 +436,9 @@ export const openapi = {
   components: {
     schemas: {
       Observation: z.toJSONSchema(PublicObservationSchema, { target: 'draft-2020-12' }),
+      ModelCatalog: z.toJSONSchema(ModelCatalogSchema),
+      ModelCoverage: z.toJSONSchema(ModelCoverageSchema),
+      ModelEvent: z.toJSONSchema(ModelEventSchema),
       GPURental: z.toJSONSchema(GPURentalSchema),
       GPUSecondary: z.toJSONSchema(GPUSecondarySchema),
       Coverage: z.toJSONSchema(CoverageSchema),
