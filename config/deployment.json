@@ -11,7 +11,7 @@
   "deployment_controller": "manual_wrangler",
   "deployment_approval_ref": null,
   "cron_enable_approval_ref": null,
-  "retention_review_ref": null,
+  "retention_review_ref": "Manual review 2026-09-29: R2 evidence/ecb/ 365d, evidence/models_dev/ 90d, archive/ 365d",
   "stage": "bootstrap",
   "public_approval_ref": null,
   "legacy_retention": {
