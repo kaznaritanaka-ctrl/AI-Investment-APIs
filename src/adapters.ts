@@ -10,7 +10,7 @@ import {
   type Candidate,
   type AIPrice,
 } from './schema';
-import { decimal, isoDate, stable, hash } from './util';
+import { decimal, isoDate, stable, hash, hashBytes } from './util';
 type Obj = Record<string, unknown>;
 const obj = (x: unknown): Obj => {
   if (!x || typeof x !== 'object' || Array.isArray(x)) throw new Error('invalid_structure');
@@ -61,7 +61,8 @@ export async function evidenceFromBody(
   headers = new Headers(),
   synthetic = false,
 ): Promise<Evidence> {
-  const payload_hash = await hash(text);
+  const bytes = new TextEncoder().encode(text);
+  const payload_hash = await hashBytes(bytes);
   const body = source.adapter === 'models_dev' ? projectModels(text, source) : text;
   return {
     source_id: source.source_id,
@@ -77,7 +78,7 @@ export async function evidenceFromBody(
     response_status: status,
     payload_hash,
     evidence_hash: await hash(body),
-    bytes: new TextEncoder().encode(text).byteLength,
+    bytes: bytes.byteLength,
     etag: headers.get('etag'),
     last_modified: headers.get('last-modified'),
     synthetic,

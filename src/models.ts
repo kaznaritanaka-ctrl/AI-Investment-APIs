@@ -1,7 +1,7 @@
 import { AISchema, type AIPrice, type Source, type Evidence } from './schema';
 import { ModelCatalogSchema, type ModelCatalog } from './models-schema';
 import { modelsAuthorizationReady } from './policy';
-import { stable, hash, decimal, isoDate } from './util';
+import { stable, hash, hashBytes, decimal, isoDate } from './util';
 
 export const MODELS_PARSER = 'models-catalog-20260930.1';
 type Obj = Record<string, unknown>;
@@ -257,9 +257,16 @@ function projectRecord(s: Source, provider: string, id: string, m: Obj): Project
   return { key: provider + '/' + id, catalog, price, price_issues: [...new Set(flags)] };
 }
 export async function projectModelCatalog(text: string, s: Source): Promise<ModelProjection> {
+  return projectEncodedCatalog(text, s, new TextEncoder().encode(text));
+}
+// Only internal callers can supply the encoding; no caller-controlled byte count can bypass limits.
+async function projectEncodedCatalog(
+  text: string,
+  s: Source,
+  bytes: Uint8Array,
+): Promise<ModelProjection> {
   if (!modelsAuthorizationReady(s)) throw new Error('model_scope_not_authorized');
-  if (new TextEncoder().encode(text).byteLength > s.max_bytes)
-    throw new Error('response_too_large');
+  if (bytes.byteLength > s.max_bytes) throw new Error('response_too_large');
   const started = performance.now();
   // Native source-aware reviver keeps the original numeric lexeme without building
   // very large strings character-by-character. Fail closed on unsupported runtimes.
@@ -324,7 +331,8 @@ export async function modelEvidence(
   observed: string,
   synthetic = false,
 ): Promise<Evidence> {
-  const projected = await projectModelCatalog(text, s),
+  const bytes = new TextEncoder().encode(text),
+    projected = await projectEncodedCatalog(text, s, bytes),
     body = stable(projected);
   return {
     format: 'models_projection_v2',
@@ -333,9 +341,9 @@ export async function modelEvidence(
     source_policy_version: s.policy.version,
     observed_at: observed,
     response_status: 200,
-    payload_hash: await hash(text),
+    payload_hash: await hashBytes(bytes),
     evidence_hash: await hash(body),
-    bytes: new TextEncoder().encode(text).byteLength,
+    bytes: bytes.byteLength,
     etag: null,
     last_modified: null,
     synthetic,
@@ -361,10 +369,10 @@ export async function readModelEvidence(
     p.records.length > s.models!.max_models
   )
     throw new Error('evidence_scope_mismatch');
+  const granted = new Set(s.models!.fields);
   for (const r of p.records) {
     const catalog = ModelCatalogSchema.parse(r.catalog);
     const price = r.price ? AISchema.parse(r.price) : null;
-    const granted = new Set(s.models!.fields);
     const guarded = {
       canonical_model_id: catalog.canonical_model_id ?? catalog.model_author,
       'limit.context': catalog.context_limit,

@@ -15,6 +15,8 @@
     "cost": "node scripts/cost-model.mjs",
     "models:status": "node scripts/models-status.mjs",
     "models:benchmark": "node scripts/models-benchmark.mjs",
+    "collector:benchmark": "node scripts/collector-benchmark.mjs",
+    "collector:benchmark:summary": "node scripts/summarize-collector-benchmark.mjs",
     "models:cost": "node scripts/models-cost.mjs",
     "models:live": "node scripts/models-live-runner.mjs",
     "test:runtime": "node scripts/run.mjs runtime",
