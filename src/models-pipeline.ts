@@ -12,6 +12,7 @@ import {
   type ModelSnapshot,
 } from './models-store';
 import { hash, stable, errorCode, isoTime } from './util';
+import { collectionIdentity } from './run-identity';
 
 export type ModelCollectOptions = CollectOptions & {
   savedOnly?: boolean;
@@ -23,17 +24,29 @@ export async function collectModels(
   scheduled: string,
   opt: ModelCollectOptions = {},
 ): Promise<RunResult> {
-  const now = opt.now ?? (() => new Date().toISOString()),
-    run = await hash(s.source_id + '|' + scheduled),
-    base = { source_id: s.source_id, run_id: run };
+  const now = opt.now ?? (() => new Date().toISOString());
+  let run = await hash(s.source_id + '|' + scheduled);
+  let base: Pick<RunResult, 'source_id' | 'run_id' | 'logical_slot' | 'run_kind'> = {
+    source_id: s.source_id,
+    run_id: run,
+  };
   if (!isoTime(scheduled) || scheduled > now())
     return { ...base, state: 'failed', reason: 'invalid_schedule' };
   if (opt.synthetic && env.ENVIRONMENT !== 'test')
     return { ...base, state: 'failed', reason: 'synthetic_data_blocked' };
-  const parser = opt.parser ?? MODELS_PARSER,
-    snapshotId = await hash(run + '|' + s.policy.version + '|' + parser);
+  const parser = opt.parser ?? MODELS_PARSER;
   let lease: string | null = null;
   try {
+    const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, scheduled);
+    run = identity.run_id;
+    scheduled = identity.storedSlot;
+    base = {
+      source_id: s.source_id,
+      run_id: run,
+      logical_slot: identity.slot,
+      run_kind: identity.kind,
+    };
+    const snapshotId = await hash(run + '|' + s.policy.version + '|' + parser);
     await syncSource(env, s, now());
     await env.PRIVATE_DB.prepare(
       "INSERT OR IGNORE INTO collection_runs(run_id,source_id,scheduled_for,state) VALUES(?,?,?,'pending')",
