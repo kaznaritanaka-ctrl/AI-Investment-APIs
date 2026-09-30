@@ -6,20 +6,26 @@ import { expireGPUData } from './gpu-retention';
 import { resumeModelRuns } from './models-pipeline';
 import { expireModels } from './models-retention';
 import { recordSummary, deliverNotifications, watchdog, expireEvidence } from './operations';
+import { dailyCollectionSlot, minuteSlot } from './run-identity';
 export default {
   async scheduled(controller: ScheduledController, env: CollectorEnv, _ctx: ExecutionContext) {
     if (env.COLLECTION_ENABLED !== 'true') return;
     const now = new Date().toISOString(),
-      slot = new Date(controller.scheduledTime).toISOString();
+      slot = minuteSlot(new Date(controller.scheduledTime).toISOString());
     let results;
     if (controller.cron === env.COLLECTION_CRON)
       results = [
         ...(await collectAll(
           env,
           activeSources.filter((s) => !s.gpu),
-          slot,
+          dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
         )),
-        ...(await queueGPURuns(env, activeSources, slot, now)),
+        ...(await queueGPURuns(
+          env,
+          activeSources,
+          dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
+          now,
+        )),
       ];
     else if (controller.cron === env.GPU_RESUME_CRON) {
       // Retention uses a separate continuation slot from model ingestion.
@@ -29,17 +35,11 @@ export default {
         ...(await resumeGPURuns(env, activeSources, now)),
       ];
     } else if (controller.cron === env.WATCHDOG_CRON) {
-      const parts = env.COLLECTION_CRON?.split(' ');
-      if (!parts || parts.length !== 5 || !/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1]))
-        throw new Error('invalid_collection_cron');
-      const day = new Date(controller.scheduledTime);
-      day.setUTCHours(Number(parts[1]), Number(parts[0]), 0, 0);
-      if (day.getTime() > controller.scheduledTime) day.setUTCDate(day.getUTCDate() - 1);
       results = [
         ...(await watchdog(
           env,
           activeSources.filter((s) => !s.gpu),
-          day.toISOString(),
+          dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
           now,
         )),
         ...(await resumeGPURuns(env, activeSources, now, true)),

@@ -5,6 +5,7 @@ import { syncSource } from './publication';
 import { stable, hash, errorCode } from './util';
 import { collectSource, type RunResult } from './pipeline';
 import { canCollect } from './policy';
+import { collectionIdentity, minuteSlot } from './run-identity';
 
 export async function recordSummary(
   env: CollectorEnv,
@@ -106,16 +107,15 @@ export async function deliverNotifications(
   return { state: sent === pending.results.length ? 'delivered' : 'pending', sent };
 }
 export async function watchdog(env: CollectorEnv, sources: Source[], slot: string, now: string) {
+  slot = minuteSlot(slot);
   const results: RunResult[] = [];
   for (const s of sources) {
-    const run = await hash(s.source_id + '|' + slot);
+    let run = await hash(s.source_id + '|' + slot);
     try {
       await syncSource(env, s, now);
-      const row = await env.PRIVATE_DB.prepare(
-        'SELECT state,lease_until,recovery_count FROM collection_runs WHERE run_id=?',
-      )
-        .bind(run)
-        .first<{ state: string; lease_until: string | null; recovery_count: number }>();
+      const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, slot);
+      run = identity.run_id;
+      const row = identity.row;
       if (!canCollect(s, now)) {
         results.push({ source_id: s.source_id, run_id: run, state: 'policy_skipped' });
         continue;
@@ -139,7 +139,9 @@ export async function watchdog(env: CollectorEnv, sources: Source[], slot: strin
         continue;
       }
       if (isGPU(s.dataset_type)) {
-        results.push(await collectGPU(env, s, slot, { now: () => now, savedOnly: true }));
+        results.push(
+          await collectGPU(env, s, identity.storedSlot, { now: () => now, savedOnly: true }),
+        );
         continue;
       }
       // Recovery only from saved evidence. Never refetch every source from a watchdog.
@@ -150,7 +152,9 @@ export async function watchdog(env: CollectorEnv, sources: Source[], slot: strin
         )
           .bind(run)
           .run();
-        results.push(await collectSource(env, s, slot, { now: () => now }));
+        results.push(
+          await collectSource(env, s, identity.storedSlot, { now: () => now, savedOnly: true }),
+        );
       } else
         results.push({
           source_id: s.source_id,
