@@ -12,7 +12,7 @@ P0のコードを適用しても、`config/sources/models_dev.json` を承認し
 
 1. [policy案](../config/proposals/models_dev.v3.json)のprovider部分集合、field部分集合、各権利gate、保持期間をレビューします。直接providerの取得許可とは別です。公開未許可ならprivate-onlyを選べます。raw配信・外部LLM許可は不要です。
 2. `owner_approval_ref`、`runtime_review_ref`、`retention.reviewed_ref`、policyの判断主体・根拠・有効期間を実際の記録で確定します。モデル別の日次追加承認は不要です。既存v2の同名上書きはしません。
-3. 現行Freeは拡張のD1 query/解析予算に適合しません。[費用と実測](models-validation.md)を確認し、必要ならWorkers Paidを別承認で契約・確認します。Website用Proプランと混同しません。Paid確認後だけdeploymentのplan根拠とTime Travel（30日）を更新します。この開発は契約を実行しません。
+3. 現行Freeは拡張のD1 query/解析予算に適合しません。[費用と実測](models-validation.md)と[追加のCPU比較](collector-performance.md)を確認し、必要ならWorkers Paidを別承認で契約・確認します。Website用Proプランと混同しません。Paid確認後だけdeploymentのplan根拠を更新します。Time Travelは現行7日を維持し、30日への変更はsource別backup権利・保持審査後に別承認します。この開発は契約を実行しません。
 4. raw90/archive365/normalized1095/backup30日という提案を確認します。許諾上限があればcleanupの余裕とbackupまで含めて短くします。R2のevidence/models_dev/とarchive/models_dev/の非公開lifecycleを確認します。既存のarchive/365日ルールは同等に使えます。保持年数・最大componentがD1 10GB/DBに収まるか審査します。
 5. 通知先・外部read-only health監視は既存未設定事項です。通知用Secretは`ALERT_WEBHOOK_URL`（既存コードの設定名）を使用し、値をGitやチャットへ貼りません。Models.dev自体のAPIキーは不要です。
 

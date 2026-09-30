@@ -32,7 +32,7 @@ Evidence processing includes parse, selection, schema/decimal work, serializatio
 | B | 13 / 1 | 3,411 / 801 | 416 | 2,673 | 6 | 3,679 / 11,867 | 14 / 11 / 0 |
 | C | 23 / 1 | 6,781 / 1,591 | 416 | 5,303 | 6 | 7,320 / 23,687 | 24 / 21 / 0 |
 
-Counts were unchanged by the allocation changes. These are **new baseline snapshot** costs, not long-history or retention worst cases. Per binding the maximum is 337 SQL in B/C. Bounded batches do not imply a bounded-enough total query count: local emulation did not enforce the Free per-invocation query limit. This is an additional reason not to approve P0 on Free.
+Counts were unchanged by the allocation changes. These are **new baseline snapshot** costs, not long-history or retention worst cases. Per binding the maximum is 337 SQL in B/C. Separately from statement counts, D1 API calls per invocation peak at **29 / 263 / 263** for A/B/C (a batch is one call). Thus B/C exceed Free's invocation budget even when counting batches as single calls. Bounded batches do not imply a bounded-enough invocation: local emulation did not enforce the Free per-invocation query limit. This is an additional reason not to approve P0 on Free. All cases use 3 price components/model; the allowed maximum of 64 components/model and long-history retention/revisions are not capacity-tested, and Paid does not automatically make those workloads safe.
 
 ## Free / Paid decision (official documentation checked 2026-09-30)
 

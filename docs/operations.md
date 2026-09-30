@@ -6,7 +6,9 @@
 
 watchdog: 同日予定runの欠落/未完了を検出。保存済みR2があるrunだけ再処理し、全ソースの再取得はしない。復旧は最大3回。欠測はmissingで残る。watchdog自身と日次Cronの双方が停止したケースはCloudflareのplatform health監視が必要で、外部死活監視は未接続。
 
-通知: summaryはprivate D1へ先に保存。状態・件数に変化があればoutboxを作り、同一状態の重複を抑制する。復旧も状態変化になる。Webhook未設定はnot_configured、失敗はpendingのまま保持、最大3送信試行。Webhook受信側はidempotency-keyで重複を防ぐ。Webhook URL、認証header、応答bodyはログに出さない。通知不達でもsummaryを失わない。
+通知: summaryはprivate D1へ先に保存。collection／watchdog／continuationを区別し、同じ処理種別の非空summaryから状態・変更・異常件数が変化した場合にoutboxを作る。対象なしcontinuationは記録だけ残し、通知しない。復旧も状態変化になる。Webhook未設定はnot_configured、失敗はpendingのまま保持、最大3送信試行。Webhook受信側はidempotency-keyで重複を防ぐ。Webhook URL、認証header、応答bodyはログに出さない。通知不達でもsummaryを失わない。既存pendingはWebhook設定後に送信対象になるため、設定前に個別の扱いを承認する。
+
+2026-09-30のslot互換修正、安全なログ、pending分類、性能比較と本番反映案は[Collector継続運用リリース計画](collector-reliability-release.md)を参照。実装は本番反映待ちであり、旧誤missing記録を削除・更新していない。価格不変の正常再観測、Collector実行だけの完了、sourceの日付更新は別の事実として扱う。
 
 品質: 欠損、未知tier、不正値、選定カタログの不完全性、大きな同条件変化を隔離。元証拠とprivate観測/品質イベントは保持。大幅変化を市場シグナルや誤りと断定しない。APIが前回正常値を返す場合はheld_atによるstale_reasonを表示。古い値は鮮度が回復したように更新しない。
 

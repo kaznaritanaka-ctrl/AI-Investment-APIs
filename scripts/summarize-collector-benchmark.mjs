@@ -60,6 +60,7 @@ const cases = ['A', 'B', 'C'].map((kind) => {
                 ...steps.flatMap((s) => [s.private_statements, s.public_statements]),
               ),
               d1_calls: sum(steps, 'd1_calls'),
+              max_d1_calls_per_invocation: Math.max(...steps.map((s) => s.d1_calls)),
               max_batch: Math.max(...steps.map((s) => s.max_batch)),
               rows_read: sum(steps, 'rows_read'),
               rows_written: sum(steps, 'rows_written'),

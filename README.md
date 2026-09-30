@@ -45,3 +45,9 @@ pnpm smoke:liveは従来のFX/AIソースだけを対象とする明示ネット
 P0追加: `dataset=ai_model_catalog` と `model_snapshot` フィルター、`/v1/models/coverage`、`/v1/models/events`。既定のlatest/observationsには新catalog datasetを混ぜず、明示指定で取得します。価格は既存ai_api_pricesです。完全な同一scope間だけでnot_seenを生成し、掲載消失を提供終了としません。`latest` は最大100件なので全件はcoverageのsnapshotを指定してobservationsをページングします。
 
 コード配布ライセンスは未選択です。全データに共通する再配布ライセンスを付けず、sourceごとの出典・条件を返します。
+
+## Collector継続運用の修正（本番反映待ち）
+
+UTC予定slotと旧秒付きrunの互換照合、安全な構造化ログ、処理種別ごとのsummary、idle continuation通知の抑制を追加しています。既存P0、権利、公開境界、Cronは維持しています。watchdog単独版は0001/0002で検証し、P0を含む全体版とは別にレビュー・リリースできます。[反映・通知・復旧計画](docs/collector-reliability-release.md)を参照してください。
+
+`pnpm collector:benchmark before` / `after` は合成データだけのNode/workerd性能検証です。[改善前後の測定とFree/Paid比較](docs/collector-performance.md)には、ローカル経過時間・CPU代理指標と本番Cloudflare CPUを分けて記録しています。Free適合や本番反映済みを示す結果ではありません。
