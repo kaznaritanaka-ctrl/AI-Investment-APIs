@@ -9,6 +9,7 @@ import { evidenceFromBody } from './adapters';
 import { ingestEvidence, PARSER_VERSION } from './ingest';
 import { hash, stable, errorCode, isoTime } from './util';
 import { collectionIdentity } from './run-identity';
+import type { SourceObserver } from './telemetry';
 export type RunResult = {
   source_id: string;
   run_id: string;
@@ -21,6 +22,8 @@ export type RunResult = {
   issues?: number;
   logical_slot?: string;
   run_kind?: 'collection';
+  published?: number;
+  publication_batches?: string[];
 };
 type State = {
   suspended: number;
@@ -36,6 +39,7 @@ export type CollectOptions = {
   parser?: string;
   afterEvidenceSaved?: () => Promise<void>;
   savedOnly?: boolean;
+  observer?: SourceObserver;
 };
 export async function collectSource(
   env: CollectorEnv,
@@ -43,6 +47,10 @@ export async function collectSource(
   scheduled: string,
   opt: CollectOptions = {},
 ): Promise<RunResult> {
+  if (opt.observer)
+    return opt.observer(s, scheduled, () =>
+      collectSource(env, s, scheduled, { ...opt, observer: undefined }),
+    );
   if (s.models) return collectModels(env, s, scheduled, opt);
   if (isGPU(s.dataset_type)) return collectGPU(env, s, scheduled, opt);
   const now = opt.now ?? (() => new Date().toISOString());
@@ -230,6 +238,7 @@ export async function collectSource(
         changes: result.changes,
         quarantined: result.quarantined,
         issues: result.issues,
+        publication_batches: [result.publication.batch],
       };
     } catch (error) {
       const code = errorCode(error),

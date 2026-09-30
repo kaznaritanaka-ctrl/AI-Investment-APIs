@@ -13,6 +13,7 @@ import {
 } from './models-store';
 import { hash, stable, errorCode, isoTime } from './util';
 import { collectionIdentity } from './run-identity';
+import { observe, type SourceObserver } from './telemetry';
 
 export type ModelCollectOptions = CollectOptions & {
   savedOnly?: boolean;
@@ -220,6 +221,7 @@ export async function collectModels(
         accepted: final.model_count + final.accepted_prices,
         quarantined: final.quarantined_count,
         issues: JSON.parse(final.issues_json).length,
+        publication_batches: [snapshotId],
       };
     }
     await env.PRIVATE_DB.prepare(
@@ -244,6 +246,7 @@ export async function resumeModelRuns(
   sources: Source[],
   now: string,
   savedOnly = false,
+  observer?: SourceObserver,
 ): Promise<RunResult[]> {
   const selected = sources.filter((s) => s.models && s.enabled);
   if (!selected.length) return [];
@@ -266,23 +269,29 @@ export async function resumeModelRuns(
         review_ref: string | null;
       }>();
     results.push(
-      await collectModels(
-        env,
+      await observe(
+        observer,
         selected.find((s) => s.source_id === row.source_id)!,
         row.scheduled_for,
-        {
-          now: () => now,
-          savedOnly,
-          ...(revision?.revises_snapshot_id
-            ? {
-                parser: revision.parser_version,
-                revision: {
-                  snapshot_id: revision.revises_snapshot_id,
-                  review_ref: revision.review_ref!,
-                },
-              }
-            : {}),
-        },
+        () =>
+          collectModels(
+            env,
+            selected.find((s) => s.source_id === row.source_id)!,
+            row.scheduled_for,
+            {
+              now: () => now,
+              savedOnly,
+              ...(revision?.revises_snapshot_id
+                ? {
+                    parser: revision.parser_version,
+                    revision: {
+                      snapshot_id: revision.revises_snapshot_id,
+                      review_ref: revision.review_ref!,
+                    },
+                  }
+                : {}),
+            },
+          ),
       ),
     );
   }
