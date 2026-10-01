@@ -40,7 +40,7 @@ private/public各0003 migrationを追加し、0001/0002は変更しません。�
 3. 前回の完全・同一scopeとのnot_seenを50件ずつ処理。scopeはendpoint、provider、field、上限、policy、parser仕様のhashです。
 4. private件数とpublic staging件数を照合して公開を一括確定します。途中失敗・lease競合・同runの再実行で二重観測を作りません。R2以降の失敗は再HTTPせず復旧します。
 
-原JSONはintakeで全体解析します。さらに各continuationで最小投影を読み直すため、bounded SQLだけでCPU・メモリーの問題が解消するとは言えません。ローカルNode CPU/RSS、workerdのSQL/D1/R2、50/250/1000規模を別々に計測します。現在のFreeプランでは拡張処理を有効化できません。Paid契約・実CPU計測・保持期間を含む容量審査は別承認です。
+原JSONはintakeで全体解析します。さらに各continuationで最小投影を読み直すため、bounded SQLだけでCPU・メモリーの問題が解消するとは言えません。ローカルNode CPU/RSS、workerdのSQL/D1/R2、50/250/1000規模を別々に計測します。2026-10-01時点で本番のWorkers PaidとCollector CPU上限5,000msは確認済みです。P0ブランチの開発時点の設定は本番用候補で同期し、拡張時の実CPU・最大component・長期容量・保持期間の審査を別に完了します。手順は[有効化計画](models-enablement.md)に記載します。
 
 上限超過は保存対象を空にしてpartial/model_limit_exceededを記録し、切り取った先頭だけを完全取得としません。provider欠落・model identity/schema破損もpartialです。価格だけ未対応ならcatalog membershipは維持してそのpriceを隔離します。parser失敗/timeout/partial/scope変更は提供終了でもnot_seenでもありません。
 

@@ -1,10 +1,14 @@
 # Models.dev拡張の有効化・停止手順
 
-これは承認後に実施する手順です。このP0開発では本番deploy、remote migration、rights grant変更、plan契約、live収集を実行していません。毎日の人手作業を追加する手順ではありません。
+これはP0の承認後に実施する手順です。2026-10-01 JSTに、先行watchdogリリースの本番確認結果を反映しました。P0のremote migration、deploy、rights grant変更、拡張live収集は未実施です。毎日の人手作業を追加する手順ではありません。
 
 ## 維持する設定
 
-`config/deployment.json` はstage=enabled、現プランはfree（Dashboard確認根拠あり）、Time Travelは7日です。collectorはCOLLECTION_ENABLED=true、AGENT_ENABLED=false、既存3 Cron、routeなし・workers.dev/preview無効。APIのcustom domainは `api.ai-investment-research.net`、bindingはPUBLIC_DBのみです。値やIDは既存ファイルを使用し、bootstrapのCron空配列・gate falseを再適用しません。
+本番はWorkers Paid確認済みで、Collectorの明示CPU上限は5,000msです。先行リリースのcommitは `5c95d8e274f349228843ee3178b402141acaaab5`、versionは `620b932f-12d6-414c-aa68-32ac487dae64`。2026-10-01 03:17 JSTのECB／Models.devは各complete・観測2・受入2、03:47のwatchdogは同じ成功runを認識しました。これは既存scopeの実績で、P0拡張の本番容量検証ではありません。
+
+このP0ブランチの `config/deployment.json` には開発時点のfree／Time Travel 7日が残っています。本番用候補を作る際は、確認済みPaidの根拠、`d1_time_travel_days=30`、Collectorの `limits.cpu_ms=5000` を同期して全チェックを再実行します。この手順書の変更だけで設定が更新されたとは扱いません。PaidのTime Travelは30日という[公式仕様](https://developers.cloudflare.com/d1/platform/limits/)を保持審査に含め、source側のbackup許可をPaid承認から推測しません。
+
+stage=enabled、COLLECTION_ENABLED=true、AGENT_ENABLED=false、既存3 Cron、Collectorのrouteなし・workers.dev/preview無効を維持します。APIのcustom domainは `api.ai-investment-research.net`、DB bindingはPUBLIC_DBだけです。値やIDは既存ファイルを使用し、bootstrapのCron空配列・gate falseを再適用しません。API／Adminに同じCPU上限を機械的に追加しません。
 
 P0のコードを適用しても、`config/sources/models_dev.json` を承認して切り替えるまでは既存2モデル経路です。ECB・disabled GPU・Admin/Access・Secretsを変更しません。mainへのmergeも別承認です。
 
@@ -12,7 +16,7 @@ P0のコードを適用しても、`config/sources/models_dev.json` を承認し
 
 1. [policy案](../config/proposals/models_dev.v3.json)のprovider部分集合、field部分集合、各権利gate、保持期間をレビューします。直接providerの取得許可とは別です。公開未許可ならprivate-onlyを選べます。raw配信・外部LLM許可は不要です。
 2. `owner_approval_ref`、`runtime_review_ref`、`retention.reviewed_ref`、policyの判断主体・根拠・有効期間を実際の記録で確定します。モデル別の日次追加承認は不要です。既存v2の同名上書きはしません。
-3. 現行Freeは拡張のD1 query/解析予算に適合しません。[費用と実測](models-validation.md)と[追加のCPU比較](collector-performance.md)を確認し、必要ならWorkers Paidを別承認で契約・確認します。Website用Proプランと混同しません。Paid確認後だけdeploymentのplan根拠を更新します。Time Travelは現行7日を維持し、30日への変更はsource別backup権利・保持審査後に別承認します。この開発は契約を実行しません。
+3. Workers Paidは承認・確認済みです。[費用と実測](models-validation.md)と[追加のCPU比較](collector-performance.md)の開発時点のFree記載を、現在のプラン判定へ転用しません。Paid確認だけでruntime reviewを完了にせず、最大component、長期履歴、保持削除、scheduled処理全体を含むCPU／memory／D1／R2予算を確認します。既存の試験は主に3 components/modelで、提案上限64の最悪条件は未検証です。
 4. raw90/archive365/normalized1095/backup30日という提案を確認します。許諾上限があればcleanupの余裕とbackupまで含めて短くします。R2のevidence/models_dev/とarchive/models_dev/の非公開lifecycleを確認します。既存のarchive/365日ルールは同等に使えます。保持年数・最大componentがD1 10GB/DBに収まるか審査します。
 5. 通知先・外部read-only health監視は既存未設定事項です。通知用Secretは`ALERT_WEBHOOK_URL`（既存コードの設定名）を使用し、値をGitやチャットへ貼りません。Models.dev自体のAPIキーは不要です。
 
@@ -41,27 +45,55 @@ git diff --check
 
 既存account/zone/domain/2 D1/R2を照合し、Time Travelの復元点と退避/復元権限を確認します。`pnpm preflight:cloudflare` は明示read-only接続です。必要な認証名は`CLOUDFLARE_API_TOKEN`、任意の`CLOUDFLARE_ACCOUNT_ID`は設定済みaccountと一致させます。Freeをsubscriptionの不在だけで推定しません。適用前は0003未適用のblockerが出ることを承知した上で、対象を誤っていないか確認します。
 
-**remote DB変更の承認後**、両方を前進migrationします。コマンドは実在するbindingとconfigを使用し、新リソースを作りません。
+以下の重大ステップはそれぞれ直前に対象・実行内容・失敗時の復旧方法を提示し、所有者の承認を得ます。一方の承認を後続のmigration／deployの包括承認にはしません。コマンドは実在するbindingとconfigを使用し、新リソースを作りません。
+
+まずread-onlyでmigration履歴を確認し、復元可能期間・bookmarkと現在のreleaseを記録します。
 
 ```sh
 pnpm exec wrangler d1 migrations list PRIVATE_DB --remote --config wrangler.collector.jsonc
 pnpm exec wrangler d1 migrations list PUBLIC_DB --remote --config wrangler.collector.jsonc
+```
+
+**1. private D1の0003を直前承認後に適用**します。
+
+```sh
 pnpm exec wrangler d1 migrations apply PRIVATE_DB --remote --config wrangler.collector.jsonc
+```
+
+private 0003はdataset CHECKを拡張するため、observationsの複写と表の置換を含みます。空DBの新設だけではありません。既存観測のID・件数・時刻・保存済fingerprint、foreign key、immutable triggerを適用前後で照合し、0003の記録を確認します。privateの検証が通るまでpublicへ進みません。本文を含む全テーブルexport／SELECT *はこの確認に含めません。
+
+**2. public D1の0003を別の直前承認後に適用**します。
+
+```sh
 pnpm exec wrangler d1 migrations apply PUBLIC_DB --remote --config wrangler.collector.jsonc
 ```
 
-0001/0002適用済み環境では0003だけが追加されます。既存Workerが動く環境を想定した前進変更です。履歴・FKを保持し、DROPによるリセット・schema巻戻しをしません。片側で失敗したらWorker適用へ進まず、migration履歴と原因を確認します。
+既存公開観測・完了batch、追加column／table／indexと0003の記録を確認します。0001/0002適用済み環境では0003だけが追加されます。片側で失敗したらWorker適用へ進まず、migration履歴と原因を確認します。既存Workerを維持し、前進修正を検討します。DROPによるリセット・既存観測削除・schema巻戻しを復旧手段にしません。
 
-**コードdeploy承認後**、承認済みstage/Cron/routesを保ったまま各Workerを1回ずつ適用します。
+両DBの検証後、ローカルdry-runを確認します。
 
 ```sh
 pnpm build
-pnpm exec wrangler deploy --config wrangler.collector.jsonc
+```
+
+**3. backward-compatible APIを直前承認後に先行deploy**します。
+
+```sh
 pnpm exec wrangler deploy --config wrangler.api.jsonc
+```
+
+version／commit、PUBLIC_DBだけのDB binding、health、公開schema、既存価格endpointの互換性を確認します。失敗時は直前の互換API版へ戻す案を提示し、Collectorへ進みません。
+
+**4. Collectorを別の直前承認後にdeploy**します。
+
+```sh
+pnpm exec wrangler deploy --config wrangler.collector.jsonc
 pnpm preflight:cloudflare
 ```
 
-最初は既存sourceのままコード・migrationだけ適用できます。拡張sourceの公開権限が未承認でも既存運転を止めません。上のdeployコマンドはdry-runではありません。この納品では実行していません。
+version／commit、CPU 5,000ms、bindings、Cron3本、scope、AGENT_ENABLED=false、外部非公開を確認します。その後の自然なcollection／continuation／watchdogでlive確認します。手動市場取得を増やしません。失敗時は当該schema・scopeと互換な直前版へ戻す案を提示し、DBの追加履歴を保持します。
+
+拡張sourceの権利が未承認なら、そのprovider／fieldはfail closedのまま既存ECB／Mistral収集を維持します。上のdeployコマンドはdry-runではありません。この手順更新では実行していません。
 
 ## 拡張scopeの切替
 
