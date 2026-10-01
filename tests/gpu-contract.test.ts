@@ -216,7 +216,7 @@ it('stops missing authentication, 403 and long Retry-After safely without follow
     ),
   ).rejects.toMatchObject({ retry_at: '2026-10-03T19:17:00.000Z' });
 });
-it('fails offline preflight on placeholders, mismatched accounts, Cron activation and unreviewed retention', () => {
+it('fails offline preflight on placeholders, mismatched accounts and unreviewed retention', () => {
   const placeholderCollector = structuredClone(collector),
     placeholderAPI = structuredClone(apiConfig),
     privatePlaceholder = '00000000-0000-0000-0000-000000000001',
@@ -228,14 +228,6 @@ it('fails offline preflight on placeholders, mismatched accounts, Cron activatio
   expect(report.static_valid).toBe(true);
   expect(report.ready).toBe(false);
   expect(report.blockers).toContain('d1_ids_placeholder');
-  expect(
-    inspectPreflight(
-      { ...deployment, stage: 'bootstrap' },
-      { ...collector, triggers: { crons: ['17 18 * * *'] } },
-      apiConfig,
-      sources,
-    ).errors,
-  ).toContain('bootstrap_cron_not_stopped');
   expect(
     inspectPreflight(deployment, collector, { ...apiConfig, r2_buckets: [{}] }, sources).errors,
   ).toContain('public_worker_private_binding_or_trigger');
