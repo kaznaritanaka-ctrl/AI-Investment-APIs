@@ -13,15 +13,31 @@ import { SourceSchema } from '../src/schema';
 import { hash, stable } from '../src/util';
 import { inspectPreflight } from '../scripts/preflight-core';
 import { readFileSync } from 'node:fs';
+import { sources } from '../src/sources';
 
 describe('provider-scoped Models.dev projection (synthetic)', () => {
-  it('keeps the live policy unchanged and the expansion unapproved', () => {
+  it('preserves legacy regression fixtures and rejects the original unapproved proposal', () => {
     expect(source('models_dev').selection).toHaveLength(2);
     expect(source('models_dev').models).toBeUndefined();
     expect(canCollect(SourceSchema.parse(proposal), time)).toBe(false);
     const s = expandedSource();
     delete s.policy.models_scope;
     expect(modelsAuthorizationReady(s)).toBe(false);
+  });
+  it('limits the approved deployment candidate to the reviewed providers, fields and independent rights', () => {
+    const active = sources.find((s) => s.source_id === 'models_dev')!;
+    expect(active.policy.version).toBe('models_dev-20261001-v3');
+    expect(active.enabled).toBe(true);
+    expect(active.selection).toEqual([]);
+    expect(active.models!.providers).toEqual(['openai', 'anthropic', 'google', 'xai', 'mistral']);
+    expect(active.models!.fields).toEqual(proposal.models.fields);
+    expect(active.policy.models_scope).toEqual(proposal.policy.models_scope);
+    expect(active.models!.retention.normalized_days).toBe(1095);
+    expect(active.models!.retention.backup_days).toBe(30);
+    expect(active.policy.rights.external_llm_processing).toBe('denied');
+    expect(active.policy.rights.raw_redistribution).toBe('denied');
+    expect(canCollect(active, time)).toBe(true);
+    expect(canCollect(active, active.policy.valid_until!)).toBe(false);
   });
   it('retains multiple providers, exact numeric tokens, explicit author mapping and date precision without secrets', async () => {
     const s = expandedSource(),
@@ -163,7 +179,8 @@ describe('provider-scoped Models.dev projection (synthetic)', () => {
     expect(inspectPreflight(d, c, a, [source('ecb'), source('models_dev')]).ready).toBe(true);
     const s = expandedSource();
     s.models!.max_models = 500;
-    expect(inspectPreflight(d, c, a, [s]).blockers).toContain(
+    const free = { ...d, workers_plan: 'free' };
+    expect(inspectPreflight(free, c, a, [s]).blockers).toContain(
       'models_dev:models_parse_and_d1_budget_requires_confirmed_paid_plan',
     );
     const paid = { ...d, workers_plan: 'paid' };

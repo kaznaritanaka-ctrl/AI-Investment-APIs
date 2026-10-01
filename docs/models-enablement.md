@@ -1,22 +1,22 @@
 # Models.dev拡張の有効化・停止手順
 
-これはP0の承認後に実施する手順です。2026-10-01 JSTに、先行watchdogリリースの本番確認結果を反映しました。P0のremote migration、deploy、rights grant変更、拡張live収集は未実施です。毎日の人手作業を追加する手順ではありません。
+これはP0の本番反映手順です。2026-10-01 JSTに、先行watchdogの本番確認、scope・権利・保持の承認、隔離ローカルlive測定を反映しました。P0のremote migration、deploy、本番拡張収集は未実施です。毎日の人手作業を追加する手順ではありません。
 
 ## 維持する設定
 
 本番はWorkers Paid確認済みで、Collectorの明示CPU上限は5,000msです。先行リリースのcommitは `5c95d8e274f349228843ee3178b402141acaaab5`、versionは `620b932f-12d6-414c-aa68-32ac487dae64`。2026-10-01 03:17 JSTのECB／Models.devは各complete・観測2・受入2、03:47のwatchdogは同じ成功runを認識しました。これは既存scopeの実績で、P0拡張の本番容量検証ではありません。
 
-このP0ブランチの `config/deployment.json` には開発時点のfree／Time Travel 7日が残っています。本番用候補を作る際は、確認済みPaidの根拠、`d1_time_travel_days=30`、Collectorの `limits.cpu_ms=5000` を同期して全チェックを再実行します。この手順書の変更だけで設定が更新されたとは扱いません。PaidのTime Travelは30日という[公式仕様](https://developers.cloudflare.com/d1/platform/limits/)を保持審査に含め、source側のbackup許可をPaid承認から推測しません。
+2026-10-01の本番用候補では、確認済みPaidの根拠、`d1_time_travel_days=30`、Collectorの `limits.cpu_ms=5000` を同期しました。scope・権利・保持の[所有者承認](p0-owner-review.md)と、現154モデルでの[容量・runtime審査](p0-runtime-review.md)を記録しています。PaidのTime Travelは30日という[公式仕様](https://developers.cloudflare.com/d1/platform/limits/)を保持審査に含め、source側のbackup許可をPaid承認から推測しません。
 
 stage=enabled、COLLECTION_ENABLED=true、AGENT_ENABLED=false、既存3 Cron、Collectorのrouteなし・workers.dev/preview無効を維持します。APIのcustom domainは `api.ai-investment-research.net`、DB bindingはPUBLIC_DBだけです。値やIDは既存ファイルを使用し、bootstrapのCron空配列・gate falseを再適用しません。API／Adminに同じCPU上限を機械的に追加しません。
 
-P0のコードを適用しても、`config/sources/models_dev.json` を承認して切り替えるまでは既存2モデル経路です。ECB・disabled GPU・Admin/Access・Secretsを変更しません。mainへのmergeも別承認です。
+ローカル本番候補の `config/sources/models_dev.json` は、承認済み5 provider・17 fieldの新policy v3へ切り替えました。旧v2設定は `config/history/models_dev.v2.json` に保存し、legacy回帰試験で使用します。本番はCollectorを別途承認してdeployするまで既存2モデル経路です。ECB・disabled GPU・Admin/Access・Secretsを変更しません。mainへのmergeも別承認です。
 
 ## 一度だけ必要な判断
 
 1. [policy案](../config/proposals/models_dev.v3.json)のprovider部分集合、field部分集合、各権利gate、保持期間をレビューします。直接providerの取得許可とは別です。公開未許可ならprivate-onlyを選べます。raw配信・外部LLM許可は不要です。
 2. `owner_approval_ref`、`runtime_review_ref`、`retention.reviewed_ref`、policyの判断主体・根拠・有効期間を実際の記録で確定します。モデル別の日次追加承認は不要です。既存v2の同名上書きはしません。
-3. Workers Paidは承認・確認済みです。[費用と実測](models-validation.md)と[追加のCPU比較](collector-performance.md)の開発時点のFree記載を、現在のプラン判定へ転用しません。Paid確認だけでruntime reviewを完了にせず、最大component、長期履歴、保持削除、scheduled処理全体を含むCPU／memory／D1／R2予算を確認します。既存の試験は主に3 components/modelで、提案上限64の最悪条件は未検証です。
+3. Workers Paidは承認・確認済みです。[費用と実測](models-validation.md)と[追加のCPU比較](collector-performance.md)の開発時点のFree記載を、現在のプラン判定へ転用しません。[新しいruntime審査](p0-runtime-review.md)では500モデル・64 components・3日分と大きな入力をローカル検証しました。現154モデルの3年容量試算と、500×64では3年保持不可という上限を分けています。クラウドCPU／memory・長期DB実行性能は未実測で、初回本番観測後に再評価します。
 4. raw90/archive365/normalized1095/backup30日という提案を確認します。許諾上限があればcleanupの余裕とbackupまで含めて短くします。R2のevidence/models_dev/とarchive/models_dev/の非公開lifecycleを確認します。既存のarchive/365日ルールは同等に使えます。保持年数・最大componentがD1 10GB/DBに収まるか審査します。
 5. 通知先・外部read-only health監視は既存未設定事項です。通知用Secretは`ALERT_WEBHOOK_URL`（既存コードの設定名）を使用し、値をGitやチャットへ貼りません。Models.dev自体のAPIキーは不要です。
 

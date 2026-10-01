@@ -2,7 +2,7 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
-Phase 0/1のFX・AI API価格、Phase 2のGPU処理を維持し、Models.devのprovider別カタログ・価格・掲載履歴を追加しました。**現在の設定はstage=enabled、既存3 CronとAPI custom domainを維持しています。本番の稼働記録は今回未検証です。** Models.dev拡張は未承認の設定案で、稼働設定は従来のMistral 2モデルのままです。GPU実ソースもdisabledのままです。合成試験を実観測の開始とは扱いません。
+Phase 0/1のFX・AI API価格、Phase 2のGPU処理を維持し、Models.devのprovider別カタログ・価格・掲載履歴を追加しました。**2026-10-01のローカル本番候補はWorkers Paid、stage=enabled、既存3 CronとAPI custom domainを維持しています。** Models.devの5 provider・17 fieldは[所有者承認](docs/p0-owner-review.md)と[容量・runtime審査](docs/p0-runtime-review.md)を反映した新policyです。本番はmigrationとCollector deployの別途承認まで従来のMistral 2モデルで動作し、自然Cronの成功確認済みです。GPU実ソースはdisabledのままです。隔離ローカルlive・合成試験・本番実測を分けて報告します。
 
 - [Phase 2納品報告](docs/phase2-delivery-report.md)
 - [P0 Models.dev設計・policy案](docs/models-expansion.md) / [有効化・停止手順](docs/models-enablement.md) / [検証報告](docs/models-validation.md)

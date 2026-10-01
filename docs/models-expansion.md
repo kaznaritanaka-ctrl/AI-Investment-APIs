@@ -1,6 +1,6 @@
 # P0: Models.devのprovider別観測履歴
 
-この実装は2026-09-30のデータ拡張仕様のP0です。既存のFX・Mistral 2モデル・GPU処理を保ち、承認後にOpenAI、Anthropic、Google、xAI、Mistralの掲載モデルを設定駆動で日次観測できます。新しいprovider/fieldの権利は付与していません。実装・migration・合成試験を納品し、本番deploy・remote migration・拡張live取得は行っていません。
+この実装は2026-09-30のデータ拡張仕様のP0です。既存のFX・Mistral 2モデル・GPU処理を保ち、OpenAI、Anthropic、Google、xAI、Mistralの掲載モデルを設定駆動で日次観測できます。2026-10-01に[所有者承認](p0-owner-review.md)と[現154モデルの隔離ローカル測定](p0-runtime-review.md)を反映しました。以下のproposalは原案として保持し、新policyをローカル本番候補へ適用しています。本番deploy・remote migrationは未実施です。
 
 ## 調査と識別
 

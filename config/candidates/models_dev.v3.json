@@ -25,7 +25,7 @@
     "Unsupported pricing is quarantined per model; catalog availability is unknown.",
     "Local capacity/runtime reviewed at 154 models; production CPU/memory verification follows separately approved deployment. 500x64 is not certified for 1095-day storage."
   ],
-  "enabled": true,
+  "enabled": false,
   "adapter": "models_dev",
   "selection": [],
   "max_bytes": 16000000,

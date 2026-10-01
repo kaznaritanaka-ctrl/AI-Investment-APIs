@@ -1,6 +1,6 @@
 # 初期設定
 
-2026-09-30確認の設定はstage=enabledです。既存Account/zone/domain/D1 ID、Workers FreeのDashboard確認根拠、3 CronとAPI routeが記録されています。今回クラウド実環境は照会していないため、設定と本番稼働を区別します。通知先・外部監視は未設定です。
+2026-10-01の本番候補はstage=enabled、Workers Paid、Collector CPU 5,000ms、D1 Time Travel 30日です。既存Account/zone/domain/D1 ID、3 CronとAPI routeを維持します。scope・権利・容量審査は[専用手順](models-enablement.md)を参照してください。本番反映はmigrationとWorkerごとの別途承認が必要です。通知先・外部監視は未設定です。
 
 [Cloudflare runbook](cloudflare-runbook.md)を正規手順とします。まずpnpm preflightで不足を一覧化します。必要なものはAccount ID/zone/domain、既存private/public D1 ID、private R2、Workers planとTime Travel、source別許諾/retention、collector Secrets、通知先、外部監視です。
 
