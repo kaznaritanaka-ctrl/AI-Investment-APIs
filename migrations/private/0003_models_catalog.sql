@@ -1,0 +1,23 @@
+-- Preserve existing observation IDs, domains, foreign keys and immutable triggers.
+PRAGMA defer_foreign_keys=ON;
+CREATE TABLE observations_v3 (observation_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, run_id TEXT NOT NULL REFERENCES collection_runs, dataset TEXT NOT NULL CHECK(dataset IN ('fx','ai_api_prices','gpu_rental','gpu_secondary','ai_model_catalog')), entity_key TEXT NOT NULL, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, fingerprint TEXT NOT NULL, parser_version TEXT NOT NULL, quality_status TEXT NOT NULL, supersedes_observation_id TEXT REFERENCES observations_v3, metadata_json TEXT NOT NULL, UNIQUE(run_id,entity_key,parser_version,policy_version,fingerprint));
+INSERT INTO observations_v3 SELECT * FROM observations;
+DROP TABLE observations;
+ALTER TABLE observations_v3 RENAME TO observations;
+CREATE INDEX observation_series ON observations(source_id,entity_key,observed_at DESC,recorded_at DESC);
+CREATE INDEX observation_content ON observations(source_id,entity_key,fingerprint,recorded_at);
+CREATE INDEX observation_supersedes ON observations(supersedes_observation_id);
+CREATE TRIGGER immutable_observations BEFORE UPDATE ON observations BEGIN SELECT RAISE(ABORT,'append-only observations'); END;
+PRAGMA defer_foreign_keys=OFF;
+CREATE TABLE model_snapshots (snapshot_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES collection_runs, source_id TEXT NOT NULL, policy_version TEXT NOT NULL, scope_hash TEXT NOT NULL, scope_json TEXT NOT NULL, parser_version TEXT NOT NULL, artifact_ref TEXT NOT NULL REFERENCES raw_artifacts, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, completed_at TEXT, state TEXT NOT NULL, stage TEXT NOT NULL DEFAULT 'ingest', cursor INTEGER NOT NULL DEFAULT 0, previous_snapshot_id TEXT REFERENCES model_snapshots, revises_snapshot_id TEXT REFERENCES model_snapshots, review_ref TEXT, enumerated_count INTEGER NOT NULL, model_count INTEGER NOT NULL DEFAULT 0, price_count INTEGER NOT NULL DEFAULT 0, component_count INTEGER NOT NULL DEFAULT 0, quarantined_count INTEGER NOT NULL DEFAULT 0, complete_capture INTEGER NOT NULL, issues_json TEXT NOT NULL, data_origin TEXT NOT NULL, expires_at TEXT NOT NULL, metrics_json TEXT NOT NULL, UNIQUE(run_id,policy_version,parser_version));
+CREATE INDEX models_snapshot_scope ON model_snapshots(source_id,scope_hash,state,observed_at DESC,completed_at DESC);
+CREATE TABLE ai_model_catalog (observation_id TEXT PRIMARY KEY REFERENCES observations, serving_provider TEXT NOT NULL, model_id TEXT NOT NULL, canonical_model_id TEXT, domain_json TEXT NOT NULL);
+CREATE INDEX models_provider_id ON ai_model_catalog(serving_provider,model_id);
+CREATE TRIGGER immutable_models_catalog BEFORE UPDATE ON ai_model_catalog BEGIN SELECT RAISE(ABORT,'append-only model catalog'); END;
+CREATE TABLE model_snapshot_members (snapshot_id TEXT NOT NULL REFERENCES model_snapshots, record_key TEXT NOT NULL, catalog_observation_id TEXT NOT NULL REFERENCES observations, price_observation_id TEXT REFERENCES observations, component_count INTEGER NOT NULL, price_eligible INTEGER NOT NULL, price_issues_json TEXT NOT NULL, first_model_observed_at TEXT NOT NULL, PRIMARY KEY(snapshot_id,record_key));
+CREATE INDEX models_members_record ON model_snapshot_members(record_key,snapshot_id);
+CREATE INDEX models_members_price ON model_snapshot_members(price_observation_id);
+CREATE TRIGGER immutable_model_members BEFORE UPDATE ON model_snapshot_members BEGIN SELECT RAISE(ABORT,'append-only model membership'); END;
+CREATE TABLE model_events (event_id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES model_snapshots, record_key TEXT NOT NULL, kind TEXT NOT NULL, observation_id TEXT REFERENCES observations, previous_observation_id TEXT REFERENCES observations, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, details_json TEXT NOT NULL);
+CREATE INDEX model_events_snapshot ON model_events(snapshot_id,record_key);
+CREATE TRIGGER immutable_model_events BEFORE UPDATE ON model_events BEGIN SELECT RAISE(ABORT,'append-only model events'); END;

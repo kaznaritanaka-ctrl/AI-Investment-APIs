@@ -6,7 +6,9 @@
 
 watchdog: 同日予定runの欠落/未完了を検出。保存済みR2があるrunだけ再処理し、全ソースの再取得はしない。復旧は最大3回。欠測はmissingで残る。watchdog自身と日次Cronの双方が停止したケースはCloudflareのplatform health監視が必要で、外部死活監視は未接続。
 
-通知: summaryはprivate D1へ先に保存。状態・件数に変化があればoutboxを作り、同一状態の重複を抑制する。復旧も状態変化になる。Webhook未設定はnot_configured、失敗はpendingのまま保持、最大3送信試行。Webhook受信側はidempotency-keyで重複を防ぐ。Webhook URL、認証header、応答bodyはログに出さない。通知不達でもsummaryを失わない。
+通知: summaryはprivate D1へ先に保存。collection／watchdog／continuationを区別し、同じ処理種別の非空summaryから状態・変更・異常件数が変化した場合にoutboxを作る。対象なしcontinuationは記録だけ残し、通知しない。復旧も状態変化になる。Webhook未設定はnot_configured、失敗はpendingのまま保持、最大3送信試行。Webhook受信側はidempotency-keyで重複を防ぐ。Webhook URL、認証header、応答bodyはログに出さない。通知不達でもsummaryを失わない。既存pendingはWebhook設定後に送信対象になるため、設定前に個別の扱いを承認する。
+
+2026-09-30のslot互換修正、安全なログ、pending分類、性能比較と本番反映案は[Collector継続運用リリース計画](collector-reliability-release.md)を参照。実装は本番反映待ちであり、旧誤missing記録を削除・更新していない。価格不変の正常再観測、Collector実行だけの完了、sourceの日付更新は別の事実として扱う。
 
 品質: 欠損、未知tier、不正値、選定カタログの不完全性、大きな同条件変化を隔離。元証拠とprivate観測/品質イベントは保持。大幅変化を市場シグナルや誤りと断定しない。APIが前回正常値を返す場合はheld_atによるstale_reasonを表示。古い値は鮮度が回復したように更新しない。
 
@@ -34,7 +36,7 @@ R2証拠が残る期間はparser再実行で履歴・公開投影を再構築で
 
 ## Phase 2の運用
 
-初期状態はCron停止です。[Cloudflare runbook](cloudflare-runbook.md)の承認・preflight後だけ有効化します。GPUは日次runを自動登録し、continuationが1source・1pageを再開します。認証失効・403・長い429は理由と再試行時刻を保存し、他のsourceは継続します。page上限・capture window超過はpartialとして残し、CSVへ戻しません。
+新規bootstrap時だけCronを停止して開始します。現在の設定はenabledで、P0開発では既存Cronを維持しています。GPU sourceはdisabledのままです。有効化後のGPUは日次runを自動登録し、continuationが1source・1pageを再開します。認証失効・403・長い429は理由と再試行時刻を保存し、他のsourceは継続します。page上限・capture window超過はpartialとして残し、CSVへ戻しません。
 
 public/v1/gpu/coverageでscopeと欠測理由を確認します。partialの間は新snapshotのpriceを公開しません。最新の完全snapshotを履歴として保持し、last observedが古い場合のfreshnessを返します。通常の大幅変動に手動承認は不要です。単位/lot/契約変更等の判断不能な例外だけreviewします。
 
@@ -43,3 +45,13 @@ GPU訂正の内部入口はsrc/gpu-corrections.tsのcorrectGPUPageです。保�
 正規化retentionは1回につき1source/snapshot、最大50行を削除し、先にpublicをwithdrawします。raw/archiveのexpiry処理とsource別R2 lifecycleを併用します。大量削除の遅れが許諾期限を超えないよう、開始前のretention/capture容量審査で余裕を持たせます。復元時は公開停止→現行policy/retentionの適用→検証→再公開です。
 
 healthのlast_collector_completed_atはcollector処理が最後まで走った時刻で、全source成功や市場正常を保証しません。monitor_connected=0は外部監視未接続です。通知Webhook未設定は既存outboxにpendingで保存し、送信済みとはしません。collector自体が起動しない障害の検出には外部read-only監視を別途接続します。
+
+## Models.dev P0の運用
+
+`pnpm models:status`でsource別実装・enabled・権利・認証待ちを確認します。`--remote --allow-network`指定時だけ固定SELECTで最新予定run、snapshot、checkpoint、complete/partial、モデル/価格/component/隔離件数、理由、観測時刻・expiryを読みます。未照会を収集成功としません。公開許可済みの詳細は`/v1/models/coverage`と`/v1/models/events`を使い、private-onlyは運用コマンドで確認します。
+
+新モードは日次intake、既存continuationで25モデルずつingest、50件ずつnot_seen、最後にpublic commitします。期限処理は25モデルずつで、削除に使用した枠では新モデルingestを行いません。通常のpendingは処理継続中、partialは列挙不完全、価格quarantinedは別件数です。モデル上限超過やparser失敗からnot_seenを作りません。FX/旧AIは従来の収集経路です。
+
+失敗したrunは最大3回の復旧予算、取得1回内は最大3 HTTP試行です。証拠が保存済みなら再HTTPしません。未取得runは予定から6時間を過ぎるとcapture_window_expired。collection_runsのlease・next_attempt_at・recovery_countで有限再開し、過去値を作りません。再解析は`collectModels`のreview付きrevisionで、元観測時刻と別parser版を使います。根拠のない大幅価格変化の隔離は翌日の反復だけでは解除しません。
+
+有効化・停止・復元の一度だけの操作は[専用手順](models-enablement.md)。通知/外部監視の未設定、現行Freeでの実行予算不足、scope権利の未承認を明示します。追加の公開HTTP操作口、日常のCSV移動、定常LLMはありません。

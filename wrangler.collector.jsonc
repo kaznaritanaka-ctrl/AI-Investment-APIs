@@ -5,6 +5,9 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": false,
   "preview_urls": false,
+  "limits": {
+    "cpu_ms": 5000
+  },
   "triggers": {
     "crons": [
       "17 18 * * *",

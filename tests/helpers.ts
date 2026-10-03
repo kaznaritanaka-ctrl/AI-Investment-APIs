@@ -1,12 +1,17 @@
 import { URL as NodeURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { sources } from '../src/sources';
-import type { Source } from '../src/schema';
+import legacyModels from '../config/history/models_dev.v2.json';
+import { SourceSchema, type Source } from '../src/schema';
 export const time = '2026-10-03T18:17:00.000Z';
 export const fixture = (name: string) =>
   readFileSync(new NodeURL('./fixtures/' + name, import.meta.url), 'utf8');
 export const source = (id: string): Source =>
-  structuredClone(sources.find((s) => s.source_id === id)!);
+  structuredClone(
+    id === 'models_dev'
+      ? SourceSchema.parse(legacyModels)
+      : sources.find((s) => s.source_id === id)!,
+  );
 export function modelSource() {
   const s = source('models_dev');
   s.selection = ['lab/model-a'];

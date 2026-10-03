@@ -6,10 +6,18 @@ import assert from 'node:assert/strict';
 const xml = await readFile('tests/fixtures/ecb.synthetic.xml', 'utf8');
 const catalog = await readFile('tests/fixtures/models.synthetic.json', 'utf8');
 const source =
-  "\nimport {sources} from './src/sources';\nimport {gpuRuntime} from './tests/gpu-runtime-harness';\nimport {collectAll} from './src/pipeline';\nimport {handle} from './src/api';\nexport default {\n async fetch(request,env){\n  if(new URL(request.url).pathname!=='/')return gpuRuntime(request,env);\n  const now='2026-10-03T18:17:00.000Z';\n  const selected=structuredClone(sources.filter(s=>['ecb','models_dev','openrouter'].includes(s.source_id)));\n  const model=selected.find(s=>s.source_id==='models_dev');model.selection=['lab/model-a'];model.max_records=4;\n  let calls=0;\n  const fetcher=async url=>{calls++;return String(url).includes('ecb.europa')?new Response(XML_BODY,{headers:{'content-type':'application/xml'}}):new Response(CATALOG_BODY,{headers:{'content-type':'application/json'}});};\n  const results=await collectAll(env,selected,now,{synthetic:true,now:()=>now,network:{fetcher}});\n  const response=await handle(new Request('https://local.test/v1/latest'),{PUBLIC_DB:env.PUBLIC_DB},now);\n  return Response.json({results,calls,status:response.status,body:await response.json()});\n }\n}";
+  "\nimport {sources} from './src/sources';\nimport legacyModels from './config/history/models_dev.v2.json';\nimport {gpuRuntime} from './tests/gpu-runtime-harness';\nimport {collectAll} from './src/pipeline';\nimport {handle} from './src/api';\nexport default {\n async fetch(request,env){\n  if(new URL(request.url).pathname!=='/')return gpuRuntime(request,env);\n  const now='2026-10-03T18:17:00.000Z';\n  const selected=structuredClone(sources.filter(s=>['ecb','models_dev','openrouter'].includes(s.source_id)).map(s=>s.source_id==='models_dev'?legacyModels:s));\n  const model=selected.find(s=>s.source_id==='models_dev');model.selection=['lab/model-a'];model.max_records=4;\n  let calls=0;\n  const fetcher=async url=>{calls++;return String(url).includes('ecb.europa')?new Response(XML_BODY,{headers:{'content-type':'application/xml'}}):new Response(CATALOG_BODY,{headers:{'content-type':'application/json'}});};\n  const results=await collectAll(env,selected,now,{synthetic:true,now:()=>now,network:{fetcher}});\n  const response=await handle(new Request('https://local.test/v1/latest'),{PUBLIC_DB:env.PUBLIC_DB},now);\n  return Response.json({results,calls,status:response.status,body:await response.json()});\n }\n}";
 const bundled = await build({
   stdin: {
     contents: source
+      .replace(
+        'export default {',
+        "import {modelsRuntime} from './tests/models-runtime-harness';\nexport default {",
+      )
+      .replace(
+        "if(new URL(request.url).pathname!=='/')",
+        "if(new URL(request.url).pathname.startsWith('/models-'))return modelsRuntime(request,env);\nif(new URL(request.url).pathname!=='/')",
+      )
       .replace('XML_BODY', JSON.stringify(xml))
       .replace('CATALOG_BODY', JSON.stringify(catalog)),
     resolveDir: process.cwd(),
@@ -134,6 +142,116 @@ try {
       ' bounded invocations, max batch ' +
       maxBatch +
       ', replay and public pagination verified. No external HTTP.',
+  );
+  const modelProfiles = [];
+  const largeCatalog = await (
+    await mf.dispatchFetch('https://local.test/models-large?n=1000')
+  ).json();
+  assert.equal(largeCatalog.model_count, 1000);
+  assert.equal(largeCatalog.complete, true);
+  assert.equal(largeCatalog.exact_decimal, '1.234567890123456789');
+  assert(largeCatalog.payload_bytes > 8 * 1024 * 1024);
+  for (const n of [50, 250, 1000]) {
+    const beforeSize = await (
+      await mf.dispatchFetch('https://local.test/models-size?n=' + n)
+    ).json();
+    const profiles = [];
+    let result;
+    do {
+      const step = await (await mf.dispatchFetch('https://local.test/models-step?n=' + n)).json();
+      assert(['pending', 'complete'].includes(step.result.state), JSON.stringify(step));
+      assert(step.max_batch <= 20, JSON.stringify(step));
+      assert(step.sql_statements < 1000, JSON.stringify(step));
+      profiles.push(step);
+      result = step.result;
+      assert(profiles.length < 100);
+    } while (result.state !== 'complete');
+    const replay = await (await mf.dispatchFetch('https://local.test/models-step?n=' + n)).json();
+    assert.equal(replay.result.reason, 'already_processed');
+    assert.equal(replay.http_requests, 0);
+    const verified = await (
+      await mf.dispatchFetch('https://local.test/models-verify?n=' + n)
+    ).json();
+    assert.equal(verified.snapshot.model_count, n);
+    assert.equal(verified.snapshot.price_count, n);
+    assert.equal(verified.snapshot.component_count, n * 3);
+    assert.equal(verified.snapshot.quarantined_count, 0);
+    assert.equal(verified.event_status, 200);
+    assert.deepEqual(verified.foreign_key_violations, []);
+    let cursor = null;
+    const ids = new Set();
+    do {
+      const page = await (
+        await mf.dispatchFetch(
+          'https://local.test/v1/observations?dataset=ai_model_catalog&source=synthetic_models_' +
+            n +
+            '&limit=100' +
+            (cursor ? '&cursor=' + cursor : ''),
+        )
+      ).json();
+      assert(!page.error, JSON.stringify(page));
+      for (const o of page.data) {
+        ids.add(o.observation_id);
+        assert.equal(o.data_origin, 'synthetic');
+      }
+      cursor = page.next_cursor;
+    } while (cursor);
+    assert.equal(ids.size, n);
+    assert.equal(
+      profiles.reduce((sum, p) => sum + p.http_requests, 0),
+      1,
+    );
+    modelProfiles.push({
+      models: n,
+      invocations: profiles.length,
+      max_sql_per_invocation: Math.max(...profiles.map((p) => p.sql_statements)),
+      max_batch: Math.max(...profiles.map((p) => p.max_batch)),
+      sql_statements: profiles.reduce((sum, p) => sum + p.sql_statements, 0),
+      d1_calls: profiles.reduce((sum, p) => sum + p.d1_calls, 0),
+      rows_read_with_metadata: profiles.reduce((sum, p) => sum + p.rows_read, 0),
+      rows_written_with_metadata: profiles.reduce((sum, p) => sum + p.rows_written, 0),
+      metadata_incomplete: profiles.some((p) => p.metadata_incomplete),
+      r2_get: profiles.reduce((sum, p) => sum + p.r2_get, 0),
+      r2_put: profiles.reduce((sum, p) => sum + p.r2_put, 0),
+      local_workerd_elapsed_ms: profiles.reduce((sum, p) => sum + p.local_workerd_elapsed_ms, 0),
+      payload_bytes: profiles[0].payload_bytes,
+      ...JSON.parse(verified.snapshot.metrics_json),
+      mock_http_requests: 1,
+      public_catalog_count: ids.size,
+      public_price_count: n,
+      database_growth_bytes: await (async () => {
+        const afterSize = await (
+          await mf.dispatchFetch('https://local.test/models-size?n=' + n)
+        ).json();
+        return {
+          private: afterSize.private_bytes - beforeSize.private_bytes,
+          public: afterSize.public_bytes - beforeSize.public_bytes,
+          includes_indexes: true,
+        };
+      })(),
+    });
+    console.log(
+      'Models workerd passed: ' +
+        n +
+        ' synthetic models, ' +
+        profiles.length +
+        ' resumable invocations, complete public history and replay verified.',
+    );
+  }
+  await writeFile(
+    'work/runtime-models-report.json',
+    JSON.stringify(
+      {
+        test_kind: 'synthetic_workerd_scale',
+        external_data_requests: 0,
+        production_deployed: false,
+        cloud_cpu_measured: false,
+        measurements: modelProfiles,
+        large_catalog_intake: largeCatalog,
+      },
+      null,
+      2,
+    ) + '\n',
   );
 } finally {
   await mf.dispose();

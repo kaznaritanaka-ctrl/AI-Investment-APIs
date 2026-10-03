@@ -27,3 +27,13 @@ private-onlyは取得/保存/内部分析だけの許可で個別運転でき、
 証拠とarchiveはsource別expiryとR2 lifecycle、正規化履歴は小さい削除単位の自動retention、バックアップはD1 Time Travelと復元手順を確認する。sourceの保持上限がある場合normalized＋backupも上限内とする。期限切れsnapshotは先にpublicをwithdrawし、関連派生値・差分・private行を段階的に削除する。保持削除はappend-onlyの訂正原則とは別の許諾義務であり、残存snapshotはpurged状態として記録する。
 
 権利停止は原価格だけでなく、入力snapshot/FXのpolicyに依存する指標も非公開にする。AIへソース原文を渡す例外処理は未実装で、external_llm_processingの許可を推測しない。
+
+## Models.dev拡張案の追加gate
+
+2026-10-01更新: 以下は初版proposalの判断経緯です。現在のローカル本番候補には[所有者承認](p0-owner-review.md)と[容量・runtime審査](p0-runtime-review.md)に基づく5 provider・17 field、7種類の許可、raw配信／外部LLMのdenied、90/365/1095/30日の保持を新policyとして反映しました。旧v2はhistory設定と本番deploy前の稼働版に残ります。未知のscopeへ許可を拡張する規則はありません。
+
+現行v2の2モデル許可は変更していません。[v3提案](../config/proposals/models_dev.v3.json)はdisabled・全9権限review_requiredです。provider/fieldごとの`policy.models_scope`、`models_projection_v2`、運用選択`models.providers/fields`、owner/runtime/retentionレビューを別に記録し、運用選択が承認範囲の部分集合であることをHTTP前と保存前に検査します。新しいモデルIDは承認済みprovider/field範囲内でのみ自動追跡でき、他providerを自動追加しません。
+
+MIT調査は[設計のpolicy proposal](models-expansion.md#policy-proposal)に固定commit付きで記録しました。これを新grant付与とは扱いません。取得/保存/内部分析の3区分だけ承認された場合はprivate-onlyで動作し、公開や派生許可を要求して内部収集まで止めません。modeのprovider request body/headerは保持せず、必要条件が残せない価格は隔離します。
+
+証拠90日・archive365日・正規化/公開/差分1095日・backup上限30日は今回の**提案**です。既存の90日はraw_artifacts/R2投影証拠のexpiryであり、旧ai_api_pricesを90日で削除する処理ではありません。新snapshotには正規化期限を保存し、sourceをdisabledにしても期限処理は継続します。read gateで期限切れを非表示にし、publicから先に小分け削除します。削除義務にはR2 lifecycle、バックアップ、復元後の現行権利再適用も必要です。

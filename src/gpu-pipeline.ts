@@ -7,15 +7,20 @@ import { gpuEvidenceFromBody } from './gpu-adapters';
 import { ingestGPUPage, snapshot, publishCoverage, finalizeGPU, GPU_PARSER } from './gpu-store';
 import { hash, stable, errorCode, isoTime } from './util';
 import { finalizeGPUMetrics } from './gpu-metrics';
+import { collectionIdentity } from './run-identity';
+import { observe, type SourceObserver } from './telemetry';
 export async function collectGPU(
   env: CollectorEnv,
   s: Source,
   scheduled: string,
   opt: CollectOptions & { savedOnly?: boolean } = {},
 ): Promise<RunResult> {
-  const now = opt.now ?? (() => new Date().toISOString()),
-    run = await hash(s.source_id + '|' + scheduled),
-    base = { source_id: s.source_id, run_id: run };
+  const now = opt.now ?? (() => new Date().toISOString());
+  let run = await hash(s.source_id + '|' + scheduled);
+  let base: Pick<RunResult, 'source_id' | 'run_id' | 'logical_slot' | 'run_kind'> = {
+    source_id: s.source_id,
+    run_id: run,
+  };
   if (!isoTime(scheduled) || scheduled > now())
     return { ...base, state: 'failed', reason: 'invalid_schedule' };
   if (opt.synthetic && env.ENVIRONMENT !== 'test')
@@ -23,6 +28,15 @@ export async function collectGPU(
   let lease: string | null = null,
     current: string | null = null;
   try {
+    const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, scheduled);
+    run = identity.run_id;
+    scheduled = identity.storedSlot;
+    base = {
+      source_id: s.source_id,
+      run_id: run,
+      logical_slot: identity.slot,
+      run_kind: identity.kind,
+    };
     await syncSource(env, s, now());
     await env.PRIVATE_DB.prepare(
       "INSERT OR IGNORE INTO collection_runs(run_id,source_id,scheduled_for,state) VALUES (?,?,?,'pending')",
@@ -278,16 +292,24 @@ export async function queueGPURuns(
 ) {
   const results: RunResult[] = [];
   for (const s of sources.filter((s) => s.gpu)) {
-    const run = await hash(s.source_id + '|' + slot);
+    let run = await hash(s.source_id + '|' + slot);
     try {
+      const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, slot);
+      run = identity.run_id;
       await syncSource(env, s, now);
       const state = canCollect(s, now) ? 'pending' : 'policy_skipped';
       await env.PRIVATE_DB.prepare(
         'INSERT OR IGNORE INTO collection_runs(run_id,source_id,scheduled_for,state) VALUES (?,?,?,?)',
       )
-        .bind(run, s.source_id, slot, state)
+        .bind(run, s.source_id, identity.storedSlot, state)
         .run();
-      results.push({ source_id: s.source_id, run_id: run, state });
+      results.push({
+        source_id: s.source_id,
+        run_id: run,
+        state: identity.row?.state ?? state,
+        logical_slot: identity.slot,
+        run_kind: identity.kind,
+      });
     } catch (e) {
       results.push({ source_id: s.source_id, run_id: run, state: 'failed', reason: errorCode(e) });
     }
@@ -299,6 +321,7 @@ export async function resumeGPURuns(
   sources: Source[],
   now: string,
   savedOnly = false,
+  observer?: SourceObserver,
 ) {
   const runs = await env.PRIVATE_DB.prepare(
     "SELECT r.source_id,r.scheduled_for FROM collection_runs r JOIN sources s USING(source_id) WHERE json_extract(s.config_json,'$.gpu') IS NOT NULL AND r.state IN ('pending','fetching','failed') AND (r.next_attempt_at IS NULL OR r.next_attempt_at<=?) AND (r.lease_until IS NULL OR r.lease_until<?) ORDER BY r.last_progress_at ASC,r.scheduled_for DESC LIMIT 1",
@@ -308,7 +331,12 @@ export async function resumeGPURuns(
   const results: RunResult[] = [];
   for (const r of runs.results) {
     const s = sources.find((s) => s.source_id === r.source_id);
-    if (s) results.push(await collectGPU(env, s, r.scheduled_for, { now: () => now, savedOnly }));
+    if (s)
+      results.push(
+        await observe(observer, s, r.scheduled_for, () =>
+          collectGPU(env, s, r.scheduled_for, { now: () => now, savedOnly }),
+        ),
+      );
   }
   return results;
 }

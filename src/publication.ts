@@ -15,7 +15,7 @@ export function publicSource(s: Source) {
     rights: s.policy.rights,
     rights_version: s.policy.version,
     conditions: s.policy.conditions,
-    coverage: s.selection,
+    coverage: s.models ? s.models.providers.map((p) => p + '/*') : s.selection,
     limitations: s.known_limitations,
   };
 }
@@ -28,6 +28,7 @@ export async function syncSource(env: CollectorEnv, s: Source, now: string) {
         endpoint: s.endpoint,
         selection: s.selection,
         ...(s.gpu ? { gpu: s.gpu } : {}),
+        ...(s.models ? { models: s.models } : {}),
       }),
     );
   const old = await env.PRIVATE_DB.prepare(
@@ -107,10 +108,15 @@ export function publicObservation(o: Observation, s: Source, batch: string) {
         ? 'ecb-original-v1'
         : o.dataset === 'ai_api_prices'
           ? 'api-catalog-v1'
-          : 'gpu-market-v1',
+          : o.dataset === 'ai_model_catalog'
+            ? 'models-catalog-v1'
+            : 'gpu-market-v1',
     quality_status: o.quality_status,
     quality_flags: o.quality_flags,
-    coverage: { selection: s.selection, market_representative: false },
+    coverage: {
+      selection: s.models ? s.models.providers.map((p) => p + '/*') : s.selection,
+      market_representative: false,
+    },
     rights_version: s.policy.version,
     reuse: {
       license_url: s.license_url,
@@ -268,6 +274,7 @@ export async function publish(
 }
 // All API data paths share this condition, including changes/latest/health/FX.
 export const visibleSQL =
+  "(o.model_snapshot_id IS NULL OR EXISTS(SELECT 1 FROM published_model_snapshots mc WHERE mc.snapshot_id=o.model_snapshot_id AND mc.state='complete' AND mc.expires_at>?)) AND " +
   "(o.snapshot_id IS NULL OR EXISTS(SELECT 1 FROM published_coverage gc WHERE gc.snapshot_id=o.snapshot_id AND gc.state='complete')) AND b.state='complete' AND p.active=1 AND p.revoked=0 AND p.valid_from<=? AND (p.valid_until IS NULL OR p.valid_until>?) AND (o.derived=0 OR p.derived_allowed=1) AND NOT EXISTS (SELECT 1 FROM published_lineage l LEFT JOIN source_publications ip ON ip.source_id=l.source_id AND ip.policy_version=l.policy_version WHERE l.observation_id=o.observation_id AND (ip.source_id IS NULL OR ip.active<>1 OR ip.revoked=1 OR ip.derived_allowed<>1 OR ip.valid_from>? OR (ip.valid_until IS NOT NULL AND ip.valid_until<=?)))";
 export const visibleJoin =
   ' FROM published_observations o JOIN publication_batches b ON o.batch_id=b.batch_id JOIN source_publications p ON o.source_id=p.source_id AND o.policy_version=p.policy_version ';

@@ -1,0 +1,1034 @@
+{
+  "measured_on": "2026-09-30",
+  "node": "v24.19.0",
+  "kind": "synthetic_local_only",
+  "notes": [
+    "Node process CPU is a host CPU proxy, not Cloudflare billed CPU.",
+    "Probe timings are independent and overlapping; do not sum them.",
+    "Full pipeline workerd elapsed includes D1/R2 waits; workerd CPU and isolate memory are unmeasured.",
+    "Cold module startup CPU is unmeasured; configuration probe revalidates all 15 configured sources.",
+    "8 MiB unselected padding is a stress fixture, not an upstream payload or proportional model-count extrapolation.",
+    "Windows process CPU has coarse resolution; a zero sample does not mean zero CPU.",
+    "Microprobe process peak RSS includes multiple probes/allocator high water; it is not a Worker isolate peak.",
+    "Runtime measures the pipeline, excluding scheduled summary, notification and retention overhead."
+  ],
+  "cold_startup_cpu_ms": null,
+  "production_cpu_after_change_ms": null,
+  "external_source_requests": 0,
+  "cases": [
+    {
+      "kind": "A",
+      "input_bytes": 8666543,
+      "unselected_padding_bytes": 8388608,
+      "selected_models": 2,
+      "output_observations": 2,
+      "fields": 5,
+      "components_per_model": 3,
+      "unchanged_domain_digest": "709f873ada75e9665a6da68febdfd3a1264928407292573c06c7057b44c69f58",
+      "measurements": {
+        "before": {
+          "node_trials": 5,
+          "process_peak_rss_bytes": {
+            "min": 778428416,
+            "median": 778543104,
+            "max": 778874880
+          },
+          "probes": [
+            {
+              "name": "configuration_schema_policy",
+              "elapsed_ms": {
+                "min": 0.8132999999999981,
+                "median": 0.9729000000000099,
+                "max": 1.185699999999997
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 47
+              },
+              "heap_delta_bytes": {
+                "min": 462504,
+                "median": 462560,
+                "max": 547616
+              }
+            },
+            {
+              "name": "response_body_read_synthetic",
+              "elapsed_ms": {
+                "min": 56.1935,
+                "median": 59.42609999999999,
+                "max": 61.145700000000005
+              },
+              "node_process_cpu_ms": {
+                "min": 47,
+                "median": 62,
+                "max": 78
+              },
+              "heap_delta_bytes": {
+                "min": 4189808,
+                "median": 4204400,
+                "max": 4204448
+              }
+            },
+            {
+              "name": "json_parse_only",
+              "elapsed_ms": {
+                "min": 427.36119999999994,
+                "median": 472.9049,
+                "max": 531.7197
+              },
+              "node_process_cpu_ms": {
+                "min": 484,
+                "median": 547,
+                "max": 641
+              },
+              "heap_delta_bytes": {
+                "min": 270511144,
+                "median": 270511768,
+                "max": 270512880
+              }
+            },
+            {
+              "name": "projection_including_parse_schema_decimal",
+              "elapsed_ms": {
+                "min": 417.0096,
+                "median": 463.6944,
+                "max": 512.4167999999999
+              },
+              "node_process_cpu_ms": {
+                "min": 485,
+                "median": 531,
+                "max": 579
+              },
+              "heap_delta_bytes": {
+                "min": 270451584,
+                "median": 270515600,
+                "max": 270537304
+              }
+            },
+            {
+              "name": "evidence_including_projection_hash_serialization",
+              "elapsed_ms": {
+                "min": 408.6455000000001,
+                "median": 422.35529999999994,
+                "max": 468.6950999999999
+              },
+              "node_process_cpu_ms": {
+                "min": 531,
+                "median": 547,
+                "max": 593
+              },
+              "heap_delta_bytes": {
+                "min": 270575624,
+                "median": 270575672,
+                "max": 270578296
+              }
+            },
+            {
+              "name": "saved_evidence_validation",
+              "elapsed_ms": {
+                "min": 2.7130999999999403,
+                "median": 2.873299999999972,
+                "max": 3.4904999999998836
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 16
+              },
+              "heap_delta_bytes": {
+                "min": 527656,
+                "median": 527656,
+                "max": 527656
+              }
+            },
+            {
+              "name": "domain_serialization_and_fingerprint_probe",
+              "elapsed_ms": {
+                "min": 0.3319000000001324,
+                "median": 0.37969999999995707,
+                "max": 0.539299999999912
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 0
+              },
+              "heap_delta_bytes": {
+                "min": 59208,
+                "median": 59208,
+                "max": 59208
+              }
+            }
+          ],
+          "workerd": {
+            "trials": 1,
+            "invocations": 1,
+            "published": 2,
+            "total_elapsed_ms": 468,
+            "invocation_elapsed_ms": {
+              "min": 468,
+              "median": 468,
+              "max": 468
+            },
+            "sql_statements": 37,
+            "private_statements": 30,
+            "public_statements": 7,
+            "max_sql_statements_per_invocation": 37,
+            "max_sql_statements_per_binding_per_invocation": 30,
+            "d1_calls": 29,
+            "max_d1_calls_per_invocation": 29,
+            "max_batch": 4,
+            "rows_read": 28,
+            "rows_written": 61,
+            "r2_get": 2,
+            "r2_put": 2,
+            "r2_head": 0,
+            "mock_http": 1,
+            "cloud_cpu_ms": null,
+            "isolate_memory_bytes": null
+          }
+        },
+        "after": {
+          "node_trials": 5,
+          "process_peak_rss_bytes": {
+            "min": 778948608,
+            "median": 779460608,
+            "max": 779755520
+          },
+          "probes": [
+            {
+              "name": "configuration_schema_policy",
+              "elapsed_ms": {
+                "min": 0.8245000000000005,
+                "median": 0.9495000000000005,
+                "max": 1.488599999999991
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 63
+              },
+              "heap_delta_bytes": {
+                "min": 462456,
+                "median": 462560,
+                "max": 462560
+              }
+            },
+            {
+              "name": "response_body_read_synthetic",
+              "elapsed_ms": {
+                "min": 55.7791,
+                "median": 58.77259999999998,
+                "max": 63.2192
+              },
+              "node_process_cpu_ms": {
+                "min": 61,
+                "median": 62,
+                "max": 63
+              },
+              "heap_delta_bytes": {
+                "min": 3946448,
+                "median": 4204512,
+                "max": 4204544
+              }
+            },
+            {
+              "name": "json_parse_only",
+              "elapsed_ms": {
+                "min": 402.6556,
+                "median": 426.33790000000005,
+                "max": 485.3528
+              },
+              "node_process_cpu_ms": {
+                "min": 453,
+                "median": 500,
+                "max": 594
+              },
+              "heap_delta_bytes": {
+                "min": 270511208,
+                "median": 270511976,
+                "max": 270512832
+              }
+            },
+            {
+              "name": "projection_including_parse_schema_decimal",
+              "elapsed_ms": {
+                "min": 425.47669999999994,
+                "median": 429.67099999999994,
+                "max": 464.20090000000005
+              },
+              "node_process_cpu_ms": {
+                "min": 484,
+                "median": 500,
+                "max": 547
+              },
+              "heap_delta_bytes": {
+                "min": 270454936,
+                "median": 270526128,
+                "max": 270814272
+              }
+            },
+            {
+              "name": "evidence_including_projection_hash_serialization",
+              "elapsed_ms": {
+                "min": 361.6729,
+                "median": 372.29269999999997,
+                "max": 392.2436
+              },
+              "node_process_cpu_ms": {
+                "min": 406,
+                "median": 453,
+                "max": 484
+              },
+              "heap_delta_bytes": {
+                "min": 270591080,
+                "median": 270655328,
+                "max": 270657968
+              }
+            },
+            {
+              "name": "saved_evidence_validation",
+              "elapsed_ms": {
+                "min": 2.992300000000114,
+                "median": 3.039800000000014,
+                "max": 3.2312000000001717
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 15
+              },
+              "heap_delta_bytes": {
+                "min": 528040,
+                "median": 528040,
+                "max": 528040
+              }
+            },
+            {
+              "name": "domain_serialization_and_fingerprint_probe",
+              "elapsed_ms": {
+                "min": 0.25479999999993197,
+                "median": 0.28739999999993415,
+                "max": 0.3694000000000415
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 0
+              },
+              "heap_delta_bytes": {
+                "min": 59704,
+                "median": 59704,
+                "max": 59704
+              }
+            }
+          ],
+          "workerd": {
+            "trials": 1,
+            "invocations": 1,
+            "published": 2,
+            "total_elapsed_ms": 453,
+            "invocation_elapsed_ms": {
+              "min": 453,
+              "median": 453,
+              "max": 453
+            },
+            "sql_statements": 37,
+            "private_statements": 30,
+            "public_statements": 7,
+            "max_sql_statements_per_invocation": 37,
+            "max_sql_statements_per_binding_per_invocation": 30,
+            "d1_calls": 29,
+            "max_d1_calls_per_invocation": 29,
+            "max_batch": 4,
+            "rows_read": 28,
+            "rows_written": 61,
+            "r2_get": 2,
+            "r2_put": 2,
+            "r2_head": 0,
+            "mock_http": 1,
+            "cloud_cpu_ms": null,
+            "isolate_memory_bytes": null
+          }
+        }
+      }
+    },
+    {
+      "kind": "B",
+      "input_bytes": 8527543,
+      "unselected_padding_bytes": 8388608,
+      "selected_models": 250,
+      "output_observations": 500,
+      "fields": 17,
+      "components_per_model": 3,
+      "unchanged_domain_digest": "9d29947840532d4358543c0746d57aa415249e7800f0a372b3f2f86f4ac90a54",
+      "measurements": {
+        "before": {
+          "node_trials": 5,
+          "process_peak_rss_bytes": {
+            "min": 146903040,
+            "median": 147582976,
+            "max": 147804160
+          },
+          "probes": [
+            {
+              "name": "configuration_schema_policy",
+              "elapsed_ms": {
+                "min": 0.7844000000000051,
+                "median": 0.926400000000001,
+                "max": 1.462600000000009
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 0
+              },
+              "heap_delta_bytes": {
+                "min": 458592,
+                "median": 458592,
+                "max": 735480
+              }
+            },
+            {
+              "name": "response_body_read_synthetic",
+              "elapsed_ms": {
+                "min": 56.8768,
+                "median": 61.13760000000002,
+                "max": 73.10990000000001
+              },
+              "node_process_cpu_ms": {
+                "min": 62,
+                "median": 63,
+                "max": 78
+              },
+              "heap_delta_bytes": {
+                "min": 4020928,
+                "median": 4189432,
+                "max": 4204168
+              }
+            },
+            {
+              "name": "json_parse_only",
+              "elapsed_ms": {
+                "min": 7.3052000000000135,
+                "median": 7.669400000000024,
+                "max": 9.423299999999983
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 16,
+                "max": 16
+              },
+              "heap_delta_bytes": {
+                "min": 9624096,
+                "median": 9624112,
+                "max": 9624112
+              }
+            },
+            {
+              "name": "projection_including_parse_schema_decimal",
+              "elapsed_ms": {
+                "min": 32.4477,
+                "median": 34.32700000000003,
+                "max": 35.61940000000004
+              },
+              "node_process_cpu_ms": {
+                "min": 31,
+                "median": 31,
+                "max": 48
+              },
+              "heap_delta_bytes": {
+                "min": 19644520,
+                "median": 19689576,
+                "max": 19708200
+              }
+            },
+            {
+              "name": "evidence_including_projection_hash_serialization",
+              "elapsed_ms": {
+                "min": 44.73599999999999,
+                "median": 47.68090000000001,
+                "max": 48.33239999999995
+              },
+              "node_process_cpu_ms": {
+                "min": 46,
+                "median": 47,
+                "max": 63
+              },
+              "heap_delta_bytes": {
+                "min": 27868320,
+                "median": 27869912,
+                "max": 27899240
+              }
+            },
+            {
+              "name": "saved_evidence_validation",
+              "elapsed_ms": {
+                "min": 22.080700000000036,
+                "median": 23.213099999999997,
+                "max": 23.740200000000016
+              },
+              "node_process_cpu_ms": {
+                "min": 16,
+                "median": 31,
+                "max": 32
+              },
+              "heap_delta_bytes": {
+                "min": 23092632,
+                "median": 23097992,
+                "max": 23111528
+              }
+            },
+            {
+              "name": "domain_serialization_and_fingerprint_probe",
+              "elapsed_ms": {
+                "min": 25.11009999999999,
+                "median": 27.562999999999988,
+                "max": 29.329499999999996
+              },
+              "node_process_cpu_ms": {
+                "min": 47,
+                "median": 94,
+                "max": 109
+              },
+              "heap_delta_bytes": {
+                "min": 12861624,
+                "median": 12863280,
+                "max": 12871072
+              }
+            }
+          ],
+          "workerd": {
+            "trials": 1,
+            "invocations": 13,
+            "published": 500,
+            "total_elapsed_ms": 4611,
+            "invocation_elapsed_ms": {
+              "min": 31,
+              "median": 415,
+              "max": 528
+            },
+            "sql_statements": 4212,
+            "private_statements": 3411,
+            "public_statements": 801,
+            "max_sql_statements_per_invocation": 416,
+            "max_sql_statements_per_binding_per_invocation": 337,
+            "d1_calls": 2673,
+            "max_d1_calls_per_invocation": 263,
+            "max_batch": 6,
+            "rows_read": 3679,
+            "rows_written": 11867,
+            "r2_get": 14,
+            "r2_put": 11,
+            "r2_head": 0,
+            "mock_http": 1,
+            "cloud_cpu_ms": null,
+            "isolate_memory_bytes": null
+          }
+        },
+        "after": {
+          "node_trials": 5,
+          "process_peak_rss_bytes": {
+            "min": 138153984,
+            "median": 138989568,
+            "max": 139280384
+          },
+          "probes": [
+            {
+              "name": "configuration_schema_policy",
+              "elapsed_ms": {
+                "min": 0.7533999999999992,
+                "median": 0.7826000000000022,
+                "max": 0.860100000000017
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 16
+              },
+              "heap_delta_bytes": {
+                "min": 458592,
+                "median": 458592,
+                "max": 458592
+              }
+            },
+            {
+              "name": "response_body_read_synthetic",
+              "elapsed_ms": {
+                "min": 53.8852,
+                "median": 57.768100000000004,
+                "max": 59.3074
+              },
+              "node_process_cpu_ms": {
+                "min": 47,
+                "median": 63,
+                "max": 125
+              },
+              "heap_delta_bytes": {
+                "min": 4205448,
+                "median": 4205520,
+                "max": 4206928
+              }
+            },
+            {
+              "name": "json_parse_only",
+              "elapsed_ms": {
+                "min": 6.8271000000000015,
+                "median": 7.134299999999996,
+                "max": 7.5996000000000095
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 15,
+                "max": 16
+              },
+              "heap_delta_bytes": {
+                "min": 9621232,
+                "median": 9624112,
+                "max": 9624112
+              }
+            },
+            {
+              "name": "projection_including_parse_schema_decimal",
+              "elapsed_ms": {
+                "min": 30.383399999999966,
+                "median": 30.99629999999999,
+                "max": 32.2424
+              },
+              "node_process_cpu_ms": {
+                "min": 31,
+                "median": 31,
+                "max": 63
+              },
+              "heap_delta_bytes": {
+                "min": 19670096,
+                "median": 19708440,
+                "max": 19716680
+              }
+            },
+            {
+              "name": "evidence_including_projection_hash_serialization",
+              "elapsed_ms": {
+                "min": 36.78069999999997,
+                "median": 37.98270000000002,
+                "max": 40.30020000000002
+              },
+              "node_process_cpu_ms": {
+                "min": 31,
+                "median": 47,
+                "max": 63
+              },
+              "heap_delta_bytes": {
+                "min": 27867032,
+                "median": 27869120,
+                "max": 27872256
+              }
+            },
+            {
+              "name": "saved_evidence_validation",
+              "elapsed_ms": {
+                "min": 20.394900000000007,
+                "median": 21.59609999999998,
+                "max": 23.802599999999984
+              },
+              "node_process_cpu_ms": {
+                "min": 15,
+                "median": 31,
+                "max": 48
+              },
+              "heap_delta_bytes": {
+                "min": 22770576,
+                "median": 22774568,
+                "max": 22776224
+              }
+            },
+            {
+              "name": "domain_serialization_and_fingerprint_probe",
+              "elapsed_ms": {
+                "min": 24.711099999999988,
+                "median": 25.231499999999983,
+                "max": 26.58760000000001
+              },
+              "node_process_cpu_ms": {
+                "min": 15,
+                "median": 15,
+                "max": 31
+              },
+              "heap_delta_bytes": {
+                "min": 13005464,
+                "median": 13007184,
+                "max": 13014904
+              }
+            }
+          ],
+          "workerd": {
+            "trials": 1,
+            "invocations": 13,
+            "published": 500,
+            "total_elapsed_ms": 4850,
+            "invocation_elapsed_ms": {
+              "min": 30,
+              "median": 430,
+              "max": 590
+            },
+            "sql_statements": 4212,
+            "private_statements": 3411,
+            "public_statements": 801,
+            "max_sql_statements_per_invocation": 416,
+            "max_sql_statements_per_binding_per_invocation": 337,
+            "d1_calls": 2673,
+            "max_d1_calls_per_invocation": 263,
+            "max_batch": 6,
+            "rows_read": 3679,
+            "rows_written": 11867,
+            "r2_get": 14,
+            "r2_put": 11,
+            "r2_head": 0,
+            "mock_http": 1,
+            "cloud_cpu_ms": null,
+            "isolate_memory_bytes": null
+          }
+        }
+      }
+    },
+    {
+      "kind": "C",
+      "input_bytes": 8666543,
+      "unselected_padding_bytes": 8388608,
+      "selected_models": 500,
+      "output_observations": 1000,
+      "fields": 17,
+      "components_per_model": 3,
+      "unchanged_domain_digest": "1460c6b5819af1a5e2947df33247277b30384c19de9f45eb085a5786beb68a0b",
+      "measurements": {
+        "before": {
+          "node_trials": 5,
+          "process_peak_rss_bytes": {
+            "min": 158498816,
+            "median": 172097536,
+            "max": 172576768
+          },
+          "probes": [
+            {
+              "name": "configuration_schema_policy",
+              "elapsed_ms": {
+                "min": 0.7741999999999791,
+                "median": 0.7841999999999985,
+                "max": 0.839100000000002
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 15
+              },
+              "heap_delta_bytes": {
+                "min": 458592,
+                "median": 458592,
+                "max": 458592
+              }
+            },
+            {
+              "name": "response_body_read_synthetic",
+              "elapsed_ms": {
+                "min": 55.408800000000014,
+                "median": 57.5557,
+                "max": 59.616000000000014
+              },
+              "node_process_cpu_ms": {
+                "min": 62,
+                "median": 63,
+                "max": 78
+              },
+              "heap_delta_bytes": {
+                "min": 4205448,
+                "median": 4205448,
+                "max": 4205520
+              }
+            },
+            {
+              "name": "json_parse_only",
+              "elapsed_ms": {
+                "min": 11.394100000000009,
+                "median": 11.491899999999987,
+                "max": 12.296899999999994
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 16
+              },
+              "heap_delta_bytes": {
+                "min": 10852632,
+                "median": 10852632,
+                "max": 10852632
+              }
+            },
+            {
+              "name": "projection_including_parse_schema_decimal",
+              "elapsed_ms": {
+                "min": 42.09449999999998,
+                "median": 43.3604,
+                "max": 44.16030000000001
+              },
+              "node_process_cpu_ms": {
+                "min": 31,
+                "median": 62,
+                "max": 78
+              },
+              "heap_delta_bytes": {
+                "min": 28172008,
+                "median": 28284424,
+                "max": 28311864
+              }
+            },
+            {
+              "name": "evidence_including_projection_hash_serialization",
+              "elapsed_ms": {
+                "min": 64.33089999999999,
+                "median": 65.03090000000003,
+                "max": 66.32829999999996
+              },
+              "node_process_cpu_ms": {
+                "min": 78,
+                "median": 94,
+                "max": 95
+              },
+              "heap_delta_bytes": {
+                "min": 3647824,
+                "median": 3671944,
+                "max": 6160856
+              }
+            },
+            {
+              "name": "saved_evidence_validation",
+              "elapsed_ms": {
+                "min": 35.00110000000001,
+                "median": 35.86500000000001,
+                "max": 36.289499999999975
+              },
+              "node_process_cpu_ms": {
+                "min": 30,
+                "median": 46,
+                "max": 63
+              },
+              "heap_delta_bytes": {
+                "min": 12908416,
+                "median": 12932312,
+                "max": 12985784
+              }
+            },
+            {
+              "name": "domain_serialization_and_fingerprint_probe",
+              "elapsed_ms": {
+                "min": 48.52449999999999,
+                "median": 51.6311,
+                "max": 52.9314
+              },
+              "node_process_cpu_ms": {
+                "min": 46,
+                "median": 47,
+                "max": 79
+              },
+              "heap_delta_bytes": {
+                "min": 25673008,
+                "median": 25673016,
+                "max": 25674736
+              }
+            }
+          ],
+          "workerd": {
+            "trials": 1,
+            "invocations": 23,
+            "published": 1000,
+            "total_elapsed_ms": 10211,
+            "invocation_elapsed_ms": {
+              "min": 57,
+              "median": 468,
+              "max": 615
+            },
+            "sql_statements": 8372,
+            "private_statements": 6781,
+            "public_statements": 1591,
+            "max_sql_statements_per_invocation": 416,
+            "max_sql_statements_per_binding_per_invocation": 337,
+            "d1_calls": 5303,
+            "max_d1_calls_per_invocation": 263,
+            "max_batch": 6,
+            "rows_read": 7320,
+            "rows_written": 23687,
+            "r2_get": 24,
+            "r2_put": 21,
+            "r2_head": 0,
+            "mock_http": 1,
+            "cloud_cpu_ms": null,
+            "isolate_memory_bytes": null
+          }
+        },
+        "after": {
+          "node_trials": 5,
+          "process_peak_rss_bytes": {
+            "min": 163536896,
+            "median": 163692544,
+            "max": 164114432
+          },
+          "probes": [
+            {
+              "name": "configuration_schema_policy",
+              "elapsed_ms": {
+                "min": 0.751400000000018,
+                "median": 0.7805999999999926,
+                "max": 0.8003000000000213
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 0,
+                "max": 16
+              },
+              "heap_delta_bytes": {
+                "min": 458592,
+                "median": 458592,
+                "max": 458664
+              }
+            },
+            {
+              "name": "response_body_read_synthetic",
+              "elapsed_ms": {
+                "min": 55.0975,
+                "median": 56.90690000000001,
+                "max": 60.584
+              },
+              "node_process_cpu_ms": {
+                "min": 62,
+                "median": 63,
+                "max": 78
+              },
+              "heap_delta_bytes": {
+                "min": 4204392,
+                "median": 4205560,
+                "max": 4205592
+              }
+            },
+            {
+              "name": "json_parse_only",
+              "elapsed_ms": {
+                "min": 10.288700000000006,
+                "median": 10.737799999999993,
+                "max": 11.660300000000007
+              },
+              "node_process_cpu_ms": {
+                "min": 0,
+                "median": 16,
+                "max": 16
+              },
+              "heap_delta_bytes": {
+                "min": 10852632,
+                "median": 10852632,
+                "max": 10852632
+              }
+            },
+            {
+              "name": "projection_including_parse_schema_decimal",
+              "elapsed_ms": {
+                "min": 42.06920000000002,
+                "median": 44.644300000000015,
+                "max": 48.0059
+              },
+              "node_process_cpu_ms": {
+                "min": 47,
+                "median": 63,
+                "max": 125
+              },
+              "heap_delta_bytes": {
+                "min": 28199528,
+                "median": 28269992,
+                "max": 28292080
+              }
+            },
+            {
+              "name": "evidence_including_projection_hash_serialization",
+              "elapsed_ms": {
+                "min": 56.032100000000014,
+                "median": 56.6078,
+                "max": 58.66919999999999
+              },
+              "node_process_cpu_ms": {
+                "min": 78,
+                "median": 93,
+                "max": 110
+              },
+              "heap_delta_bytes": {
+                "min": 3650616,
+                "median": 3656488,
+                "max": 3680072
+              }
+            },
+            {
+              "name": "saved_evidence_validation",
+              "elapsed_ms": {
+                "min": 34.33539999999999,
+                "median": 35.39589999999998,
+                "max": 36.17969999999997
+              },
+              "node_process_cpu_ms": {
+                "min": 31,
+                "median": 47,
+                "max": 47
+              },
+              "heap_delta_bytes": {
+                "min": 12251320,
+                "median": 12285016,
+                "max": 12308304
+              }
+            },
+            {
+              "name": "domain_serialization_and_fingerprint_probe",
+              "elapsed_ms": {
+                "min": 49.27510000000001,
+                "median": 49.423100000000034,
+                "max": 51.62310000000002
+              },
+              "node_process_cpu_ms": {
+                "min": 62,
+                "median": 63,
+                "max": 94
+              },
+              "heap_delta_bytes": {
+                "min": 25959696,
+                "median": 25959704,
+                "max": 25959704
+              }
+            }
+          ],
+          "workerd": {
+            "trials": 1,
+            "invocations": 23,
+            "published": 1000,
+            "total_elapsed_ms": 10907,
+            "invocation_elapsed_ms": {
+              "min": 53,
+              "median": 485,
+              "max": 729
+            },
+            "sql_statements": 8372,
+            "private_statements": 6781,
+            "public_statements": 1591,
+            "max_sql_statements_per_invocation": 416,
+            "max_sql_statements_per_binding_per_invocation": 337,
+            "d1_calls": 5303,
+            "max_d1_calls_per_invocation": 263,
+            "max_batch": 6,
+            "rows_read": 7320,
+            "rows_written": 23687,
+            "r2_get": 24,
+            "r2_put": 21,
+            "r2_head": 0,
+            "mock_http": 1,
+            "cloud_cpu_ms": null,
+            "isolate_memory_bytes": null
+          }
+        }
+      }
+    }
+  ]
+}

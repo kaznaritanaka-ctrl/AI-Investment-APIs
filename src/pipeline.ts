@@ -1,4 +1,5 @@
 import { isGPU } from './gpu';
+import { collectModels } from './models-pipeline';
 import { collectGPU } from './gpu-pipeline';
 import type { CollectorEnv, Source, Evidence } from './schema';
 import { canCollect, assertPersistenceAllowed } from './policy';
@@ -7,6 +8,8 @@ import { fetchSource, FetchFailure, type NetworkOptions } from './network';
 import { evidenceFromBody } from './adapters';
 import { ingestEvidence, PARSER_VERSION } from './ingest';
 import { hash, stable, errorCode, isoTime } from './util';
+import { collectionIdentity } from './run-identity';
+import type { SourceObserver } from './telemetry';
 export type RunResult = {
   source_id: string;
   run_id: string;
@@ -17,6 +20,10 @@ export type RunResult = {
   changes?: number;
   quarantined?: number;
   issues?: number;
+  logical_slot?: string;
+  run_kind?: 'collection';
+  published?: number;
+  publication_batches?: string[];
 };
 type State = {
   suspended: number;
@@ -31,6 +38,8 @@ export type CollectOptions = {
   synthetic?: boolean;
   parser?: string;
   afterEvidenceSaved?: () => Promise<void>;
+  savedOnly?: boolean;
+  observer?: SourceObserver;
 };
 export async function collectSource(
   env: CollectorEnv,
@@ -38,15 +47,32 @@ export async function collectSource(
   scheduled: string,
   opt: CollectOptions = {},
 ): Promise<RunResult> {
+  if (opt.observer)
+    return opt.observer(s, scheduled, () =>
+      collectSource(env, s, scheduled, { ...opt, observer: undefined }),
+    );
+  if (s.models) return collectModels(env, s, scheduled, opt);
   if (isGPU(s.dataset_type)) return collectGPU(env, s, scheduled, opt);
-  const now = opt.now ?? (() => new Date().toISOString()),
-    run = await hash(s.source_id + '|' + scheduled),
-    base = { source_id: s.source_id, run_id: run };
+  const now = opt.now ?? (() => new Date().toISOString());
+  let run = await hash(s.source_id + '|' + scheduled);
+  let base: Pick<RunResult, 'source_id' | 'run_id' | 'logical_slot' | 'run_kind'> = {
+    source_id: s.source_id,
+    run_id: run,
+  };
   if (!isoTime(scheduled) || scheduled > now())
     return { ...base, state: 'failed', reason: 'invalid_schedule' };
   if (opt.synthetic && env.ENVIRONMENT !== 'test')
     return { ...base, state: 'failed', reason: 'synthetic_data_blocked' };
   try {
+    const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, scheduled);
+    run = identity.run_id;
+    scheduled = identity.storedSlot;
+    base = {
+      source_id: s.source_id,
+      run_id: run,
+      logical_slot: identity.slot,
+      run_kind: identity.kind,
+    };
     await syncSource(env, s, now());
     const sourceState = await env.PRIVATE_DB.prepare(
       'SELECT suspended,consecutive_failures,circuit_until,last_artifact_ref,last_success_at FROM sources WHERE source_id=?',
@@ -100,7 +126,7 @@ export async function collectSource(
       return { ...base, state: 'deferred', reason: 'retry_after' };
     const lease = crypto.randomUUID();
     const claim = await env.PRIVATE_DB.prepare(
-      "UPDATE collection_runs SET lease_token=?,lease_until=?,state='fetching',started_at=COALESCE(started_at,?) WHERE run_id=? AND (lease_until IS NULL OR lease_until<?)",
+      "UPDATE collection_runs SET lease_token=?,lease_until=?,state='fetching',started_at=COALESCE(started_at,?) WHERE run_id=? AND state NOT IN ('complete','quarantined') AND (lease_until IS NULL OR lease_until<?)",
     )
       .bind(lease, new Date(Date.parse(now()) + 10 * 60000).toISOString(), now(), run, now())
       .run();
@@ -111,6 +137,7 @@ export async function collectSource(
         evidence: Evidence;
       if (saved) evidence = await saved.json<Evidence>();
       else {
+        if (opt.savedOnly) throw new Error('saved_evidence_missing');
         let previous: Evidence | null = null;
         if (sourceState?.last_artifact_ref) {
           const raw = await env.EVIDENCE.get(sourceState.last_artifact_ref);
@@ -211,6 +238,7 @@ export async function collectSource(
         changes: result.changes,
         quarantined: result.quarantined,
         issues: result.issues,
+        publication_batches: [result.publication.batch],
       };
     } catch (error) {
       const code = errorCode(error),

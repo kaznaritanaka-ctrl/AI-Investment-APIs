@@ -1,0 +1,239 @@
+{
+  "recorded_at": "2026-10-01T01:00:54.755Z",
+  "status": "local_current_scale_reviewed_for_staged_rollout",
+  "owner_capacity_condition": "1095 days",
+  "source_requests": 1,
+  "live": {
+    "test_kind": "single_opt_in_local_live_capacity",
+    "recorded_at": "2026-10-01T00:52:25.168Z",
+    "observed_slot": "2026-10-01T00:49:50.309Z",
+    "production_deployed": false,
+    "production_requests": 0,
+    "source_requests": 1,
+    "public_payload_output": false,
+    "source_payload_sent_to_llm": false,
+    "local_invocations": 10,
+    "result": {
+      "source_id": "models_dev",
+      "run_kind": "collection",
+      "state": "complete",
+      "observations": 308,
+      "accepted": 279,
+      "quarantined": 29,
+      "issues": 0
+    },
+    "snapshot": {
+      "state": "complete",
+      "complete_capture": 1,
+      "model_count": 154,
+      "price_count": 154,
+      "component_count": 583,
+      "quarantined_count": 29,
+      "issues_json": "[]",
+      "metrics_json": "{\"cloud_cpu_measured\":false,\"parse_elapsed_ms\":295.49500000000035,\"payload_bytes\":5276537,\"projection_bytes\":407460}",
+      "data_origin": "live"
+    },
+    "projection": {
+      "complete": true,
+      "enumerated": 154,
+      "projected": 154,
+      "issues": [],
+      "by_provider": {
+        "anthropic": 16,
+        "google": 39,
+        "mistral": 34,
+        "openai": 53,
+        "xai": 12
+      },
+      "components_histogram": {
+        "2": 60,
+        "3": 36,
+        "4": 29,
+        "5": 1,
+        "6": 14,
+        "8": 4,
+        "9": 2,
+        "12": 7,
+        "16": 1
+      },
+      "price_issues": {
+        "unretained_mode_conditions": 14,
+        "zero_price_reported": 10,
+        "price_component_missing": 15
+      },
+      "input_bytes": 5276537,
+      "projection_bytes": 407460
+    },
+    "local_sqlite_bytes": {
+      "before": {
+        "PRIVATE_DB": 323584,
+        "PUBLIC_DB": 163840
+      },
+      "after": {
+        "PRIVATE_DB": 1892352,
+        "PUBLIC_DB": 2543616
+      },
+      "growth": {
+        "private": 1568768,
+        "public": 2379776
+      }
+    },
+    "local_r2": {
+      "object_count": 8,
+      "truncated": false,
+      "bytes": 1324058
+    },
+    "local_elapsed_ms": 153256.3522,
+    "cloud_cpu_measured": false,
+    "capacity_projection_not_yet_reviewed": true
+  },
+  "stress": {
+    "test_kind": "synthetic_local_workerd_capacity_stress",
+    "recorded_at": "2026-10-01T00:53:40.236Z",
+    "models": 500,
+    "components_per_model": 64,
+    "days": 3,
+    "external_requests": 0,
+    "production_changed": false,
+    "cloud_cpu_measured": false,
+    "cloud_memory_measured": false,
+    "baseline_bytes": {
+      "private_bytes": 315392,
+      "public_bytes": 155648
+    },
+    "profiles": [
+      {
+        "synthetic_day": 0,
+        "models": 500,
+        "components_per_model": 64,
+        "invocations": 23,
+        "max_d1_calls": 263,
+        "max_sql_statements": 416,
+        "rows_read": 7319,
+        "rows_written": 23687,
+        "r2_get": 24,
+        "r2_put": 21,
+        "growth_bytes": {
+          "private": 14315520,
+          "public": 17022976
+        },
+        "local_elapsed_ms": 19183
+      },
+      {
+        "synthetic_day": 1,
+        "models": 500,
+        "components_per_model": 64,
+        "invocations": 23,
+        "max_d1_calls": 338,
+        "max_sql_statements": 491,
+        "rows_read": 14828,
+        "rows_written": 23683,
+        "r2_get": 24,
+        "r2_put": 22,
+        "growth_bytes": {
+          "private": 14344192,
+          "public": 17059840
+        },
+        "local_elapsed_ms": 24159
+      },
+      {
+        "synthetic_day": 2,
+        "models": 500,
+        "components_per_model": 64,
+        "invocations": 23,
+        "max_d1_calls": 338,
+        "max_sql_statements": 491,
+        "rows_read": 15827,
+        "rows_written": 23683,
+        "r2_get": 24,
+        "r2_put": 22,
+        "growth_bytes": {
+          "private": 14348288,
+          "public": 17068032
+        },
+        "local_elapsed_ms": 23857
+      }
+    ],
+    "snapshots": [
+      {
+        "state": "complete",
+        "model_count": 500,
+        "price_count": 500,
+        "component_count": 32000,
+        "quarantined_count": 0,
+        "data_origin": "synthetic"
+      },
+      {
+        "state": "complete",
+        "model_count": 500,
+        "price_count": 500,
+        "component_count": 32000,
+        "quarantined_count": 0,
+        "data_origin": "synthetic"
+      },
+      {
+        "state": "complete",
+        "model_count": 500,
+        "price_count": 500,
+        "component_count": 32000,
+        "quarantined_count": 0,
+        "data_origin": "synthetic"
+      }
+    ],
+    "foreign_key_violations": 0,
+    "public_rows": 3000,
+    "forecast_1095_days_GB": {
+      "private": 15.711690752,
+      "public": 18.689650688
+    },
+    "forecast_method": "Largest measured daily SQLite growth including indexes x 1095; no claim of full three-year runtime validation; stable prices and metadata, one lifecycle event per model/day"
+  },
+  "intake": {
+    "test_kind": "synthetic_local_workerd_large_intake",
+    "models": 500,
+    "components_per_model": 64,
+    "model_count": 500,
+    "payload_bytes": 15604498,
+    "projection_bytes": 9863362,
+    "complete": true,
+    "exact_decimal": "1.234567890123456789",
+    "external_requests": 0,
+    "local_elapsed_ms": 1208.9553,
+    "cloud_cpu_measured": false,
+    "cloud_memory_measured": false,
+    "production_changed": false
+  },
+  "forecast": {
+    "unit": "decimal GB",
+    "constant_current_scope_1095_days": {
+      "private": 1.71780096,
+      "public": 2.60585472
+    },
+    "public_all_rows_eligible_ratio_allowance": 1.103942652329749,
+    "constant_scope_with_50_percent_reserve": {
+      "private": 2.57670144,
+      "public": 4.315071256774194
+    },
+    "illustrative_30_percent_annual_model_growth_and_50_percent_reserve": {
+      "private": 3.9172042625209187,
+      "public": 6.559943367019413,
+      "ending_models": 338.338
+    },
+    "worst_500_models_64_components": {
+      "private": 15.711690752,
+      "public": 18.689650688
+    },
+    "hard_limit_per_db_GB": 10,
+    "reassess_forecast_at_GB": 7,
+    "reassess_actual_storage_at_GB": 5,
+    "critical_actual_storage_at_GB": 8
+  },
+  "limits": [
+    "A one-day local live measurement and three synthetic days are not a three-year full-database test.",
+    "Model growth, component growth, revisions and additional events can change the forecast. The 50% reserve is an assumption, not a measured bound.",
+    "500 models x 64 components cannot be retained daily for 1095 days in these two D1 databases. Max_models is an intake guard, not a long-term storage certification.",
+    "Cloudflare P0 CPU and isolate memory must be measured after the separately approved rollout.",
+    "Capacity reassessment thresholds are documented operational thresholds; no new external monitor or notification service was installed.",
+    "The 2026-12-26 policy review deadline remains in force."
+  ]
+}

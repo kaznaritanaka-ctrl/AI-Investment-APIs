@@ -306,6 +306,123 @@
       ],
       "additionalProperties": false
     },
+    "models": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "minItems": 1,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          }
+        },
+        "fields": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "id",
+              "canonical_model_id",
+              "limit.context",
+              "limit.input",
+              "limit.output",
+              "modalities.input",
+              "modalities.output",
+              "reasoning",
+              "tool_call",
+              "structured_output",
+              "attachment",
+              "temperature",
+              "release_date",
+              "last_updated",
+              "status",
+              "cost",
+              "experimental.modes.cost"
+            ]
+          }
+        },
+        "max_models": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 2000
+        },
+        "models_per_invocation": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 25
+        },
+        "max_components": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 64
+        },
+        "owner_approval_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime_review_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retention": {
+          "type": "object",
+          "properties": {
+            "evidence_days": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 3650
+            },
+            "archive_days": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 3650
+            },
+            "normalized_days": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 3650
+            },
+            "backup_days": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 30
+            },
+            "reviewed_ref": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "evidence_days",
+            "archive_days",
+            "normalized_days",
+            "backup_days",
+            "reviewed_ref"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "providers",
+        "fields",
+        "max_models",
+        "models_per_invocation",
+        "max_components",
+        "owner_approval_ref",
+        "runtime_review_ref",
+        "retention"
+      ],
+      "additionalProperties": false
+    },
     "selection": {
       "type": "array",
       "items": {
@@ -486,6 +603,51 @@
           "items": {
             "type": "string"
           }
+        },
+        "models_scope": {
+          "type": "object",
+          "properties": {
+            "providers": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+$"
+              }
+            },
+            "fields": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "id",
+                  "canonical_model_id",
+                  "limit.context",
+                  "limit.input",
+                  "limit.output",
+                  "modalities.input",
+                  "modalities.output",
+                  "reasoning",
+                  "tool_call",
+                  "structured_output",
+                  "attachment",
+                  "temperature",
+                  "release_date",
+                  "last_updated",
+                  "status",
+                  "cost",
+                  "experimental.modes.cost"
+                ]
+              }
+            }
+          },
+          "required": [
+            "providers",
+            "fields"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

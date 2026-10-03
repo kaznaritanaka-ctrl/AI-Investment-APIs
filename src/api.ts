@@ -1,4 +1,5 @@
 import { gpuAPI } from './gpu-api';
+import { modelsAPI } from './models-api';
 import { visibleSQL, visibleJoin, MIT_NOTICE } from './publication';
 import { freshness } from './fx';
 import { hash, stable, isoTime } from './util';
@@ -35,6 +36,7 @@ const gpuFilterKeys = [
   'condition',
   'basis',
   'snapshot',
+  'model_snapshot',
 ];
 function gpuFilters(url: URL, prefix: string) {
   const columns: Record<string, string> = {
@@ -47,6 +49,7 @@ function gpuFilters(url: URL, prefix: string) {
     condition: 'item_condition',
     basis: 'basis',
     snapshot: 'snapshot_id',
+    model_snapshot: 'model_snapshot_id',
   };
   const filters: string[] = [],
     values: string[] = [];
@@ -62,7 +65,10 @@ function gpuFilters(url: URL, prefix: string) {
 }
 function dataset(url: URL) {
   const v = url.searchParams.get('dataset');
-  assert(v === null || ['fx', 'ai_api_prices', 'gpu_rental', 'gpu_secondary'].includes(v));
+  assert(
+    v === null ||
+      ['fx', 'ai_api_prices', 'ai_model_catalog', 'gpu_rental', 'gpu_secondary'].includes(v),
+  );
   return v;
 }
 const encode = (o: unknown) =>
@@ -116,6 +122,7 @@ export async function handle(
     )
       return error('rate_limited', 429);
     if (path.startsWith('/v1/gpu/')) return await gpuAPI(url, env, now);
+    if (path.startsWith('/v1/models/')) return await modelsAPI(url, env, now);
     if (path === '/openapi.json') return json(openapi);
     if (path === '/llms.txt')
       return new Response(
@@ -150,7 +157,7 @@ export async function handle(
           visibleSQL +
           ' GROUP BY o.dataset ORDER BY o.dataset',
       )
-        .bind(now, now, now, now)
+        .bind(now, now, now, now, now)
         .all();
       const health =
         path === '/health'
@@ -192,7 +199,7 @@ export async function handle(
           visibleSQL +
           " AND o.dataset='fx' AND o.entity_key=? AND o.observed_at<=? AND o.recorded_at<=? AND b.completed_at<=? ORDER BY o.observed_at DESC,o.recorded_at DESC,o.seq DESC LIMIT 1",
       )
-        .bind(now, now, now, now, base + '/' + quote, asOf, asOf, asOf)
+        .bind(now, now, now, now, now, base + '/' + quote, asOf, asOf, asOf)
         .first<{ public_json: string; held_at: string | null }>();
       return row
         ? json({ schema_version: '1', data: decorate(row.public_json, asOf, row.held_at) })
@@ -206,12 +213,12 @@ export async function handle(
       const ds = dataset(url),
         entity = url.searchParams.get('entity');
       assert(!entity || entity.length <= 300);
-      const values: unknown[] = [now, now, now, now, asOf, asOf, asOf, asOf],
+      const values: unknown[] = [now, now, now, now, now, asOf, asOf, asOf, asOf, asOf],
         filters: string[] = [];
       if (ds) {
         filters.push('dataset=?');
         values.push(ds);
-      }
+      } else filters.push("dataset<>'ai_model_catalog'");
       if (entity) {
         filters.push('entity_key=?');
         values.push(entity);
@@ -221,11 +228,11 @@ export async function handle(
       values.push(...gf.values);
       // Resolve supersession before entity filtering: a corrected condition may change its series key.
       const rows = await env.PUBLIC_DB.prepare(
-        'WITH eligible AS (SELECT o.observation_id,o.supersedes_observation_id,o.dataset,o.entity_key,o.source_id,o.snapshot_id,o.gpu_sku_id,o.provider,o.country,o.region,o.contract_type,o.item_condition,o.basis,o.observed_at,o.recorded_at,o.seq,o.public_json,p.held_at' +
+        'WITH eligible AS (SELECT o.observation_id,o.supersedes_observation_id,o.dataset,o.entity_key,o.source_id,o.snapshot_id,o.model_snapshot_id,o.gpu_sku_id,o.provider,o.country,o.region,o.contract_type,o.item_condition,o.basis,o.observed_at,o.recorded_at,o.seq,o.public_json,p.held_at' +
           visibleJoin +
           'WHERE ' +
           visibleSQL +
-          " AND o.observed_at<=? AND o.recorded_at<=? AND b.completed_at<=? AND (o.snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_coverage gc JOIN published_coverage newer ON newer.source_id=gc.source_id AND newer.scope_hash=gc.scope_hash WHERE gc.snapshot_id=o.snapshot_id AND newer.state='complete' AND newer.completed_at>gc.completed_at AND newer.completed_at<=?))), current AS (SELECT e.*,ROW_NUMBER() OVER(PARTITION BY e.dataset,e.source_id,e.entity_key ORDER BY e.observed_at DESC,e.recorded_at DESC,e.seq DESC) AS rn FROM eligible e WHERE NOT EXISTS (SELECT 1 FROM eligible n WHERE n.supersedes_observation_id=e.observation_id)) SELECT public_json,held_at FROM current WHERE rn=1" +
+          " AND o.observed_at<=? AND o.recorded_at<=? AND b.completed_at<=? AND (o.snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_coverage gc JOIN published_coverage newer ON newer.source_id=gc.source_id AND newer.scope_hash=gc.scope_hash WHERE gc.snapshot_id=o.snapshot_id AND newer.state='complete' AND newer.completed_at>gc.completed_at AND newer.completed_at<=?)) AND (o.model_snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_model_snapshots mc JOIN published_model_snapshots newer ON newer.source_id=mc.source_id AND newer.scope_hash=mc.scope_hash JOIN publication_batches nb ON nb.batch_id=newer.batch_id WHERE mc.snapshot_id=o.model_snapshot_id AND newer.state='complete' AND nb.state='complete' AND (newer.observed_at>mc.observed_at OR (newer.observed_at=mc.observed_at AND newer.completed_at>mc.completed_at)) AND newer.completed_at<=?))), current AS (SELECT e.*,ROW_NUMBER() OVER(PARTITION BY e.dataset,e.source_id,e.entity_key ORDER BY e.observed_at DESC,e.recorded_at DESC,e.seq DESC) AS rn FROM eligible e WHERE NOT EXISTS (SELECT 1 FROM eligible n WHERE n.supersedes_observation_id=e.observation_id)) SELECT public_json,held_at FROM current WHERE rn=1" +
           (filters.length ? ' AND ' + filters.join(' AND ') : '') +
           ' ORDER BY dataset,entity_key LIMIT 100',
       )
@@ -299,12 +306,12 @@ export async function handle(
       );
       if (cursor) assert(cursor.v === 1 && cursor.filter === fingerprint, 'cursor_filter_mismatch');
       const alias = kind === 'changes' ? 'c' : 'o';
-      const values: unknown[] = [now, now, now, now, after, snapshot, from, to, asOf],
+      const values: unknown[] = [now, now, now, now, now, after, snapshot, from, to, asOf],
         filters = [];
       if (ds) {
         filters.push('o.dataset=?');
         values.push(ds);
-      }
+      } else filters.push("o.dataset<>'ai_model_catalog'");
       if (entity) {
         filters.push('o.entity_key=?');
         values.push(entity);
@@ -312,7 +319,7 @@ export async function handle(
       const gf = gpuFilters(url, 'o.');
       filters.push(...gf.filters);
       values.push(...gf.values);
-      if (kind === 'changes') values.push(now, now, asOf);
+      if (kind === 'changes') values.push(now, now, asOf, now);
       values.push(limit + 1);
       const sql =
         'SELECT ' +
@@ -337,7 +344,7 @@ export async function handle(
         '.observed_at<=? AND b.completed_at<=?' +
         (filters.length ? ' AND ' + filters.join(' AND ') : '') +
         (kind === 'changes'
-          ? " AND p.derived_allowed=1 AND pp.active=1 AND pp.revoked=0 AND pp.derived_allowed=1 AND pp.valid_from<=? AND (pp.valid_until IS NULL OR pp.valid_until>?) AND pb.state='complete' AND (c.snapshot_id IS NULL OR EXISTS(SELECT 1 FROM published_coverage cg WHERE cg.snapshot_id=c.snapshot_id AND cg.state='complete' AND cg.completed_at<=?))"
+          ? " AND p.derived_allowed=1 AND pp.active=1 AND pp.revoked=0 AND pp.derived_allowed=1 AND pp.valid_from<=? AND (pp.valid_until IS NULL OR pp.valid_until>?) AND pb.state='complete' AND (c.snapshot_id IS NULL OR EXISTS(SELECT 1 FROM published_coverage cg WHERE cg.snapshot_id=c.snapshot_id AND cg.state='complete' AND cg.completed_at<=?)) AND (po.model_snapshot_id IS NULL OR EXISTS(SELECT 1 FROM published_model_snapshots pm WHERE pm.snapshot_id=po.model_snapshot_id AND pm.state='complete' AND pm.expires_at>?))"
           : '') +
         ' ORDER BY ' +
         alias +

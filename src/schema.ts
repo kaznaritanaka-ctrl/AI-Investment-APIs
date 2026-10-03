@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ModelScopeSchema, ModelsConfigSchema, type ModelCatalog } from './models-schema';
 import type { GPURental, GPUSecondary } from './gpu';
 
 export const Rights = z.enum(['allowed', 'denied', 'review_required', 'expired']);
@@ -30,6 +31,7 @@ export const PolicySchema = z
     decision_actor: z.string(),
     evidence_version: z.string(),
     evidence_refs: z.array(z.string()).min(1),
+    models_scope: ModelScopeSchema.optional(),
   })
   .strict();
 
@@ -111,6 +113,7 @@ export const SourceSchema = z
       'price_of_compute',
     ]),
     gpu: GPUConfigSchema.optional(),
+    models: ModelsConfigSchema.optional(),
     selection: z.array(z.string()),
     max_bytes: z.number().int().positive().max(32000000),
     max_records: z.number().int().positive().max(100),
@@ -137,6 +140,12 @@ export const PriceComponent = z
     unit: z.enum(['token', 'million_tokens', 'request']),
     tier_conditions: z.string().nullable(),
     cache_ttl: z.string().nullable(),
+    price_state: z
+      .enum(['reported', 'zero_unverified', 'missing', 'unknown', 'unsupported', 'free_confirmed'])
+      .optional(),
+    free_evidence_ref: z.string().nullable().optional(),
+    source_path: z.string().optional(),
+    pricing_mode: z.string().nullable().optional(),
   })
   .strict();
 export const AISchema = z
@@ -170,7 +179,7 @@ export const FXSchema = z
 export type AIPrice = z.infer<typeof AISchema>;
 export type FXRate = z.infer<typeof FXSchema>;
 export type Candidate = {
-  dataset: 'fx' | 'ai_api_prices' | 'gpu_rental' | 'gpu_secondary';
+  dataset: 'fx' | 'ai_api_prices' | 'ai_model_catalog' | 'gpu_rental' | 'gpu_secondary';
   entity_key: string;
   source_record_key: string;
   source_date: string | null;
@@ -178,15 +187,21 @@ export type Candidate = {
   source_effective_at: string | null;
   observation_basis:
     | 'reference_rate'
+    | 'catalog_listing'
     | 'advertised_quote'
     | 'observed_transaction'
     | 'third_party_reported_transaction'
     | 'modeled_estimate';
   quality_flags: string[];
-  domain: AIPrice | FXRate | GPURental | GPUSecondary;
+  domain: AIPrice | FXRate | ModelCatalog | GPURental | GPUSecondary;
 };
 export type Evidence = {
-  format: 'ecb_xml' | 'models_projection_v1' | 'openrouter_synthetic' | 'gpu_projection_v1';
+  format:
+    | 'ecb_xml'
+    | 'models_projection_v1'
+    | 'models_projection_v2'
+    | 'openrouter_synthetic'
+    | 'gpu_projection_v1';
   gpu_page?: {
     snapshot_id: string;
     partition_id: string;
@@ -227,6 +242,7 @@ export type Observation = Candidate & {
   parser_version: string;
   schema_version: '1';
   snapshot_id?: string;
+  model_snapshot_id?: string;
   backfill?: boolean;
   data_origin: 'synthetic' | 'live';
   quality_status: 'accepted' | 'quarantined';
