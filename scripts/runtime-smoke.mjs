@@ -19,7 +19,15 @@ const bundled = await build({
         "if(new URL(request.url).pathname.startsWith('/models-'))return modelsRuntime(request,env);\nif(new URL(request.url).pathname!=='/')",
       )
       .replace('XML_BODY', JSON.stringify(xml))
-      .replace('CATALOG_BODY', JSON.stringify(catalog)),
+      .replace('CATALOG_BODY', JSON.stringify(catalog))
+      .replace(
+        'export default {',
+        "import {operationsRuntime} from './tests/operations-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        "async fetch(request,env){\nif(new URL(request.url).pathname==='/operations')return operationsRuntime(env);",
+      ),
     resolveDir: process.cwd(),
     sourcefile: 'runtime-harness.ts',
     loader: 'ts',
@@ -66,6 +74,17 @@ try {
   assert(result.body.data.every((o) => o.data_origin === 'synthetic'));
   console.log(
     'Workerd runtime smoke passed: 2 synthetic sources, 1 blocked source, D1/R2 pipeline and public API. No external HTTP.',
+  );
+  const operations = await (await mf.dispatchFetch('https://local.test/operations')).json();
+  assert.equal(operations.collection, 'complete');
+  assert.equal(operations.publication, 'complete');
+  assert.equal(operations.dry.eligible, 1);
+  assert.equal(operations.dryCalls, 0);
+  assert.equal(operations.failed.state, 'pending');
+  assert.equal(operations.recovered.sent, 1);
+  assert.equal(operations.calls, 2);
+  console.log(
+    'Workerd operational check, notification dry-run, failure and recovery passed. Synthetic delivery only.',
   );
   let steps = 0,
     maxBatch = 0,

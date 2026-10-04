@@ -2,7 +2,7 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
-Phase 0/1のFX・AI API価格、Phase 2のGPU処理を維持し、Models.devのprovider別カタログ・価格・掲載履歴を追加しました。**2026-10-01のローカル本番候補はWorkers Paid、stage=enabled、既存3 CronとAPI custom domainを維持しています。** Models.devの5 provider・17 fieldは[所有者承認](docs/p0-owner-review.md)と[容量・runtime審査](docs/p0-runtime-review.md)を反映した新policyです。本番はmigrationとCollector deployの別途承認まで従来のMistral 2モデルで動作し、自然Cronの成功確認済みです。GPU実ソースはdisabledのままです。隔離ローカルlive・合成試験・本番実測を分けて報告します。
+現在の本番はWorkers Paid・stage=enabledで、ECBとModels.devの5 provider/17 fieldを既存の日次Cronで収集・公開しています。2026-10-04にCollector a534ff0、Admin 97277deとprivate 0005/配信台帳を反映済みです。public APIは24768e9です。GPU実ソースはdisabledのままです。[本番対応・継続運用の受け入れ](docs/operations-acceptance.md)に配信version/tree/artifact、履歴保全、通知・復旧・保持の確認結果をまとめています。今回の通知修正/0006は未配信・未適用、GitHubへのpushは所有者指定で保留です。
 
 - [Phase 2納品報告](docs/phase2-delivery-report.md)
 - [P0 Models.dev設計・policy案](docs/models-expansion.md) / [有効化・停止手順](docs/models-enablement.md) / [検証報告](docs/models-validation.md)
@@ -46,8 +46,8 @@ P0追加: `dataset=ai_model_catalog` と `model_snapshot` フィルター、`/v1
 
 コード配布ライセンスは未選択です。全データに共通する再配布ライセンスを付けず、sourceごとの出典・条件を返します。
 
-## Collector継続運用の修正（本番反映待ち）
+## Collector継続運用
 
-UTC予定slotと旧秒付きrunの互換照合、安全な構造化ログ、処理種別ごとのsummary、idle continuation通知の抑制を追加しています。既存P0、権利、公開境界、Cronは維持しています。watchdog単独版は0001/0002で検証し、P0を含む全体版とは別にレビュー・リリースできます。[反映・通知・復旧計画](docs/collector-reliability-release.md)を参照してください。
+UTC予定slotと秒付き旧runの照合、保存済み証拠からの有限復旧、Admin専用read-only入口は本番にあります。今回の候補は既存summary/outboxを使い、異常・復旧・継続通知と安全な有効化条件を追加します。正常時は通知しません。外部監視/通知送達と新版7日間実測は未受け入れです。通常判定は決定的処理で、常駐LLMを必要としません。
 
 `pnpm collector:benchmark before` / `after` は合成データだけのNode/workerd性能検証です。[改善前後の測定とFree/Paid比較](docs/collector-performance.md)には、ローカル経過時間・CPU代理指標と本番Cloudflare CPUを分けて記録しています。Free適合や本番反映済みを示す結果ではありません。

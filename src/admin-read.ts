@@ -14,7 +14,7 @@ import { sources as configuredSources } from './sources';
 import { canCollect, canPublish, modelsAuthorizationReady, gpuAuthorizationReady } from './policy';
 import { dailyCollectionSlot, minuteSlot } from './run-identity';
 import { freshness } from './fx';
-import { hash, stable } from './util';
+import { hash, stable, notificationEpoch } from './util';
 import { safeLogCode } from './telemetry';
 import { MIT_NOTICE, visibleJoin, visibleSQL } from './publication';
 import { readData } from './admin-read-data';
@@ -475,13 +475,22 @@ export async function sourceStatuses(
     const age = observed
       ? freshness(observed, str(latest?.source_date), now, s.dataset_type)
       : null;
+    const activation = notificationEpoch(env.NOTIFICATIONS_ACTIVE_FROM, now);
     const notification =
-      last && env.ALERT_WEBHOOK_URL
+      activation && env.ALERT_WEBHOOK_URL
         ? (
             await rows(
               env.PRIVATE_DB,
-              "SELECT n.attempts FROM notification_outbox n JOIN daily_summaries d ON d.summary_id=n.notification_id WHERE n.state='pending' AND d.recorded_at<=? AND EXISTS(SELECT 1 FROM json_each(d.summary_json,'$.sources') x WHERE json_extract(x.value,'$.source_id')=? AND (json_extract(x.value,'$.run_id')=? OR json_extract(x.value,'$.logical_slot')=?)) ORDER BY n.attempts DESC LIMIT 1",
-              [asOf, s.source_id, last.run_id, minuteSlot(String(last.scheduled_for))],
+              "SELECT n.attempts FROM notification_outbox n JOIN notification_incidents i ON i.activation_at=n.activation_at AND i.incident_key=n.incident_key AND i.last_event_id=n.notification_id WHERE n.activation_at=? AND n.state='pending' AND n.recorded_at<=? AND n.recorded_at>=? AND substr(n.incident_key,1,length(?)+1)=?||':' AND ((n.event_kind IN ('opened','reminder') AND i.active=1 AND i.last_condition='alert') OR (n.event_kind='recovered' AND i.active=0 AND i.last_condition='clear')) ORDER BY n.attempts DESC LIMIT 1",
+              [
+                activation,
+                asOf,
+                new Date(
+                  Math.max(Date.parse(activation), Date.parse(now) - 86400000),
+                ).toISOString(),
+                s.source_id,
+                s.source_id,
+              ],
             )
           )[0]
         : null;
@@ -770,11 +779,19 @@ export async function readAdmin(
               field('watchdog_cron', env.WATCHDOG_CRON ?? null),
               field('continuation_cron', env.GPU_RESUME_CRON ?? null),
               field('notification_configured', !!env.ALERT_WEBHOOK_URL),
+              field(
+                'notification_activation_at',
+                notificationEpoch(env.NOTIFICATIONS_ACTIVE_FROM, now),
+              ),
               field('agent_enabled', env.AGENT_ENABLED ?? null),
             ],
             stored: [],
             matches: null,
-            blockers: env.ALERT_WEBHOOK_URL ? [] : ['notification_not_configured'],
+            blockers: !env.ALERT_WEBHOOK_URL
+              ? ['notification_not_configured']
+              : notificationEpoch(env.NOTIFICATIONS_ACTIVE_FROM, now)
+                ? []
+                : ['notification_activation_required'],
           },
         ];
         for (const s of selected) {

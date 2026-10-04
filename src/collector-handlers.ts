@@ -6,6 +6,7 @@ import { expireGPUData } from './gpu-retention';
 import { resumeModelRuns } from './models-pipeline';
 import { expireModels } from './models-retention';
 import { recordSummary, deliverNotifications, watchdog, expireEvidence } from './operations';
+import { recordOperationalNotifications } from './notifications';
 import { dailyCollectionSlot, minuteSlot } from './run-identity';
 import {
   sourceObserver,
@@ -84,7 +85,15 @@ export default {
         event_scheduled_at: eventScheduled,
         logical_slot: logicalSlot ?? undefined,
       });
-      const notification = await deliverNotifications(env, now);
+      // Notification faults must not prevent retention or the normal health update.
+      let notification = { state: 'unavailable', sent: 0 };
+      try {
+        const checkedAt = new Date().toISOString();
+        await recordOperationalNotifications(env, activeSources, checkedAt);
+        notification = await deliverNotifications(env, checkedAt);
+      } catch {
+        /* No raw error, URL or payload is logged. */
+      }
       await expireEvidence(env, now);
       await expireGPUData(env, activeSources, now);
       await env.PUBLIC_DB.prepare(

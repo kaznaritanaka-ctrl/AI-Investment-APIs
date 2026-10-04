@@ -1,5 +1,7 @@
 # Repository boundaries
 
+- 2026-10-04 acceptance work is local/read-only production audit. Original production commits are retained on codex/preserve-production-20261004. Owner subsequently placed GitHub push on hold because Netlify integration scope is unverified. No push/PR/deploy/migration/notification activation without satisfying that hold or required production approvals. Read docs/operations-acceptance.md. 0006 is the new notification metadata proposal, not remotely applied.
+
 - Owner-approved 2026-10-04 Admin plan adds only a named AdminRead service entrypoint, allowlisted SELECT projections and additive private 0005 release metadata/indexes. Keep the default Collector HTTP handler closed and source/rights/Cron configuration unchanged. The companion Admin has no D1/R2 bindings and no mutation controls. Read docs/admin-read.md for the contract, release evidence and immediate production approval sequence. 0004 is reserved for the separate GPU/energy branch.
 
 - Read `docs/architecture.md` and `docs/rights-policy.md` before changing ingestion or publication.
@@ -19,7 +21,7 @@
 - Bootstrap means explicit crons=[] and COLLECTION_ENABLED=false. Wrangler is the only Cron controller; CI never deploys.
 - GPU continuation runs resume a daily search; they are not repeated market snapshots. Enforce 50-record pages and one page per invocation in deployment preflight.
 - Run check/test/test:runtime/build, offline preflight, and generated schema checks. Runtime tests include 1051 synthetic listings; live acquisition requires explicit opt-in and reviewed rights.
-- Models.dev provider expansion is an unapproved proposal in config/proposals, never an implicit replacement for config/sources/models_dev.json. Preserve policy v2 and existing enabled Cron/domain settings until separately approved.
+- Further Models.dev provider/field expansion requires separate approval; never replace config/sources/models_dev.json with a proposal implicitly. The approved production source is policy v3 (five providers / 17 fields); preserve it and the enabled Cron/domain settings. config/history contains the old v2 and config/proposals the historical proposal.
 - Read docs/models-expansion.md and docs/models-enablement.md for P0 changes. Provider/field scope, original units, per-model price quarantine and complete-snapshot absence semantics are mandatory. Source zero is not confirmed free.
 - Preserve applied 0001/0002 migrations. Models use forward 0003 migrations, bounded checkpoints, private-only support, current input-rights checks, and separate evidence/archive/normalized/backup retention. Synthetic 50/250/1000 model tests do not prove Free-plan or production capacity.
 - Collector reliability: use the shared UTC logical slot resolver and retain legacy seconds-based run IDs/evidence/checkpoints. Keep invocation process_kind separate from collection identity. Never infer data freshness from idle continuation or last_collector_completed_at alone.

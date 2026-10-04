@@ -22,7 +22,8 @@
     "test:runtime": "node scripts/run.mjs runtime",
     "preflight": "node scripts/preflight.mjs",
     "preflight:cloudflare": "node scripts/preflight.mjs --cloudflare-read-only",
-    "deploy:plan": "node scripts/preflight.mjs --plan"
+    "deploy:plan": "node scripts/preflight.mjs --plan",
+    "operations:check": "node scripts/operations-check.mjs"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

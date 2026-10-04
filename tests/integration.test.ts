@@ -300,25 +300,24 @@ describe('Cloudflare D1/R2 integration (synthetic only)', () => {
     const history = (await (await api('/v1/observations')).json()) as any;
     history.data.forEach((x: unknown) => PublicObservationSchema.parse(x));
   });
-  it('persists notifications without claiming delivery and suppresses unchanged notifications', async () => {
+  it('records successful summaries quietly and requires reviewed notification activation', async () => {
     const results = [await fx()];
     await recordSummary(local.env, time, results, time);
     await recordSummary(local.env, time, results, '2026-10-03T18:47:00.000Z');
     expect(await count('daily_summaries')).toBe(2);
-    expect(await count('notification_outbox')).toBe(1);
+    expect(await count('notification_outbox')).toBe(0);
     expect((await deliverNotifications(local.env, time)).state).toBe('not_configured');
-    const fail = await deliverNotifications(
-      { ...local.env, ALERT_WEBHOOK_URL: 'https://notify.example.test/hook' },
-      time,
-      responder('', undefined, 500),
-    );
-    expect(fail.state).toBe('pending');
-    const success = await deliverNotifications(
-      { ...local.env, ALERT_WEBHOOK_URL: 'https://notify.example.test/hook' },
-      time,
-      responder('{}'),
-    );
-    expect(success.sent).toBe(1);
+    const fetcher = vi.fn().mockRejectedValue(new Error('must not send'));
+    expect(
+      (
+        await deliverNotifications(
+          { ...local.env, ALERT_WEBHOOK_URL: 'https://notify.example.test/hook' },
+          time,
+          fetcher,
+        )
+      ).state,
+    ).toBe('activation_required');
+    expect(fetcher).not.toHaveBeenCalled();
   });
   it('expires raw evidence while keeping observation audit metadata', async () => {
     await fx();

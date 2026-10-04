@@ -6,6 +6,7 @@ import { domainFields } from '../src/admin-read-data';
 import { AdminQuery, AdminReport, ReleaseRecord } from '../src/admin-contract';
 import { collectSource } from '../src/pipeline';
 import { recordSummary, watchdog } from '../src/operations';
+import { recordNotificationSignals } from '../src/notifications';
 import { hash, stable } from '../src/util';
 import { sources } from '../src/sources';
 import { fxFetch, source, time } from './helpers';
@@ -304,12 +305,18 @@ describe('Admin read projection', () => {
       s = source('ecb');
     s.policy.valid_until = '2026-10-09T00:00:00.000Z';
     env.ALERT_WEBHOOK_URL = 'https://synthetic.invalid/webhook';
+    env.NOTIFICATIONS_ACTIVE_FROM = time;
     const result = await collectSource(env, s, time, {
       synthetic: true,
       now: () => time,
       network: { fetcher: fxFetch() },
     });
     await recordSummary(env, time, [result], time, { process_kind: 'collection' });
+    await recordNotificationSignals(
+      env,
+      [{ key: 'ecb:review', condition: 'alert', code: 'internal_policy_review_within_7_days' }],
+      now,
+    );
     await env.PRIVATE_DB.prepare(
       "UPDATE notification_outbox SET attempts=3 WHERE state='pending'",
     ).run();
