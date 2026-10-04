@@ -4,7 +4,8 @@ import { collectSource, type RunResult } from '../src/pipeline';
 import { recordSummary, watchdog } from '../src/operations';
 import { sourceObserver, safeLogCode } from '../src/telemetry';
 import { revokeSource } from '../src/publication';
-import collector from '../src/collector';
+// Node exercises the unchanged scheduled handler; admin-rpc.test covers the workerd entrypoint.
+import collector from '../src/collector-handlers';
 import { stable } from '../src/util';
 import { source, fxFetch, time } from './helpers';
 

@@ -1,5 +1,7 @@
 # Repository boundaries
 
+- Owner-approved 2026-10-04 Admin plan adds only a named AdminRead service entrypoint, allowlisted SELECT projections and additive private 0005 release metadata/indexes. Keep the default Collector HTTP handler closed and source/rights/Cron configuration unchanged. The companion Admin has no D1/R2 bindings and no mutation controls. Read docs/admin-read.md for the contract, release evidence and immediate production approval sequence. 0004 is reserved for the separate GPU/energy branch.
+
 - Read `docs/architecture.md` and `docs/rights-policy.md` before changing ingestion or publication.
 - Never deploy, buy services, contact providers, merge to main, or change rights grants without explicit authorization.
 - Unknown rights fail closed before HTTP, storage, LLM processing and publication independently. A public endpoint is not a license.

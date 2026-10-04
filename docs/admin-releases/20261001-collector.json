@@ -1,0 +1,25 @@
+{
+  "record_id": "20261001-collector-verified",
+  "worker": "ai-investment-collector",
+  "version_id": "58f4a924-6c83-4492-8fd9-08194a9b9255",
+  "git_sha": "24768e9e19f26b70555a7d1f738be43cde758d01",
+  "tree_sha": "9ea7f7f92debc1c5796501357d112b4a7ff4b049",
+  "artifact_sha256": "922f92ddfac1e8a54852e083565cb5ea420c9fa53e54ea3592ca694c4fc3c24b",
+  "event": "verified",
+  "recorded_at": "2026-10-01T02:48:11.440Z",
+  "traffic_percent": 100,
+  "evidence_ref": "docs/admin-releases/20261001-collector-evidence.json",
+  "evidence_sha256": "460489ed5e76ba598d0725b2630916e504bce01c3a70b427380f3248f39ac700",
+  "checks": {
+    "deployment_readback": "passed",
+    "artifact_hash": "passed",
+    "settings_preserved": "passed",
+    "http_smoke": "passed"
+  },
+  "migration_names": [
+    "0001_initial.sql",
+    "0002_gpu.sql",
+    "0003_models_catalog.sql"
+  ],
+  "github_url": "https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/commit/24768e9e19f26b70555a7d1f738be43cde758d01"
+}

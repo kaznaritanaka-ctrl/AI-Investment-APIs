@@ -24,6 +24,7 @@ for (const name of readdirSync('config/sources').filter((x) => x.endsWith('.json
   assert(s.policy.fields.length > 0);
 }
 assert(!/tests\/fixtures|fixtures\/|synthetic\.json/.test(read('src/collector.ts')));
+assert(!/tests\/fixtures|fixtures\/|synthetic\.json/.test(read('src/collector-handlers.ts')));
 assert(/work\//.test(read('.gitignore')));
 assert(/\.dev\.vars/.test(read('.gitignore')));
 assert(JSON.parse(read('config/source.schema.json')).properties.policy);

@@ -1,0 +1,51 @@
+{
+  "kind": "historical_asset_hash_manifest",
+  "verified_at_deployment": true,
+  "files": [
+    {
+      "path": "dist/ai_investment_admin/.vite/manifest.json",
+      "bytes": 157,
+      "sha256": "adc6cbede6ffdd0f4ff071c941fea1448fb726fc5b86039b8a41b4b97a5a22a1"
+    },
+    {
+      "path": "dist/ai_investment_admin/index.js",
+      "bytes": 209268,
+      "sha256": "8e110f7918fb865a4b62600037cabbd64dbd3582a17cd5a9af68fc65cb24f8c8"
+    },
+    {
+      "path": "dist/ai_investment_admin/wrangler.json",
+      "bytes": 1783,
+      "sha256": "015a847969f367b88723cbd44abf2e213237c6af86f206338d8f812846efb9ad"
+    },
+    {
+      "path": "dist/client/.assetsignore",
+      "bytes": 24,
+      "sha256": "4f83140d5f4293ab55bd1207327e995c83258f1e7d3145b1b5d7a3d17fdfe0a7"
+    },
+    {
+      "path": "dist/client/assets/index-BLpAmNRX.css",
+      "bytes": 18172,
+      "sha256": "7273bdd2fb8d636f9fbc0d1262e0d41dfb691239eee24f4fad23ba854065f7fa"
+    },
+    {
+      "path": "dist/client/assets/index-CpmkENB1.js",
+      "bytes": 371949,
+      "sha256": "456785acdf883f8cde2e9e308361bbff884028840e377e4a43023666ab99b653"
+    },
+    {
+      "path": "dist/client/favicon.svg",
+      "bytes": 195,
+      "sha256": "b49b31965a4f62f3b36934194ed75b1ff6a373d1040044112b7e98ee6e31895e"
+    },
+    {
+      "path": "dist/client/index.html",
+      "bytes": 532,
+      "sha256": "1b62e80ec6b435243167d17bc74d7153851327237960a2a9d58880922713ff95"
+    },
+    {
+      "path": "dist/client/_headers",
+      "bytes": 282,
+      "sha256": "e843f50619973df39888f13d5059453ba6028bbb836f8af1aab0998e6184d8f7"
+    }
+  ]
+}
