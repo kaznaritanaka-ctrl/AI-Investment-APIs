@@ -119,4 +119,36 @@ runnerはmetadataの読取権限、承認済みEvidenceのprivate read、local b
 
 ## 検証結果
 
-最終状態のcommit、全体検証、別branchの修復patch検証、workerdの計測結果は、この節へ追記する。途中の成功を足し合わせず、凍結した状態の実行結果だけを受け入れ結果とする。
+最終コードは **`148774babd9d1ad476ab9d4b5f64a95ba589bfbb`**、branchは `codex/schema-drift-recovery-20261005`。本体の最終検証は2026-10-05 **02:22:23–02:40:45 JST**（2026-10-04 17:22:23–17:40:45 UTC）。コード・テストを編集せずに実行し、開始前/終了後ともtracked差分なし、HEAD一致を記録した。この受け入れ記録の追記だけを検証後の文書commitとする。
+
+環境はWindows x64、Node v24.19.0、pnpm 11.19.0、固定lockfileの既存依存。ネットワーク取得・本番操作をしない検証であり、**GitHub CIは未実行**。Windowsの既存ローカル検証条件に合わせ、全体testの各ケース上限を60秒で起動した。assertion・対象test・公開/権利/品質の期待値は弱めていない。別checkoutの本体と候補を固定して検証し、検証中の並行編集はない。
+
+| 検証 | 本体148774b | 生成した修復候補 |
+|---|---|---|
+| 型・形式・境界検査 `node scripts/run.mjs check` | PASS | PASS |
+| 全体test `node scripts/run.mjs test --testTimeout 60000 --reporter verbose` | **22 files / 194 tests PASS** | **23 files / 195 tests PASS** |
+| workerd runtime `node scripts/run.mjs runtime` | PASS | PASS |
+| API/Collector build `node scripts/run.mjs build` | PASS、Wrangler **dry-runのみ** | PASS、同左 |
+| offline preflight `node scripts/preflight.mjs` | PASS | PASS |
+| `operations-check.mjs` offline / `generate.mjs` | PASS / 生成物差分なし | 候補用5検証の対象外 |
+
+本体の各コマンドのexit code・時刻・前後status・artifact hashは `work/final-validation-148774b/result.json`、詳細ログは同じディレクトリに保存した。Collector buildのSHA256は `f6235154a7c0c83028458dc8bf985c9a9c28916b54515296ce8b3d3f0dd8dc52`、APIは `d7577cdcfb983bbda02942254c53a2026457358b16dc041bb3936228d8196023`。uploadはしていない。
+
+修復候補は `pnpm repair:prepare --demo --verify` 相当のCLIを実行して生成した、**合成Models wrapper事例**である。検証期間は02:21:56–02:40:19 JST。基準148774bに対する検証済みpatchを、そのままローカルbranch **`codex/repair-73ff2b6be12645c0` / commit `3490e2083b2fbf7b716dc03d192432e4b6839d80`** に固定した。commit前後のpatch全文一致、src/models.ts hash、clean statusを確認した。本体branchにはこの合成修復patchをmergeしていない。
+
+- parser版: `models-catalog-20260930.1.repair-1137253ccb804750`
+- patch SHA256: `578e130e66a51da66ab0c3bb9ae18da2069aa785c07ad4283028a5a2b27b863c`
+- 合成Evidence body hash: `3cd013a34da2b2b572052e46bcba6f999032fdb53ab200997bba195492885bd0`
+- 出力: `work/repairs/73ff2b6be12645c0/` の `candidate.patch`、`ai-input.json`、`test-receipts.json`、`repair-result.json`、各検証ログ
+
+実際に生成patchをbuildして、保存した合成Evidenceをそのparserで再解析した。5 entity / accepted 5 / quarantined 0でbaselineと一致、identity・decimal・currency・unit・basis・元observed_atを維持した。demoの提供元・権利の意味は合成fixtureとして管理されるので、候補gateは全PASS。ただし `production_deploy_allowed=false`、`publication_allowed=false` のまま。実データでは現行source許可・上流の意味が未確認ならnullとなり、このdemoの結果は転用しない。fixtureの観測時刻 `2026-10-05T18:18:00.000Z` は試験用の時計で、実際にその日に収集した記録ではない。
+
+runtimeでは8,391,612 bytesの合成responseから許可fieldのbody 2,272 bytesを保存できた（envelopeのmetadataは別）。ローカル経過144msであり、**Cloudflareの課金CPU計測ではない**。HTTPはmock 1回、外部HTTPは0回。schema driftでrunは停止し、private観測0・public行0のままEvidenceを保存、その保存値から5件を再解析できた。結果は `work/runtime-recovery-report.json`。通常のECB/Models収集、通知dry-run、1051件/22pageの既存GPU処理、50/250/1000 Modelsの継続・履歴・replayも今回のruntimeで成功した。実sourceの有効化や実通知の試験ではない。
+
+朝向け出力もCLI経由で照合した。`work/repairs/73ff2b6be12645c0/overnight-brief.synthetic.json` は `repair_patch=generated`、`regression_result=passed`、`reparse_result=passed_with_patched_parser` を返す。同時に、元の合成状態 `collection_status=failed` / `publication_status=awaiting_collection` / `missing_observation_count=null` を保持し、human actionを `review_gate_and_approve_deploy` とする。通知は `not_attempted`。試験結果から本番の欠測0や公開完了を作っていない。
+
+予備検証では旧候補 `a6f181c8e84a1b37` の195件中1件が、修復checkoutの `work/` を既存testより先に作っていなかったためENOENTで失敗した。gateは不合格となり、朝向けJSONも `failed_or_unverified` を保持した。148774bで作業フォルダーの準備を直し、既存test本文を変えずに**上表の両方の全体検証を最初から再実行**した。旧候補の194件成功、旧本体9db86ffの成功、途中の部分検証を最終件数へ足していない。失敗記録は消していない。
+
+未検証なのは実sourceの未知変更、本番Cloudflare CPU/容量、private R2 lifecycleとの適合、現行本番に対するremote checker到達性、独立runner・heartbeat、実通知送達、実Evidenceの本番再解析/公開、GitHub CIである。capture flagの有効化・新規runner/schedule/Secrets登録・production deployは実施していない。7日間の自然実行実績を今回追加取得したり、候補の実績へ合算したりしていない。
+
+元operations checkoutはcf726bdのままで、既存未コミット文書のSHA256 `3f83d39af6eed049a38eba0800e7b56220d52ab8d2fa211e27a420ec46854932` も不変。Adminは `ff46be8ecf20f9df8df52374e3991c5a217e21fe`、独立GPU作業は `a0196dc24348cb7185a37e6762ecd9a7c136c288` で、ともにcleanなまま。source権利・保持設定・既存migration・Wrangler設定・GitHub Actionsに本体候補の差分はない。

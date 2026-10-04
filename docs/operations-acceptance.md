@@ -169,3 +169,5 @@ rollback候補は現Collector `764bb171-582b-47a0-ad40-5d6aadc61ee6` / a534ff0�
 追加依頼は `codex/schema-drift-recovery-20261005` で実装し、[調査・権利境界・復旧gate・夜間運用・検証記録](schema-drift-recovery.md)にまとめた。上記cf726bdの凍結検証結果と、新しい候補の結果を合算しない。元operations checkoutの未コミット文書、Admin、独立GPU checkoutは編集していない。
 
 新候補は既存metrics/raw_artifactsを使い、schema recovery用migrationは追加しない。0006候補への依存、0004分離、通知無効、旧Collector rollback時のWebhook不存在確認、GitHub push/PR保留は継続する。`SCHEMA_RECOVERY_ENABLED`、独立runner/schedule、Secrets、実通知、本番反映を有効にしていない。
+
+新候補の最終コードは `148774babd9d1ad476ab9d4b5f64a95ba589bfbb`。2026-10-05 02:22–02:40 JSTに固定状態で194件全test、型・境界検査、runtime、dry-run build、offline preflight/checker、生成物差分確認を通した。別branchの合成修復候補 `3490e2083b2fbf7b716dc03d192432e4b6839d80` は195件全testと同じ5種類の候補検証・保存Evidence再解析がPASS。上記cf726bdの検証結果との合算ではなく、GitHub CI・本番反映の成功でもない。失敗した予備候補を含む詳細とhashは[今回の検証記録](schema-drift-recovery.md#検証結果)に記載した。
