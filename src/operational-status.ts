@@ -296,6 +296,15 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
           condition: 'alert',
           code: 'schema_drift_detected',
         });
+      else if (
+        morning.collection_status === 'complete' &&
+        morning.publication_status === 'complete'
+      )
+        reports.at(-1)!.signals.push({
+          key: s.source_id + ':schema_drift',
+          condition: 'clear',
+          code: 'schema_recovery_complete',
+        });
       reports.at(-1)!.signals.push({
         key: s.source_id + ':configuration',
         condition:

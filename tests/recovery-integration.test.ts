@@ -15,6 +15,7 @@ import { catalog, expandedSource, finishModels } from './models-helpers';
 import { source, time, responder, fixture } from './helpers';
 import { hash, stable } from '../src/util';
 import { syncSource } from '../src/publication';
+import { recordNotificationSignals } from '../src/notifications';
 
 let local: Awaited<ReturnType<typeof localEnv>>;
 beforeEach(async () => {
@@ -102,6 +103,29 @@ it('normal acquisition still completes with capture enabled; unchanged prices re
     publication_status: 'complete',
     missing_observation_count: 0,
   });
+  const recovered = await readOperationalStatus(local.env, [s], at(1));
+  expect(recovered.sources[0].signals).toContainEqual({
+    key: 'models_dev:schema_drift',
+    condition: 'clear',
+    code: 'schema_recovery_complete',
+  });
+  const notifications = { ...local.env, NOTIFICATIONS_ACTIVE_FROM: time };
+  await recordNotificationSignals(
+    notifications,
+    [{ key: 'models_dev:schema_drift', condition: 'alert', code: 'schema_drift_detected' }],
+    time,
+  );
+  const cleared = await recordNotificationSignals(
+    notifications,
+    recovered.sources[0].signals,
+    at(1),
+  );
+  expect(cleared.events).toContain('models_dev:schema_drift:recovered');
+  expect(
+    await local.env.PRIVATE_DB.prepare(
+      "SELECT active FROM notification_incidents WHERE incident_key='models_dev:schema_drift'",
+    ).first<number>('active'),
+  ).toBe(0);
 });
 
 it('keeps permission gates and default-off behavior, including source suspension during HTTP', async () => {
