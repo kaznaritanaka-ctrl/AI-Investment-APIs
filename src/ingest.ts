@@ -6,6 +6,7 @@ import { batches, hash, stable, D } from './util';
 import type { CollectorEnv, Evidence, Observation, Source, AIPrice, FXRate } from './schema';
 import { crossRate } from './fx';
 import { publish, type Change } from './publication';
+import type { DriftStage } from './schema-drift';
 function legacyTable(dataset: string) {
   if (dataset === 'fx') return 'fx_observations';
   if (dataset === 'ai_api_prices') return 'ai_api_prices';
@@ -41,6 +42,7 @@ export async function ingestEvidence(
   evidence: Evidence,
   now: string,
   parser = PARSER_VERSION,
+  onStage?: (stage: DriftStage) => void,
 ) {
   if (isGPU(s.dataset_type))
     return ingestGPUPage(env, s, run, scheduled, artifactRef, evidence, now, parser);
@@ -57,9 +59,11 @@ export async function ingestEvidence(
     throw new Error('evidence_retention_expired');
   if (evidence.synthetic && env.ENVIRONMENT !== 'test') throw new Error('synthetic_data_blocked');
   if (evidence.observed_at > now) throw new Error('future_observation');
+  onStage?.('parser');
   const parsed = parseEvidence(s, evidence);
   if (!parsed.candidates.length) throw new Error('empty_parsed_result');
   if (parsed.candidates.length > s.max_records) throw new Error('record_limit_exceeded');
+  onStage?.('private_store');
   const sourceState = await env.PRIVATE_DB.prepare(
     'SELECT last_count FROM sources WHERE source_id=?',
   )
@@ -335,6 +339,7 @@ export async function ingestEvidence(
       customMetadata: { sha256: await hash(archive) },
     },
   );
+  onStage?.('publication');
   const publication = await publish(env, s, run, parser, observations, changeRows, now);
   const accepted = observations.filter((o) => o.quality_status === 'accepted').length;
   await env.PUBLIC_DB.prepare(

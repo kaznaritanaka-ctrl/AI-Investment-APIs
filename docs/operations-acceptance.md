@@ -1,6 +1,19 @@
 # 継続運用の受け入れ・本番保全（2026-10-04）
 
-本番の最小メタデータを2026-10-04 14:51–15:16 JSTに読み取り確認した記録です。今回の修正はローカル候補で、本番反映していません。公開前検査でNetlify Appの対象repo範囲を確認できず、所有者がGitHubへのpush保留を指定しました。PR作成・main mergeも未実施です。
+2026-10-04の最終確認です。ローカル検証は22:58–23:16 JST、本番の最小メタデータの再照合は22:59–23:10 JSTに実施しました。機能・コード・テストは変更せず、下記の固定状態で全検証を再実行しています。GitHub pushは所有者指定の保留を継続し、PR作成・main merge・本番deploy・remote migration・実通知・Secrets変更・監視schedule追加・保存期間変更は行っていません。
+
+## 固定した検証対象
+
+| repo / 作業ディレクトリ | 対象commit | tree | 検証開始・終了時の未コミット差分 |
+|---|---|---|---|
+| AI-Investment-APIs / `work/p0-main-integration` | `cf726bd52db57f90ffb6299402982e8b6bb77d03` | `4b8c9cc334135424f6bead470743f8919579433f` | なし → なし |
+| AI-Investment-Admin / `work/admin-ecb-fix` | `ff46be8ecf20f9df8df52374e3991c5a217e21fe` | `7e696140f96e457e4d7e3e49430819014b639530` | なし → なし |
+
+両repoの対象branchは `codex/operations-acceptance-20261004`。各検証コマンドの前後でHEADとworking treeを確認し、並行編集は行いませんでした。検証終了後の変更は本ファイルへの記録更新だけで、未コミットのまま保持しています。ソース・テスト・lockfile・migration・設定は上記commitから不変です。独立GPU作業 `work/gpu-energy-expansion`（`a0196dc24348cb7185a37e6762ecd9a7c136c288`、clean）も変更していません。
+
+環境はWindows 10.0.26200 x64、Node 24.19.0、pnpm 11.19.0。APIはWrangler 4.140.0、Miniflare 4.20260730.0、Vitest 5.0.2、TypeScript 7.0.2。AdminはWrangler 4.143.0、Vite 8.3.1、Cloudflare Vite plugin 1.62.0、Vitest 5.0.2、TypeScript 7.0.2、Playwright 1.63.0、Edge 154.0.4258.37（`PLAYWRIGHT_CHANNEL=msedge`）です。lockfile SHA-256はAPI `f6a08aa31f8d4fc9ad7e33d56aa1125c2fecd326c96f061490f75151876be57e`、Admin `67fe32508e141e0bcd5b54708ac0ab98135c3638ec47bc8f2217dce505a5ca8e`。依存更新・再インストールはしていません。
+
+workerd/Edgeを起動できるローカル環境で実行し、Git所有者例外は当該プロセスの対象repoだけ（`GIT_CONFIG_COUNT/KEY_0/VALUE_0`）、短い一時パスは `AI_APIS_TEMP_DIR` で指定しました。Gitのglobal設定は変更せず、Wrangler telemetryも無効です。API/Collector compatibilityは2026-09-01、Adminは2026-09-29のままです。
 
 ## 本番とソースの対応
 
@@ -14,23 +27,36 @@ private台帳5件と稼働versionを照合しました。[配信台帳の保全]
 
 配信時のfrozen Collector module SHA-256は `145c6db6f83d66b60c7ee38c4693759880fcfdf635045d837a8869cde805e8ed`、Admin server moduleは `16185dc38509ffafaee29892c20716f16828eec9a3be9d556728ddff93e4ae94`。Admin台帳のartifactはserver単体ではなくfrozen manifestで、SHA-256は `582bc8c781f1e152135e1ac7b8649ab25774716c8ec671c60b59ebd8c446eaec` です。配信時のreadback一致と、今回のソースtree照合を根拠に対応を確定しています。今回の修正版ビルドや別環境の再ビルドが本番バイナリと一致したという意味ではありません。今回の検証環境はNode 24.19.0・pnpm 11.19.0・API Wrangler 4.140.0・Admin Wrangler 4.143.0です。再ビルドではNode 24・pnpm 11.19.0、各commitのlockfile、API/Collector compatibility 2026-09-01・Admin 2026-09-29とWrangler/Vite設定を再ビルド条件として固定します。
 
-API repoの元HEADはa534ff0、Admin repoは97277deで、両方cleanでした。両repoで `codex/preserve-production-20261004` が元commitを保持し、修正は `codex/operations-acceptance-20261004` です。APIのGitHub origin/mainはdd43e54、AdminのGitHub mainは5ed8eb6。Adminの従来originはローカルrepoなので維持し、GitHubを `github` remoteに追加しました。既存worktree、独立したoperations-phase1/GPU作業には変更していません。
+API repoの元HEADはa534ff0、Admin repoは97277deで、両方cleanでした。両repoで `codex/preserve-production-20261004` が元commitを保持し、修正は `codex/operations-acceptance-20261004` です。保全時に取得したremote-tracking mainはAPIがdd43e54、Adminが5ed8eb6で、今回の最新GitHub head確認値ではありません。Adminの従来originはローカルrepoなので維持し、GitHubを `github` remoteに追加済みです。既存worktree、独立したoperations-phase1/GPU作業には変更していません。
 
 開始時の未公開履歴はAPI 2 commit/26 blob、Admin 4 commit/66 blobを検査しました。credentialパターン候補は2件とも合成テストのredaction sentinel。変更ファイル一覧・fixtures・release証跡の点検で本番本文、実価格fixture、私的ログ、認証値の追加を認めませんでした。網羅的な秘密情報不存在証明ではありません。追加修正も検査してローカルcommitへまとめ、公開前には最終未公開履歴全体を再検査します。Cloudflare Workers Buildsは3 Workerともtriggerなし、Pagesなし、両repoのWebhookとGitHub deployment履歴は0、CIは検証だけ。Netlifyのrepo接続範囲は再認証が必要で未確認のため、公開条件は未達です。
 
 ## 現在の収集・公開
 
-private migrationは0001/0002/0003/0005、publicは0001/0002/0003。0004は独立作業の未適用案であり、番号衝突を解消してから別途扱います。Collector CPU 5000ms、COLLECTION_ENABLED=true、AGENT_ENABLED=false、private/public D1・private R2 bindingsを維持。Cronは毎日03:17 JST、watchdog03:47、continuation03:00–08:55の5分間隔。APIはPUBLIC_DBのみ、AdminはADMIN_READ→Collector#AdminReadと既存ASSETS/metadata用Secret。全Workerでworkers.dev/previewは無効です。Secret値は取得していません。
+22:59 JSTのmigration台帳はprivateが0001/0002/0003/0005、publicが0001/0002/0003。今回の0006は未適用で、23:10 JSTのschema照会でもincident表・追加3列・indexが存在しないことを確認しました。0004は独立GPU/電力作業の未適用案で、今回の適用対象から除外します。適用済みmigrationの内容・番号は変更しません。Collector CPU 5000ms、COLLECTION_ENABLED=true、AGENT_ENABLED=false、private/public D1・private R2 bindingsを維持。Cronは毎日03:17 JST、watchdog03:47、continuation03:00–08:55の5分間隔。APIはPUBLIC_DBのみ、AdminはADMIN_READ→Collector#AdminReadと既存ASSETS/metadata用Secret。全Workerでworkers.dev/previewは無効です。Secret値は取得していません。
 
 最新予定枠2026-10-03T18:17Z（10月4日03:17 JST）：ECBは2観測/2受入、原系列2＋派生1公開。観測03:18:01 JST、公表対象日は10月2日で前回と同じですが、今回も取得済みです。Models.devは155モデル、310観測/265受入、完全snapshot・公開batch完了、650 components。取得03:18:06、公開03:56:02 JSTで約38分です。価格隔離45は `price_component_missing` 16と `unretained_mode_conditions` 29、前回から件数・理由とも同じ。2日前は44件（不足15、条件29）でした。品質gateは緩和していません。
 
-直近3拡張枠で公開完了を記録していますが、いずれも現Collector版へ切替前です。旧秒付きrunと誤missingを同じ分の予定枠として照合。healthの最終完了08:56 JSTはidle continuationであり、新観測時刻ではありません。公開 `/health` は15:16 JSTにHTTP 200。過去403/1010はアクセス障害の記録として保持し、収集失敗へ読み替えません。DB照会は必要なSELECTのみ、書込み0・市場再取得0・実通知0です。
+23:07 JSTに直近3拡張枠の収集完了・完全snapshotと、最新枠の公開完了を再照合し、前回MCP結果との一致を確認しました。いずれも現Collector版へ切替前です。旧秒付きrunと誤missingの同一予定枠照合は既存証跡を保持し、今回の合成テストでも再検証しました。healthの最終完了08:56 JSTはidle continuationであり、新観測時刻ではありません。公開 `/health` は23:07:54 JSTに通常GETでHTTP 200。過去403/1010はアクセス障害の記録として保持し、収集失敗へ読み替えません。今回のD1応答はすべて `rows_written=0` / `changed_db=false`、市場再取得0・実通知0です。
 
 ## 状態判定と通知候補
 
 `operational-status.ts` は既存の予定枠resolverとAdmin `runDTO` /公開gateを再利用します。API到達性、処理記録、観測完了、完全snapshot/公開、外部監視receiptを分離します。日次起動の猶予10分、Models進捗停止20分（通常5分の4枠）、Models最終期限6時間です。6時間は既存capture windowで、03:47は期限ではありません。価格不変・changes=0は正常。ECB source_dateの据置を取得失敗にせず、カレンダー未評価を明記します。disabledは対象外、enabledのpolicy停止・設定driftは要確認。隔離は同scope/policyの前回完了snapshotと件数・理由を比較し、新理由・総数増加・同じ総数でも理由別件数の増加・確認不能を区別します。
 
-`pnpm operations:check` はoffline、`pnpm operations:check --remote --allow-network` は固定先のCloudflare GET/単一SELECTと公開health GETだけを行い、送信しません。Secretは環境の既存 `CLOUDFLARE_API_TOKEN` に限定し、対象accountのD1 ReadとWorkers Metadata Read-Onlyが前提です。[D1 queryの公式permission](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/)はD1 Readを受理します。既存Admin Secretを取り出したり権限を拡大しません。このCLIの本番接続自体は今回未実行で、本番確認は既存MCP/通常GETを使いました。未取得や例外は0件・Healthyにしません。
+`pnpm operations:check` はoffline、`pnpm operations:check --remote --allow-network` は固定先のCloudflare GET/単一SELECTと公開health GETだけを行い、通知しません。既存 `CLOUDFLARE_API_TOKEN` に対象accountのD1 ReadとWorkers Metadata Read-Only（API名 Workers Tail Read）が必要です。[D1 query](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/)はD1 Read、[Worker `/settings` GET](https://developers.cloudflare.com/api/typescript/resources/workers/subresources/scripts/subresources/script_and_version_settings/methods/get/)はWorkers Tail Readを受理します。Workers Scripts Read/Writeの追加は不要です。
+
+今回の通常・検証用実行環境のProcess/User/Machine環境変数に `CLOUDFLARE_API_TOKEN` はなく、対象repoの既知の `.env` / `.dev.vars` にも利用可能な設定はありませんでした。確認したのは存在有無だけです。利用可能な最小権限tokenがないため、**remote CLIは0回、未実行**です。別の保管先にtokenが存在しないと断定するものではありません。MCP認証はCLIと別経路で、MCP成功をCLI認証成功に読み替えません。既存Admin Secretの取り出し、広いWrangler OAuthへの代替、token新規作成・権限拡大はしていません。再確認に必要なのは、対象accountの上記read権限に限定した既存tokenをこのCLIで利用できることと、そのscopeの確認です。
+
+| 判定対象 | 今回確認した根拠 | 新remote CLIとの対応・限界 |
+|---|---|---|
+| 認証 | 既存MCPは成功。CLI用tokenは利用不能 | CLIのCloudflare認証・実際のSELECT到達は未検証 |
+| API到達性 | 通常GET `/health` HTTP 200 | 到達性のみ。収集・公開・監視の成功を含めない |
+| 収集 | 最新予定枠のECB complete 2/2、Models complete 310/265、errorなし | checkerのrun/予定枠判定に対応するDB根拠。CLI出力そのものではない |
+| 公開 | ECB原系列2＋派生1、Models catalog155＋価格110、batch complete。現policyはactive・期限内 | 完全snapshotと公開件数を別々に確認。650 componentsを650公開観測とは数えない |
+| 品質 | 最新・前回とも隔離45（不足16、条件29） | 値不変や既知隔離を新規障害にしない。隔離解消とは扱わない |
+| 監視・通知 | `monitor_connected=0`、既存18 pending/attempts=0。CollectorのWebhook Secret・activation設定なし | 外部receipt/実送達は未検証。monitor flagだけで稼働監視の有無を断定しない |
+
+今回の固定対象へのMCP GET/SELECTと通常health GETは前回の結果と整合しましたが、新CLIのHTTPアダプター・認証・本番SQL経路とのend-to-end照合は未了です。未取得や例外を0件・Healthyへ変換しません。
 
 ローカル候補のCollector module SHA-256は `c7c7ea5ef7cb574480fb32b87e07ed4499a22c7af6d8b49683c928c0bea2fc94`、0006 SQLは `7a289907203ad8663920072784828bc09e4e193f48ee208ad48c55ea9d25db8b` です。これはdry-run候補で、新しいCloudflare versionはまだありません。配信前にはその時点のversion/config差分を再照合します。`docs/admin-releases/*.json` はGitの改行変換を無効にし、既存証跡のbyte digestを保持します。
 
@@ -60,32 +86,86 @@ ECB/Modelsの内部policy再確認期限は2026-12-26T00:00Z（12月26日09:00 J
 
 ## 検証・受け入れと反映手順
 
-合成、今回のread-only本番確認、将来の候補配信後の実測を分離します。2026-10-04の最終ローカル確認は次のとおりです。
+合成、read-only本番確認、候補配信後の実測を分離します。次表は**すべて今回の固定状態で各コマンドを最初から完了した結果**です。前回の153件成功と部分再実行21件成功は今回の合格根拠に使用しません。今回、コード修正・テスト修正・選択的な再試行はありません。
 
-| 対象 | 結果 |
-|---|---|
-| API check | 型・format・境界検査が成功 |
-| API test | 20 file/157ケースを確認（初回153成功＋失敗3 file/21ケースの再検証が全件成功） |
-| API runtime | workerd内の通知dry-run/失敗/復旧、GPU 1,051件/22ページ/23 invocation、Models 50/250/1,000件が成功 |
-| API preflight / build | offline preflight成功、network=false。Collector/API dry-run成功。source schema/OpenAPI差分なし、git diff --check成功 |
-| 合成復元 | private/public schema・観測・系譜・訂正・as_of・FK・immutable trigger・0006適用後の読み取りが成功。本番復元訓練ではない |
-| Admin | 型、単体93件、Vite/client境界、dry-run、既存browser14件（Edge/合成）が成功。画面コード変更なし |
+| 対象 / コマンド | 実行時間（2026-10-04 JST） | 今回の結果 |
+|---|---|---|
+| API `pnpm check` | 22:58:20–22:58:27 | 型・format・境界検査成功、exit 0 |
+| API `pnpm test --testTimeout 60000 --reporter verbose` | 22:58:28–23:14:07 | **20 file / 157件すべて成功**、skipなし、exit 0 |
+| API `pnpm test:runtime` | 23:14:07–23:14:58 | workerdの通知dry-run/失敗/復旧、GPU 1,051件/22ページ/23 invocation、Models 50/250/1,000件成功、exit 0。外部HTTPなし |
+| API `pnpm build` | 23:14:58–23:15:03 | Collector/API両方のWrangler dry-run成功、exit 0 |
+| API `pnpm preflight` | 23:15:03–23:15:05 | offline、ready=true、errors/blockersなし、exit 0。通知先未設定・外部監視未接続等のpendingは維持 |
+| API `pnpm operations:check` | 23:15:05–23:15:06 | offline、network_performed=false、external_monitor=not_verified、exit 0 |
+| API `node scripts/generate.mjs` と生成物・差分検査 | 23:15:06 | source schema/OpenAPIの対HEAD差分なし。`git diff --check`成功、working tree clean |
+| Admin `pnpm check` / `pnpm test` | 23:15:56–23:16:03 | 型、8 file / **93件すべて成功**、skipなし、各exit 0 |
+| Admin `pnpm build` | 23:16:03–23:16:06 | Vite/server/client build・client境界成功、exit 0 |
+| Admin `pnpm test:browser` | 23:16:06–23:16:40 | Edge/ローカル合成 **14件すべて成功**、exit 0 |
+| Admin `pnpm deploy:dry-run` | 23:16:41–23:16:43 | 生成Vite設定からのdry-run成功、exit 0。`git diff --check`成功、working tree clean |
 
-初回全体テストでは、既存Modelsの2ケースがWindowsの30秒上限、配信記録の1ケースが実行ユーザー差によるGit所有者確認で停止しました。追加した隔離理由別増加の1ケースも変更前moduleと変更後テストが同一実行に混在して失敗したため、最終コードを新しいプロセスで読み直して再検証しました。再検証コマンドは `pnpm test tests/models-integration.test.ts tests/operations-acceptance.test.ts tests/admin-release.test.ts --testTimeout 60000 --reporter verbose`。Git例外は当プロセスの対象repoだけ（GIT_CONFIG_COUNT/KEY_0/VALUE_0）です。CIのグローバルtimeout・assertionを緩めておらず、新規の複数snapshotを読む受け入れケースだけ60秒枠を明示しました。GitHub CIはpush保留のため今回未実行です。
+Adminに独立した `test:runtime` / `preflight` scriptはありません。既存のVite/workerdブラウザ試験・client境界・生成設定によるdry-runを実行した範囲で記録し、存在しない試験を成功扱いにしません。API全体テスト内の合成復元も今回成功しています（schema・観測・系譜・訂正・as_of・FK・immutable trigger・0006適用後の読戻し）。本番復元訓練ではありません。
 
-通知CLIはoffline既定動作を確認し、本番接続は既存MCPによる最小SELECT/通常health GETだけです。新checkerのremote認証、外部監視の送達、実Webhook、配信後CPU、新版の自然Cronは未検証のまま残します。
+API全体テストの60秒指定は、Windowsホスト上での各testの待ち時間上限です。assertion、入力、skip、収集・公開・通知の期待値、workerdで検査する処理制限は変更していません。既存のCI設定はそのままです。今回のローカル結果はCI既定timeoutやUbuntu/Chromiumでの成功を証明しません。**GitHub CIはpush保留により未実行**です。ログと開始/終了時刻は各repoのGit対象外 `work/final-review-*.log` / `work/final-review-results.json` にあり、本書へ今回の結果だけを記録しました。
 
-目標は「同じ検証対象版で7つの連続する日次枠が手修正なしで収集・公開完了」。現a534ff0は次の10月5日03:17 JSTが最初の日次枠で、現在は0/7です。今回の通知修正版も未配信なので0/7。旧版での成功を混ぜず、途中deploy/手修正があれば対象版と起点を再確認します。待機・新しい予約・手動Collector起動はしません。
+今回生成したCollector `dist/collector/collector.js` のSHA-256は上記候補 `c7c7ea5e…` と一致しました。検証対象commitとlockfileに変更はありません。コード・テスト・設定を後から修正する場合はこの検証結果を新状態へ転用せず、対象を固定し直して必要な検証を再実行します。
 
-次の自然枠では03:17起動、ECB完了、Models5分checkpointの進捗、03:47の同一run認識、完全snapshotと公開件数・時刻、隔離理由/前回差、09:25時点の未完了を確認します。件数は155/265を固定値にせず、当日snapshotから照合します。
+### 自然実行の確認範囲
 
-| 別途承認する変更単位 | 理由・具体的変更 | 影響・費用 | 戻し方 |
-|---|---|---|---|
-| GitHub公開の再開 | Netlify対象外または自動公開なしを証拠付きで確認後、2repoの保全/修正branchをpushしてPR。現在は所有者指定で保留 | code/検査済metadataの公開。新サービス費用なし | 新branchを維持しmainへmergeしない。履歴を上書きしない |
-| private D1 0006 | 上記SHAのSQLでincident表、outbox nullable列3/index1を追加。既存pending不変 | 小さなschema/metadata追加。既存D1従量内 | additive schemaを残してcodeを戻す。DROP/Time Travelを通常rollbackに使わない |
-| Collector修正版の配信 | 承認直前にcommit/artifact/version/config差分を固定。activation未設定で通知は停止のまま | Cron・権利・収集範囲維持。通知候補を通常成功から生成しなくなる | 0006を残し、旧versionへ戻す前に通知Secretを外すか未設定を確認。旧codeはcutoffを無視して旧pendingを送るため、Secretありのまま旧版へ戻さない |
-| 通知経路の有効化 | 送信先・受信側idempotency確認、Secretと新しいNOTIFICATIONS_ACTIVE_FROMを設定、dry-run後に承認した1通知で送達確認 | 最大5件/回、継続24h、最大3試行。送信先料金は選定後確定 | activationを外して停止。旧pendingは保存しsentへ変えない。新epochで再開 |
-| 独立監視/dead-man | 上記read-only checkerの外部schedule、限定credential、receipt監視と通知を個別設定 | runner/query/通知先の従量あり。見積・送達/停止試験が必要 | schedule停止・専用credential失効。Collectorを止めない |
-| 5年以上の保存 | 新policy、容量測定、archive/読戻し設計と段階移行を別レビュー | R2/D1/移行の追加費用未確定 | 検証完了前は現データを削除せず現policyを維持。移行済みデータの短縮/削除も別承認 |
+23:07 JSTのSELECTで確認できた直近の日次枠だけを記録します。各枠とも両sourceのstate=complete、error_code=nullでした。
 
-既に完了した0005、a534ff0/97277de配信、台帳5件追記を再承認待ちに戻していません。Admin/APIの新しいdeployは今回不要です。main mergeは今回行いません。
+| 予定枠（JST / UTC） | ECB 観測/受入 | Models 観測/受入 | 完全snapshotのモデル数 / 隔離数 | 対象版への算入 |
+|---|---|---|---|---|
+| 10月2日03:17 / 10月1日18:17Z | 2/2 | 308/264 | 154 / 44 | a534ff0切替前、算入しない |
+| 10月3日03:17 / 10月2日18:17Z | 2/2 | 310/265 | 155 / 45 | a534ff0切替前、算入しない |
+| 10月4日03:17 / 10月3日18:17Z | 2/2 | 310/265 | 155 / 45 | a534ff0切替前、算入しない |
+
+目標は「同じ検証対象版で7つの連続する日次枠が手修正なしで収集・公開完了」。現a534ff0は10月5日03:17 JSTが最初の日次枠で、今回確認時点は**0/7**です。今回の通知修正版cf726bdも未配信なので**0/7**。旧版での成功やidle continuationを混ぜません。7日分を待機せず、手動Collector起動・新規監視予約も行っていません。新CLI本番経路、実Webhook、独立監視の送達/欠落検知、配信後CPU、本番復元も未検証です。
+
+### NetlifyとGitHub push保留
+
+今回の既存ブラウザでGitHubのInstalled Appsを読み、Netlify Appが存在することを再確認しました。[Netlify App設定](https://github.com/settings/installations/97316872)は「Confirm access / Verify via email」で停止し、対象repo一覧は表示されません。[Netlify](https://app.netlify.com/)はログイン画面で、既存の認証済みセッションは利用できませんでした。実行環境に `NETLIFY_AUTH_TOKEN` もありません。本人確認メール送信、新しい認証連携、権限追加、設定変更は行っていません。
+
+再認証の目的と残る確認は次のとおりです。
+
+| 読み取り先 | 必要な再認証の目的 | push前に必要な確認結果 |
+|---|---|---|
+| GitHub Netlify App | 現在のAppのRepository accessを閲覧するための本人確認（sudo） | All/Selected repositoriesの別、API/Admin両repoを含むか。対象外ならその設定の確認記録 |
+| Netlify既存アカウント | 接続済みprojectのdeploy設定を読むためのログイン | 両repoとの接続、production branch、branch deploy対象、PR Deploy Preview、automatic publishing/build停止状態。保全/修正branchへのpushとPR作成で公開が起きるか |
+
+GitHub App対象外の確認だけで他の既存Netlify project連携まで不存在とは扱いません。repo Webhook/deployment履歴0やCIにdeploy工程がないことも、Netlify側の自動公開不存在の証明にはなりません。両repoについて公開経路がない、または対象branch/PRから自動公開されない根拠を揃える必要があります。設定変更が必要なら別途その変更を承認します。
+
+安全を確認してもpush保留は自動解除しません。再開には、最終未公開差分の点検後、API/Admin両repoの `codex/preserve-production-20261004` と `codex/operations-acceptance-20261004` の公開対象commitを提示し、**所有者によるGitHub push/PR再開の明示承認**が必要です。main mergeと本番deployは含めません。今回のGitHub CIは未実行のままです。
+
+### 0006とCollectorだけを通知無効で反映する手順（未実施）
+
+| 対象 | 適用済み | 未適用・今回の扱い |
+|---|---|---|
+| private D1 `ai-investment-private` | `0001_initial.sql`、`0002_gpu.sql`、`0003_models_catalog.sql`、`0005_admin_release_ledger.sql` | 候補repoでは `0006_notification_incidents.sql` だけが未適用 |
+| public D1 `ai-investment-public` | `0001_initial.sql`、`0002_gpu.sql`、`0003_models_catalog.sql` | 候補repoに未適用なし。今回触れない |
+| 独立GPU/電力worktree | 上記本番に0004の適用記録なし | private/publicの `0004_energy.sql` は別作業。複写・適用・番号変更しない |
+
+適用済みSQLは本番Collectorソースa534ff0からの差分がないことを確認しました。今回の0006のbyte hashは `7a289907203ad8663920072784828bc09e4e193f48ee208ad48c55ea9d25db8b`。台帳の空き番号を埋めるために0004を取り込んだり、0005/0006を振り直したりしません。
+
+[D1 migration仕様](https://developers.cloudflare.com/d1/reference/migrations/)とインストール済みWrangler 4.140.0の処理を確認すると、`migrations apply` は指定ディレクトリ内の未適用SQLをすべて対象にします。単一SQLを指定するapply引数はありません。今後承認された場合は、次の順に対象を限定します。今回は以下の適用コマンドを実行していません。
+
+1. 直前のprivate migration台帳・schema・稼働Collector version・Cron・bindings・通知設定を再取得。前提が変われば停止し差分を再レビューする。既存outboxのID/state/attempts/記録時刻と本文digestを非公開に保全し、本文を公開成果物へ含めない。
+2. ローカルの専用releaseディレクトリに、上記hashの `0006_notification_incidents.sql` **1ファイルだけ**を同名で置く。専用Wrangler設定のaccountは `0f9bb71bb987011462a91596f7cc9e6f`、D1は `ai-investment-private` / `f9239883-9929-4137-8079-5a03d9a8beb2` の1 bindingだけ、`migrations_dir` はその専用フォルダー、journalは既存 `d1_migrations` とする。public binding・0004・他のSQLを含めない。
+3. 所有者の**0006 private-only適用の直前承認後**、その専用設定を明示した `pnpm exec wrangler d1 migrations apply ai-investment-private --remote --config <専用設定の絶対パス>` を使う。通常のCollector設定やGPU worktreeで一括applyしない。SQLだけの `d1 execute --file` で台帳記録を省略しない。非対話環境ではWranglerの確認が省略されるため、ツール内確認を所有者承認の代わりにしない。
+4. 台帳への0006追加、表1・nullable列3・index1、既存outbox全行の不変、既存観測/schemaの保護を確認する。不一致・失敗時は旧Collectorを維持して後続を止める。
+5. **Collector upload/本番切替の別の直前承認後**、cf726bdと上記artifact hashの候補をアップロードし、version/configを照合して100%切替する。既存Cron・COLLECTION_ENABLED・取得範囲・権利・retention・CPU・DB/R2 bindingsを維持。初回は `NOTIFICATIONS_ACTIVE_FROM` 未設定、`ALERT_WEBHOOK_URL` Secret不存在の両方を必須とし、通知を有効化しない。どちらかが存在・変更されていれば停止して別レビューとする。
+6. 切替後はread-onlyの稼働version/設定・Admin読取り互換性・公開APIを確認する。手動収集・実送達試験・新schedule・public migration・API/Admin deploy・配信台帳への書込みを、この承認範囲に含めない。自然枠は到来済みのものだけを別記録する。
+
+rollback候補は現Collector `764bb171-582b-47a0-ad40-5d6aadc61ee6` / a534ff0。旧codeはactivationを無視して旧pendingを送信できるため、**旧versionへ切り替える直前のWebhook Secret不存在確認、または別途所有者が承認した無効化の完了確認が必須**です。確認対象は戻し先versionのbindingと、切替後に実際に有効になる設定です。現在版の設定だけでは代用しません。新codeのactivation未設定だけでは旧codeの誤送信を防げません。Secretが存在する・不存在を確認できない場合はrollbackを停止します。今回の作業からSecret削除の許可は導きません。rollback自体も直前承認と設定照合の対象とし、0006のadditive schemaは残します。DROP・Time Travel・旧pendingの削除/state書換えは行いません。
+
+| 今後必要な承認 | 具体的な対象 | 含まれない変更 |
+|---|---|---|
+| GitHub push/PR再開 | Netlify公開経路の確認後、両repoの保全/修正branchと最終commit | main merge、本番反映、自動公開設定の変更 |
+| private D1 0006 | 上記SQL hash、private DBだけ、専用ディレクトリから1件適用 | 0004、public migration、既存観測/旧pendingの変更 |
+| Collector upload/100%切替 | cf726bd・artifact `c7c7ea5e…`、直前の設定差分、通知無効の維持 | Admin/API deploy、Secrets/activation、実通知、監視追加、保存期間変更 |
+
+既に完了した0005、a534ff0/97277de配信、台帳5件追記は完了したままです。上記は次の承認対象を確定した手順であり、今回の実適用承認ではありません。独立GPU作業への変更もありません。
+
+## 2026-10-05 Schema drift recovery候補（別branch・未配信）
+
+追加依頼は `codex/schema-drift-recovery-20261005` で実装し、[調査・権利境界・復旧gate・夜間運用・検証記録](schema-drift-recovery.md)にまとめた。上記cf726bdの凍結検証結果と、新しい候補の結果を合算しない。元operations checkoutの未コミット文書、Admin、独立GPU checkoutは編集していない。
+
+新候補は既存metrics/raw_artifactsを使い、schema recovery用migrationは追加しない。0006候補への依存、0004分離、通知無効、旧Collector rollback時のWebhook不存在確認、GitHub push/PR保留は継続する。`SCHEMA_RECOVERY_ENABLED`、独立runner/schedule、Secrets、実通知、本番反映を有効にしていない。

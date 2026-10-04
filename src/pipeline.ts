@@ -10,6 +10,14 @@ import { ingestEvidence, PARSER_VERSION } from './ingest';
 import { hash, stable, errorCode, isoTime } from './util';
 import { collectionIdentity } from './run-identity';
 import type { SourceObserver } from './telemetry';
+import {
+  preserveRecoveryEvidence,
+  recordRecoveryFailure,
+  loadRecoveryEvidence,
+  SchemaDriftFailure,
+  type QuarantineEvidence,
+} from './recovery-evidence';
+import type { DriftStage } from './schema-drift';
 export type RunResult = {
   source_id: string;
   run_id: string;
@@ -132,11 +140,18 @@ export async function collectSource(
       .run();
     if (!claim.meta.changes) return { ...base, state: 'in_progress' };
     const artifact = 'evidence/' + s.source_id + '/' + run + '.json';
+    let recovery: QuarantineEvidence | null = null;
+    let acquiredEvidence: Evidence | null = null;
+    let recoveryStage: DriftStage = 'http';
     try {
       let saved = await env.EVIDENCE.get(artifact),
         evidence: Evidence;
       if (saved) evidence = await saved.json<Evidence>();
       else {
+        if (env.SCHEMA_RECOVERY_ENABLED === 'true' && s.adapter === 'ecb') {
+          recovery = await loadRecoveryEvidence(env, s, run, now(), true);
+          if (recovery) throw new Error('quarantine_reparse_review_required');
+        }
         if (opt.savedOnly) throw new Error('saved_evidence_missing');
         let previous: Evidence | null = null;
         if (sourceState?.last_artifact_ref) {
@@ -152,6 +167,22 @@ export async function collectSource(
           validators: previous
             ? { etag: previous.etag, last_modified: previous.last_modified }
             : undefined,
+          onBody:
+            env.SCHEMA_RECOVERY_ENABLED === 'true' && s.adapter === 'ecb'
+              ? async (body) => {
+                  recoveryStage = 'private_store';
+                  recovery = await preserveRecoveryEvidence(
+                    env,
+                    s,
+                    run,
+                    body.text,
+                    body.observed_at,
+                    now(),
+                    !!opt.synthetic,
+                  );
+                  recoveryStage = 'body';
+                }
+              : undefined,
           onAttempt: async (a) => {
             await env.PRIVATE_DB.prepare(
               'INSERT INTO fetch_attempts(run_id,attempt,started_at,status,code,duration_ms) VALUES (?,?,?,?,?,?)',
@@ -169,7 +200,14 @@ export async function collectSource(
             source_policy_version: s.policy.version,
             synthetic: !!opt.synthetic,
           };
-        } else
+        } else {
+          recoveryStage = 'body';
+          if (env.SCHEMA_RECOVERY_ENABLED === 'true' && s.adapter === 'ecb') {
+            recovery = await loadRecoveryEvidence(env, s, run, now());
+            if (recovery?.diagnostics.some((d) => d.severity === 'block'))
+              throw new SchemaDriftFailure();
+          }
+          recoveryStage = 'projection';
           evidence = await evidenceFromBody(
             s,
             response.text,
@@ -178,7 +216,9 @@ export async function collectSource(
             response.headers,
             !!opt.synthetic,
           );
+        }
         // Authorization is checked again after acquisition, before persistence.
+        recoveryStage = 'private_store';
         await assertPersistenceAllowed(env, s, now());
         await env.EVIDENCE.put(artifact, stable(evidence), {
           onlyIf: { etagDoesNotMatch: '*' },
@@ -189,6 +229,7 @@ export async function collectSource(
         evidence = await saved.json<Evidence>();
         await opt.afterEvidenceSaved?.();
       }
+      acquiredEvidence = evidence;
       const expires = new Date(
         Date.parse(evidence.observed_at) +
           Math.min(s.policy.retention_days, s.policy.retention_limit_days ?? Infinity) * 86400000,
@@ -211,6 +252,7 @@ export async function collectSource(
           "UPDATE collection_runs SET state='evidence_saved',artifact_ref=? WHERE run_id=? AND lease_token=?",
         ).bind(artifact, run, lease),
       ]);
+      recoveryStage = 'parser';
       const result = await ingestEvidence(
         env,
         s,
@@ -220,11 +262,14 @@ export async function collectSource(
         evidence,
         now(),
         opt.parser ?? PARSER_VERSION,
+        (stage) => {
+          recoveryStage = stage;
+        },
       );
       const state = result.quarantined || result.issues ? 'quarantined' : 'complete';
       await env.PRIVATE_DB.batch([
         env.PRIVATE_DB.prepare(
-          'UPDATE collection_runs SET state=?,finished_at=?,observation_count=?,accepted_count=?,error_code=NULL,next_attempt_at=NULL,lease_token=NULL,lease_until=NULL,metrics_json=? WHERE run_id=? AND lease_token=?',
+          "UPDATE collection_runs SET state=?,finished_at=?,observation_count=?,accepted_count=?,error_code=NULL,next_attempt_at=NULL,lease_token=NULL,lease_until=NULL,metrics_json=json_patch(COALESCE(metrics_json,'{}'),?) WHERE run_id=? AND lease_token=?",
         ).bind(state, now(), result.observations, result.accepted, stable(result), run, lease),
         env.PRIVATE_DB.prepare(
           'UPDATE sources SET consecutive_failures=0,circuit_until=NULL,last_success_at=?,last_artifact_ref=?,last_count=? WHERE source_id=?',
@@ -243,6 +288,23 @@ export async function collectSource(
     } catch (error) {
       const code = errorCode(error),
         retry = error instanceof FetchFailure ? error.retry_at : null;
+      try {
+        if (!recovery && env.SCHEMA_RECOVERY_ENABLED === 'true')
+          recovery = await loadRecoveryEvidence(env, s, run, now());
+        if (s.adapter === 'ecb' && acquiredEvidence && recoveryStage === 'parser')
+          recovery = await preserveRecoveryEvidence(
+            env,
+            s,
+            run,
+            acquiredEvidence.body,
+            acquiredEvidence.observed_at,
+            now(),
+            acquiredEvidence.synthetic,
+          );
+        await recordRecoveryFailure(env, s, run, lease, now(), recoveryStage, code, recovery);
+      } catch {
+        /* Keep the ingestion failure even when diagnostics cannot be saved. */
+      }
       const failures =
         (sourceState?.consecutive_failures ?? 0) + (existing?.state === 'failed' ? 0 : 1);
       // Count source runs, not individual HTTP attempts. Repeated bad runs open for 24h.

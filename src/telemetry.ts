@@ -53,6 +53,10 @@ const codes = new Set([
   'recovery_exhausted',
   'catalog_partial',
   'catalog_parse_error',
+  'schema_drift_detected',
+  'quarantine_reparse_review_required',
+  'recovery_capture_failed',
+  'attempt_log_failed',
   'invalid_decimal',
   'decimal_out_of_bounds',
 ]);

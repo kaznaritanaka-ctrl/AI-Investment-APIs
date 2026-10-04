@@ -4,6 +4,7 @@ import { collectionIdentity, dailyCollectionSlot } from './run-identity';
 import { runDTO } from './admin-read';
 import type { RunDTO } from './admin-contract';
 import { isoTime, stable } from './util';
+import { overnightSource } from './overnight';
 
 export type Condition = 'alert' | 'clear' | 'pending' | 'unknown' | 'not_applicable';
 export type Signal = { key: string; condition: Condition; code: string };
@@ -208,6 +209,7 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
   if (!isoTime(now)) throw new Error('invalid_check_time');
   const slot = dailyCollectionSlot(env.COLLECTION_CRON, Date.parse(now));
   const reports: ReturnType<typeof evaluateSource>[] = [];
+  const overnight: ReturnType<typeof overnightSource>[] = [];
   for (const s of sources.filter((s) => ['ecb', 'models_dev'].includes(s.source_id))) {
     try {
       const configured = await env.PRIVATE_DB.prepare(
@@ -218,7 +220,7 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
       const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, slot);
       const row = identity.row
         ? await env.PRIVATE_DB.prepare(
-            'SELECT run_id,source_id,scheduled_for,state,started_at,finished_at,last_progress_at,observation_count,accepted_count,error_code,recovery_count,next_attempt_at FROM collection_runs WHERE run_id=?',
+            'SELECT run_id,source_id,scheduled_for,state,started_at,finished_at,last_progress_at,observation_count,accepted_count,error_code,recovery_count,next_attempt_at,metrics_json FROM collection_runs WHERE run_id=?',
           )
             .bind(identity.run_id)
             .first<Record<string, unknown>>()
@@ -282,6 +284,18 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
       reports
         .at(-1)!
         .signals.push({ key: s.source_id + ':read', condition: 'clear', code: 'metadata_read_ok' });
+      const morning = overnightSource(
+        reports.at(-1)!,
+        row?.metrics_json,
+        typeof row?.recovery_count === 'number' ? row.recovery_count : null,
+      );
+      overnight.push(morning);
+      if (morning.schema_drift === true && morning.publication_status !== 'complete')
+        reports.at(-1)!.signals.push({
+          key: s.source_id + ':schema_drift',
+          condition: 'alert',
+          code: 'schema_drift_detected',
+        });
       reports.at(-1)!.signals.push({
         key: s.source_id + ':configuration',
         condition:
@@ -316,6 +330,7 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
         publication: 'unknown',
         signals: [{ key: s.source_id + ':read', condition: 'alert', code: 'metadata_unavailable' }],
       });
+      overnight.push(overnightSource(reports.at(-1)!));
     }
   }
   let lastInvocation: string | null = null;
@@ -357,6 +372,28 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
       meaning: 'summary_recorded_not_proof_of_observation_or_handler_finish',
     },
     external_monitor: 'not_verified',
+    overnight: {
+      schema_version: 1,
+      checked_at: now,
+      logical_slot: slot,
+      production_deploy_enabled: false,
+      external_runner: 'not_verified',
+      sources: [
+        ...overnight,
+        ...sources
+          .filter((s) => !reports.some((r) => r.source_id === s.source_id))
+          .map((s) =>
+            overnightSource({
+              source_id: s.source_id,
+              run_id: null,
+              collection: s.enabled ? 'unknown' : 'not_applicable',
+              publication: s.enabled ? 'unknown' : 'not_applicable',
+              observation_count: null,
+              accepted_count: null,
+            }),
+          ),
+      ],
+    },
     sources: reports,
   };
 }

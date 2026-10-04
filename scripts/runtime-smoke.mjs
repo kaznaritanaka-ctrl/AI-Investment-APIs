@@ -27,6 +27,14 @@ const bundled = await build({
       .replace(
         'async fetch(request,env){',
         "async fetch(request,env){\nif(new URL(request.url).pathname==='/operations')return operationsRuntime(env);",
+      )
+      .replace(
+        'export default {',
+        "import {recoveryRuntime} from './tests/recovery-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        "async fetch(request,env){\nif(new URL(request.url).pathname==='/schema-recovery')return recoveryRuntime(env);",
       ),
     resolveDir: process.cwd(),
     sourcefile: 'runtime-harness.ts',
@@ -83,6 +91,30 @@ try {
   assert.equal(operations.failed.state, 'pending');
   assert.equal(operations.recovered.sent, 1);
   assert.equal(operations.calls, 2);
+  const recovery = await (await mf.dispatchFetch('https://local.test/schema-recovery')).json();
+  assert.equal(recovery.reason, 'schema_drift_detected');
+  assert.equal(recovery.state, 'failed');
+  assert.equal(recovery.calls, 1);
+  assert.equal(recovery.observations, 0);
+  assert.equal(recovery.publicRows, 0);
+  assert.equal(recovery.evidence_preserved, true);
+  assert.equal(recovery.reparse, 'passed');
+  assert.equal(recovery.records, 5);
+  assert(recovery.payload_bytes > 8 * 1024 * 1024);
+  assert(recovery.retained_bytes < 10000);
+  assert.equal(recovery.gate.production_deploy_allowed, false);
+  console.log(
+    'Workerd schema drift: authorized evidence preserved, publication held, saved response reparsed offline. Synthetic only.',
+  );
+  await mkdir('work', { recursive: true });
+  await writeFile(
+    'work/runtime-recovery-report.json',
+    JSON.stringify(
+      { ...recovery, synthetic: true, cloud_cpu_measured: false, external_http_requests: 0 },
+      null,
+      2,
+    ) + '\n',
+  );
   console.log(
     'Workerd operational check, notification dry-run, failure and recovery passed. Synthetic delivery only.',
   );

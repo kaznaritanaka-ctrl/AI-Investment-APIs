@@ -16,6 +16,14 @@ import {
 import { hash, stable, errorCode, isoTime } from './util';
 import { minuteSlot, collectionIdentity } from './run-identity';
 import { observe, type SourceObserver } from './telemetry';
+import {
+  preserveRecoveryEvidence,
+  recordRecoveryFailure,
+  loadRecoveryEvidence,
+  SchemaDriftFailure,
+  type QuarantineEvidence,
+} from './recovery-evidence';
+import type { DriftStage } from './schema-drift';
 
 export type ModelCollectOptions = CollectOptions & {
   savedOnly?: boolean;
@@ -41,6 +49,8 @@ export async function collectModels(
     return { ...base, state: 'failed', reason: 'synthetic_data_blocked' };
   const parser = opt.parser ?? MODELS_PARSER;
   let lease: string | null = opt.claimedRun?.lease_token ?? null;
+  let recovery: QuarantineEvidence | null = null;
+  let recoveryStage: DriftStage = 'http';
   try {
     if (opt.claimedRun && (!opt.savedOnly || opt.revision || opt.parser))
       throw new Error('invalid_operation');
@@ -184,12 +194,40 @@ export async function collectModels(
     } else if (parser !== MODELS_PARSER) throw new Error('model_revision_review_required');
     if (saved) evidence = await saved.json<Evidence>();
     else {
+      recovery =
+        env.SCHEMA_RECOVERY_ENABLED === 'true'
+          ? await loadRecoveryEvidence(env, s, run, now(), true)
+          : null;
+      if (recovery) {
+        recoveryStage = 'projection';
+        if (recovery.diagnostics.some((d) => d.severity === 'block')) {
+          throw new SchemaDriftFailure();
+        }
+        throw new Error('quarantine_reparse_review_required');
+      }
       if (opt.savedOnly) throw new Error('saved_evidence_missing');
       if (Date.parse(now()) - Date.parse(scheduled) > 6 * 3600000)
         throw new Error('capture_window_expired');
       const response = await fetchSource(s, {
         ...opt.network,
         now,
+        onBody:
+          env.SCHEMA_RECOVERY_ENABLED === 'true'
+            ? async (body) => {
+                await assertModelLease(env, fence);
+                recoveryStage = 'private_store';
+                recovery = await preserveRecoveryEvidence(
+                  env,
+                  s,
+                  run,
+                  body.text,
+                  body.observed_at,
+                  now(),
+                  !!opt.synthetic,
+                );
+                recoveryStage = 'body';
+              }
+            : undefined,
         onAttempt: async (a) => {
           await env.PRIVATE_DB.prepare(
             'INSERT INTO fetch_attempts(run_id,attempt,started_at,status,code,duration_ms) VALUES(?,?,?,?,?,?)',
@@ -199,7 +237,13 @@ export async function collectModels(
         },
       });
       if (response.status !== 200) throw new Error('models_unexpected_status');
+      recoveryStage = 'body';
+      if (env.SCHEMA_RECOVERY_ENABLED === 'true')
+        recovery = await loadRecoveryEvidence(env, s, run, now());
+      recoveryStage = 'projection';
+      if (recovery?.diagnostics.some((d) => d.severity === 'block')) throw new SchemaDriftFailure();
       evidence = await modelEvidence(s, response.text, response.observed_at, !!opt.synthetic);
+      recoveryStage = 'private_store';
       await assertPersistenceAllowed(env, s, now());
       await env.EVIDENCE.put(artifact, stable(evidence), {
         onlyIf: { etagDoesNotMatch: '*' },
@@ -217,7 +261,9 @@ export async function collectModels(
     if (expires <= now() || evidence.observed_at > now())
       throw new Error('evidence_time_out_of_bounds');
     await assertPersistenceAllowed(env, s, now());
+    recoveryStage = 'parser';
     const projection = await readModelEvidence(s, evidence, revision?.scope_hash);
+    recoveryStage = 'private_store';
     await assertModelLease(env, fence);
     if (!snap) {
       await assertPersistenceAllowed(env, s, now());
@@ -259,6 +305,7 @@ export async function collectModels(
       await storeModelChunk(env, s, snap, evidence, projection, scheduled, now(), fence);
     else if (snap.stage === 'absence') await storeModelAbsence(env, s, snap, now(), fence);
     else if (snap.stage === 'finalize' || snap.stage === 'done') {
+      recoveryStage = 'publication';
       const final = await finalizeModels(env, s, snap, now(), fence);
       await assertModelLease(env, fence);
       const completed = now();
@@ -277,7 +324,7 @@ export async function collectModels(
           completed,
         ),
         env.PRIVATE_DB.prepare(
-          'UPDATE collection_runs SET state=?,finished_at=?,observation_count=?,accepted_count=?,error_code=?,metrics_json=?,last_progress_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?',
+          "UPDATE collection_runs SET state=?,finished_at=?,observation_count=?,accepted_count=?,error_code=?,metrics_json=json_patch(COALESCE(metrics_json,'{}'),?),last_progress_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?",
         ).bind(
           final.state,
           final.completed_at,
@@ -317,6 +364,16 @@ export async function collectModels(
     return { ...base, state: 'pending' };
   } catch (error) {
     const code = errorCode(error);
+    if (lease && env.SCHEMA_RECOVERY_ENABLED === 'true') {
+      try {
+        if (!recovery) {
+          recovery = await loadRecoveryEvidence(env, s, run, now());
+        }
+        await recordRecoveryFailure(env, s, run, lease, now(), recoveryStage, code, recovery);
+      } catch {
+        /* Diagnostic/storage failure must never hide the original failed run. */
+      }
+    }
     if (lease)
       await env.PRIVATE_DB.prepare(
         "UPDATE collection_runs SET state='failed',error_code=?,next_attempt_at=?,recovery_count=recovery_count+1,last_progress_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?",

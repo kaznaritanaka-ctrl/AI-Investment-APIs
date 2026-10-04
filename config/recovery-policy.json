@@ -1,0 +1,58 @@
+{
+  "version": "schema-recovery-20261005.1",
+  "mode": "candidate_only",
+  "automatic_production_deploy": false,
+  "automatic_publication": false,
+  "external_llm_data_default": "denied",
+  "candidate_changes": ["wrapper", "field_rename", "optional_field", "pagination_metadata"],
+  "implemented_patch_generators": ["models_dev.wrapper"],
+  "stop_changes": [
+    "currency",
+    "unit",
+    "price_basis",
+    "entity_identity",
+    "contract_type",
+    "region_semantics",
+    "record_scope",
+    "undocumented_meaning",
+    "rights"
+  ],
+  "required_checks": [
+    "regression_pass",
+    "new_contract_pass",
+    "counts_reconciled",
+    "identity_preserved",
+    "currency_unit_basis_preserved",
+    "public_rights_preserved",
+    "current_source_authorization_verified",
+    "evidence_reparse_pass",
+    "immutable_history_preserved",
+    "parser_version_changed",
+    "rollback_available",
+    "upstream_semantics_confirmed"
+  ],
+  "suggested_external_checks_jst": {
+    "start": "03:20",
+    "end": "09:20",
+    "interval_minutes": 5,
+    "final": "09:25",
+    "enabled": false
+  },
+  "runner_capabilities": [
+    "read_fixed_metadata",
+    "read_authorized_evidence",
+    "write_local_patch",
+    "run_offline_tests"
+  ],
+  "forbidden_capabilities": [
+    "read_secrets",
+    "change_rights",
+    "extend_retention",
+    "change_public_policy",
+    "deploy",
+    "publish",
+    "send_notification",
+    "schedule",
+    "fetch_replacement_market_data"
+  ]
+}
