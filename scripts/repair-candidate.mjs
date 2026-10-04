@@ -210,6 +210,8 @@ mkdirSync(out, { recursive: true });
 mkdirSync(resolve(checkout, '..'), { recursive: true });
 const branch = 'codex/repair-' + id;
 gitRead('worktree', 'add', '-b', branch, checkout, base);
+// Existing offline tests write relative to work/ even when TEMP points elsewhere.
+mkdirSync(join(checkout, 'work'), { recursive: true });
 symlinkSync(
   join(repo, 'node_modules'),
   join(checkout, 'node_modules'),

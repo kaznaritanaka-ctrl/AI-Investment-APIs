@@ -97,9 +97,11 @@ AI向け `ai-input.json` はsource/policy ID、Evidence hash、時刻、固定di
 
 runnerはmetadataの読取権限、承認済みEvidenceのprivate read、local branch/test権限だけに分割する。市場API鍵/Worker管理/Secret読出し/公開DB書込み権限をrepair子processに渡さない。GitHub Actionsを使うなら、push/PR保留とNetlify公開経路を解決した後にworkflow/token/非公開artifact/runnerの保管期限を別承認する。現CLIの子processはcredentialsを除外したenvironmentで動く。ログは合成testと固定codeだけ。
 
-処理順は `operations:check → slot/source/run照合 → incident分類 → private captureの有無/期限確認 → candidate生成 → check/test/runtime/build/preflight → patched parserで再解析 → gate再評価 → overnight:brief`。run+Evidence hash+base commitで重複を防ぎ、意味論/権利/未知欠測は即停止する。runner自体のheartbeat/期限逸脱を**Cloudflareと別の失敗経路**で監視し、Cloudflare到達不能を収集失敗と混同しない。新schedule/runner/認証/実通知は別承認のため、今は所有者へ自動送達される状態ではない。
+処理順は `operations:check → slot/source/run照合 → incident分類 → private captureの有無/期限確認 → candidate生成 → check/test/runtime/build/preflight → patched parserで再解析 → gate再評価 → overnight:brief`。candidateの重複防止キーはbase commit・Evidence body hash・候補parser版であり、既存成果物を上書きしない。別日の同一本文も同じキーになるため、現CLIはそこで停止する。runごとの再利用・receipt再検証を行うrunnerは未実装であり、別runの成功結果をそのまま転用しない。意味論/権利/未知欠測は即停止する。runner自体のheartbeat/期限逸脱を**Cloudflareと別の失敗経路**で監視し、Cloudflare到達不能を収集失敗と混同しない。新schedule/runner/認証/実通知は別承認のため、今は所有者へ自動送達される状態ではない。
 
 `operations:check` の `overnight` はsource別collection/publication、schema drift、detected_at、evidence状態/期限、recovery回数、patch/test/reparse、missing observation、human action、severityを返す。disabledは対象外。過去版で診断のないrunは `not_reported`、確認不能はunknown/null。collection完了・publication失敗を分け、再解析PASSだけでは欠測0や公開完了にしない。
+
+`recovery_attempts` はcollection runの復旧試行数であり、個々のHTTP retry回数ではない。HTTP試行は既存fetch_attemptsの記録で別に確認する。欠測判定の範囲は `current_run_only` で、過去日すべての欠測が解消したことを意味しない。公開停止は該当する新runの公開を止める意味で、既存の公開履歴は元のobserved_atのまま保持する。前日の値を当日値として表示しない。
 
 `pnpm overnight:brief --status <operations.json> --repair <repair-result.json>` でローカル修復receiptを結合する。同じsource/run/Evidence hash/期限、5種類の検証、patch hashを確認し、DB由来のcollection/publicationを上書きしない。合成結果は `--synthetic` を明示しないと結合しない。未実施のtestはnot_run、意味論判断はhuman action、本文を復元できない場合は欠測未確認とする。成功時は短い要約、異常時は「何が起きたか・自動対処の到達点・欠測の有無/不明・残る判断」を出す。実通知機能をこのCLIへ追加していない。
 
