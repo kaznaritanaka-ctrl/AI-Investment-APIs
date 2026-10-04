@@ -10,14 +10,18 @@ import {
   storeModelAbsence,
   finalizeModels,
   type ModelSnapshot,
+  assertModelLease,
+  type ModelLease,
 } from './models-store';
 import { hash, stable, errorCode, isoTime } from './util';
-import { collectionIdentity } from './run-identity';
+import { minuteSlot, collectionIdentity } from './run-identity';
 import { observe, type SourceObserver } from './telemetry';
 
 export type ModelCollectOptions = CollectOptions & {
   savedOnly?: boolean;
   revision?: { snapshot_id: string; review_ref: string };
+  // Internal operations already atomically claimed this exact existing run.
+  claimedRun?: { run_id: string; lease_token: string };
 };
 export async function collectModels(
   env: CollectorEnv,
@@ -36,9 +40,32 @@ export async function collectModels(
   if (opt.synthetic && env.ENVIRONMENT !== 'test')
     return { ...base, state: 'failed', reason: 'synthetic_data_blocked' };
   const parser = opt.parser ?? MODELS_PARSER;
-  let lease: string | null = null;
+  let lease: string | null = opt.claimedRun?.lease_token ?? null;
   try {
-    const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, scheduled);
+    if (opt.claimedRun && (!opt.savedOnly || opt.revision || opt.parser))
+      throw new Error('invalid_operation');
+    const target = opt.claimedRun
+      ? await env.PRIVATE_DB.prepare(
+          'SELECT run_id,scheduled_for FROM collection_runs WHERE run_id=? AND source_id=?',
+        )
+          .bind(opt.claimedRun.run_id, s.source_id)
+          .first<{ run_id: string; scheduled_for: string }>()
+      : null;
+    if (
+      opt.claimedRun &&
+      (!target ||
+        target.scheduled_for !== scheduled ||
+        target.run_id !== (await hash(s.source_id + '|' + scheduled)))
+    )
+      throw new Error('collection_run_identity_mismatch');
+    const identity = target
+      ? {
+          run_id: target.run_id,
+          storedSlot: target.scheduled_for,
+          slot: minuteSlot(target.scheduled_for),
+          kind: 'collection' as const,
+        }
+      : await collectionIdentity(env.PRIVATE_DB, s.source_id, scheduled);
     run = identity.run_id;
     scheduled = identity.storedSlot;
     base = {
@@ -48,13 +75,16 @@ export async function collectModels(
       run_kind: identity.kind,
     };
     const snapshotId = await hash(run + '|' + s.policy.version + '|' + parser);
-    await syncSource(env, s, now());
-    await env.PRIVATE_DB.prepare(
-      "INSERT OR IGNORE INTO collection_runs(run_id,source_id,scheduled_for,state) VALUES(?,?,?,'pending')",
-    )
-      .bind(run, s.source_id, scheduled)
-      .run();
+    if (!opt.claimedRun) {
+      await syncSource(env, s, now());
+      await env.PRIVATE_DB.prepare(
+        "INSERT OR IGNORE INTO collection_runs(run_id,source_id,scheduled_for,state) VALUES(?,?,?,'pending')",
+      )
+        .bind(run, s.source_id, scheduled)
+        .run();
+    }
     if (!canCollect(s, now())) {
+      if (opt.claimedRun) throw new Error('policy_blocked');
       await env.PRIVATE_DB.prepare(
         "UPDATE collection_runs SET state='policy_skipped',error_code='policy_blocked' WHERE run_id=? AND state<>'complete'",
       )
@@ -71,7 +101,7 @@ export async function collectModels(
     let snap = await env.PRIVATE_DB.prepare('SELECT * FROM model_snapshots WHERE snapshot_id=?')
       .bind(snapshotId)
       .first<ModelSnapshot>();
-    if (snap?.stage === 'done')
+    if (snap?.stage === 'done' && state?.state === snap.state)
       return {
         ...base,
         state: snap.state,
@@ -85,15 +115,56 @@ export async function collectModels(
       return { ...base, state: 'deferred', reason: 'retry_after' };
     if ((state?.recovery_count ?? 0) >= 3)
       return { ...base, state: 'failed', reason: 'recovery_exhausted' };
-    lease = crypto.randomUUID();
-    const claim = await env.PRIVATE_DB.prepare(
-      "UPDATE collection_runs SET lease_token=?,lease_until=?,started_at=COALESCE(started_at,?),state='processing' WHERE run_id=? AND (lease_until IS NULL OR lease_until<?)",
-    )
-      .bind(lease, new Date(Date.parse(now()) + 10 * 60000).toISOString(), now(), run, now())
-      .run();
-    if (!claim.meta.changes) return { ...base, state: 'in_progress' };
+    lease = opt.claimedRun?.lease_token ?? crypto.randomUUID();
+    const fence: ModelLease = { run_id: run, token: lease, now };
+    if (!opt.claimedRun) {
+      const claim = await env.PRIVATE_DB.prepare(
+        "UPDATE collection_runs SET lease_token=?,lease_until=?,started_at=COALESCE(started_at,?),state='processing' WHERE run_id=? AND (lease_until IS NULL OR lease_until<?) AND recovery_count<3 AND (next_attempt_at IS NULL OR next_attempt_at<=?) AND EXISTS(SELECT 1 FROM sources WHERE source_id=? AND enabled=1 AND suspended=0 AND policy_version=? AND (circuit_until IS NULL OR circuit_until<=?))",
+      )
+        .bind(
+          lease,
+          new Date(Date.parse(now()) + 10 * 60000).toISOString(),
+          now(),
+          run,
+          now(),
+          now(),
+          s.source_id,
+          s.policy.version,
+          now(),
+        )
+        .run();
+      if (!claim.meta.changes) {
+        await assertPersistenceAllowed(env, s, now());
+        const current = await env.PRIVATE_DB.prepare(
+          'SELECT r.recovery_count,r.next_attempt_at,s.circuit_until FROM collection_runs r JOIN sources s ON s.source_id=r.source_id WHERE r.run_id=?',
+        )
+          .bind(run)
+          .first<{
+            recovery_count: number;
+            next_attempt_at: string | null;
+            circuit_until: string | null;
+          }>();
+        if (current && current.recovery_count >= 3)
+          return { ...base, state: 'failed', reason: 'recovery_exhausted' };
+        if (current?.next_attempt_at && current.next_attempt_at > now())
+          return { ...base, state: 'deferred', reason: 'retry_after' };
+        if (current?.circuit_until && current.circuit_until > now())
+          return { ...base, state: 'deferred', reason: 'source_backoff' };
+        return { ...base, state: 'in_progress' };
+      }
+    }
+    await assertModelLease(env, fence);
+    // Re-read only after claiming; an earlier preview/snapshot is not authoritative.
+    snap = await env.PRIVATE_DB.prepare('SELECT * FROM model_snapshots WHERE snapshot_id=?')
+      .bind(snapshotId)
+      .first<ModelSnapshot>();
+    if (snap && !['ingest', 'absence', 'finalize', 'done'].includes(snap.stage))
+      throw new Error('invalid_model_checkpoint');
+    if (snap && snap.expires_at <= now()) throw new Error('evidence_retention_expired');
     const artifact = 'evidence/' + s.source_id + '/' + run + '.json';
     const saved = await env.EVIDENCE.get(artifact);
+    await assertModelLease(env, fence);
+    await assertPersistenceAllowed(env, s, now());
     let evidence: Evidence;
     let revision: ModelSnapshot | null = null;
     if (opt.revision) {
@@ -145,8 +216,11 @@ export async function collectModels(
     ).toISOString();
     if (expires <= now() || evidence.observed_at > now())
       throw new Error('evidence_time_out_of_bounds');
+    await assertPersistenceAllowed(env, s, now());
     const projection = await readModelEvidence(s, evidence, revision?.scope_hash);
+    await assertModelLease(env, fence);
     if (!snap) {
+      await assertPersistenceAllowed(env, s, now());
       await env.PRIVATE_DB.prepare(
         'INSERT OR IGNORE INTO raw_artifacts(artifact_ref,source_id,run_id,observed_at,payload_hash,evidence_hash,bytes,expires_at) VALUES(?,?,?,?,?,?,?,?)',
       )
@@ -173,24 +247,40 @@ export async function collectModels(
         parser,
         revision,
         opt.revision?.review_ref ?? null,
+        fence,
       );
       await env.PRIVATE_DB.prepare(
-        'UPDATE collection_runs SET artifact_ref=? WHERE run_id=? AND lease_token=?',
+        'UPDATE collection_runs SET artifact_ref=? WHERE run_id=? AND lease_token=? AND lease_until>?',
       )
-        .bind(artifact, run, lease)
+        .bind(artifact, run, lease, now())
         .run();
       // Intake is its own bounded step; never fetch the full catalog per model.
     } else if (snap.stage === 'ingest')
-      await storeModelChunk(env, s, snap, evidence, projection, scheduled, now());
-    else if (snap.stage === 'absence') await storeModelAbsence(env, s, snap, now());
-    else if (snap.stage === 'finalize') {
-      const final = await finalizeModels(env, s, snap, now());
-      await env.PRIVATE_DB.batch([
+      await storeModelChunk(env, s, snap, evidence, projection, scheduled, now(), fence);
+    else if (snap.stage === 'absence') await storeModelAbsence(env, s, snap, now(), fence);
+    else if (snap.stage === 'finalize' || snap.stage === 'done') {
+      const final = await finalizeModels(env, s, snap, now(), fence);
+      await assertModelLease(env, fence);
+      const completed = now();
+      const committed = await env.PRIVATE_DB.batch([
         env.PRIVATE_DB.prepare(
-          'UPDATE collection_runs SET state=?,finished_at=?,observation_count=?,accepted_count=?,error_code=?,metrics_json=?,last_progress_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?',
+          'UPDATE sources SET last_success_at=CASE WHEN ? THEN ? ELSE last_success_at END,last_artifact_ref=?,last_count=?,consecutive_failures=0,circuit_until=NULL WHERE source_id=? AND (last_success_at IS NULL OR last_success_at<=?) AND EXISTS(SELECT 1 FROM collection_runs WHERE run_id=? AND lease_token=? AND lease_until>?)',
+        ).bind(
+          final.state === 'complete' ? 1 : 0,
+          evidence.observed_at,
+          artifact,
+          final.model_count,
+          s.source_id,
+          evidence.observed_at,
+          run,
+          lease,
+          completed,
+        ),
+        env.PRIVATE_DB.prepare(
+          'UPDATE collection_runs SET state=?,finished_at=?,observation_count=?,accepted_count=?,error_code=?,metrics_json=?,last_progress_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?',
         ).bind(
           final.state,
-          now(),
+          final.completed_at,
           final.model_count + final.price_count,
           final.model_count + final.accepted_prices,
           final.state === 'partial' ? 'catalog_partial' : null,
@@ -200,20 +290,13 @@ export async function collectModels(
             price_quarantined: final.quarantined_count,
             ...JSON.parse(final.metrics_json),
           }),
-          now(),
+          completed,
           run,
           lease,
-        ),
-        env.PRIVATE_DB.prepare(
-          'UPDATE sources SET last_success_at=CASE WHEN ? THEN ? ELSE last_success_at END,last_artifact_ref=?,last_count=?,consecutive_failures=0,circuit_until=NULL WHERE source_id=?',
-        ).bind(
-          final.state === 'complete' ? 1 : 0,
-          evidence.observed_at,
-          artifact,
-          final.model_count,
-          s.source_id,
+          completed,
         ),
       ]);
+      if (!committed[1].meta.changes) throw new Error('operation_lease_lost');
       return {
         ...base,
         state: final.state,
@@ -224,19 +307,21 @@ export async function collectModels(
         publication_batches: [snapshotId],
       };
     }
-    await env.PRIVATE_DB.prepare(
-      "UPDATE collection_runs SET state='pending',last_progress_at=?,error_code=NULL,next_attempt_at=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?",
+    await assertModelLease(env, fence);
+    const released = await env.PRIVATE_DB.prepare(
+      "UPDATE collection_runs SET state='pending',last_progress_at=?,error_code=NULL,next_attempt_at=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?",
     )
-      .bind(now(), run, lease)
+      .bind(now(), run, lease, now())
       .run();
+    if (!released.meta.changes) throw new Error('operation_lease_lost');
     return { ...base, state: 'pending' };
   } catch (error) {
     const code = errorCode(error);
     if (lease)
       await env.PRIVATE_DB.prepare(
-        "UPDATE collection_runs SET state='failed',error_code=?,next_attempt_at=?,recovery_count=recovery_count+1,last_progress_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?",
+        "UPDATE collection_runs SET state='failed',error_code=?,next_attempt_at=?,recovery_count=recovery_count+1,last_progress_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?",
       )
-        .bind(code, error instanceof FetchFailure ? error.retry_at : null, now(), run, lease)
+        .bind(code, error instanceof FetchFailure ? error.retry_at : null, now(), run, lease, now())
         .run();
     return { ...base, state: 'failed', reason: code };
   }

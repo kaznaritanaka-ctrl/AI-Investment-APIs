@@ -34,6 +34,40 @@ export type ModelSnapshot = {
   expires_at: string;
   metrics_json: string;
 };
+export type ModelLease = { run_id: string; token: string; now: () => string };
+export async function assertModelLease(env: CollectorEnv, lease?: ModelLease) {
+  if (!lease) return;
+  const held = await env.PRIVATE_DB.prepare(
+    'SELECT 1 held FROM collection_runs WHERE run_id=? AND lease_token=? AND lease_until>?',
+  )
+    .bind(lease.run_id, lease.token, lease.now())
+    .first();
+  if (!held) throw new Error('operation_lease_lost');
+}
+async function checkpoint(
+  env: CollectorEnv,
+  snap: ModelSnapshot,
+  stage: string,
+  cursor: number,
+  lease?: ModelLease,
+) {
+  const result = await env.PRIVATE_DB.prepare(
+    'UPDATE model_snapshots SET stage=?,cursor=? WHERE snapshot_id=? AND stage=? AND cursor=?' +
+      (lease
+        ? ' AND EXISTS(SELECT 1 FROM collection_runs WHERE run_id=? AND lease_token=? AND lease_until>?)'
+        : ''),
+  )
+    .bind(
+      stage,
+      cursor,
+      snap.snapshot_id,
+      snap.stage,
+      snap.cursor,
+      ...(lease ? [lease.run_id, lease.token, lease.now()] : []),
+    )
+    .run();
+  if (!result.meta.changes) throw new Error('operation_lease_lost');
+}
 type Member = {
   record_key: string;
   catalog_observation_id: string;
@@ -72,6 +106,7 @@ export async function initializeModelSnapshot(
   parser = MODELS_PARSER,
   revises: ModelSnapshot | null = null,
   review: string | null = null,
+  lease?: ModelLease,
 ) {
   const id = await hash(run + '|' + s.policy.version + '|' + parser);
   const prior = await env.PRIVATE_DB.prepare(
@@ -82,6 +117,8 @@ export async function initializeModelSnapshot(
   const expiry = new Date(
     Date.parse(e.observed_at) + s.models!.retention.normalized_days * 86400000,
   ).toISOString();
+  await assertModelLease(env, lease);
+  await assertPersistenceAllowed(env, s, lease?.now() ?? now);
   await env.PRIVATE_DB.prepare(
     'INSERT OR IGNORE INTO model_snapshots(snapshot_id,run_id,source_id,policy_version,scope_hash,scope_json,parser_version,artifact_ref,observed_at,recorded_at,state,previous_snapshot_id,revises_snapshot_id,review_ref,enumerated_count,complete_capture,issues_json,data_origin,expires_at,metrics_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
   )
@@ -428,12 +465,15 @@ export async function storeModelChunk(
   p: ModelProjection,
   scheduled: string,
   now: string,
+  lease?: ModelLease,
 ) {
+  await assertModelLease(env, lease);
   await stageSnapshot(env, s, snap, now);
   const archive: unknown[] = [];
   const page = p.records.slice(snap.cursor, snap.cursor + s.models!.models_per_invocation);
   for (const r of page) {
-    await assertPersistenceAllowed(env, s, now);
+    await assertModelLease(env, lease);
+    await assertPersistenceAllowed(env, s, lease?.now() ?? now);
     const existing = await env.PRIVATE_DB.prepare(
       'SELECT * FROM model_snapshot_members WHERE snapshot_id=? AND record_key=?',
     )
@@ -637,6 +677,8 @@ export async function storeModelChunk(
         }
         rows.push(price);
       }
+      await assertModelLease(env, lease);
+      await assertPersistenceAllowed(env, s, lease?.now() ?? now);
       await env.PRIVATE_DB.batch([
         ...rows.flatMap((o) => privateObservation(env, o, snap.run_id)),
         env.PRIVATE_DB.prepare(
@@ -655,9 +697,11 @@ export async function storeModelChunk(
       ]);
     }
     archive.push({ observations: rows, events });
-    await stagePublic(env, s, snap, rows, events, firstModel, now);
+    await assertModelLease(env, lease);
+    await stagePublic(env, s, snap, rows, events, firstModel, lease?.now() ?? now);
   }
-  await assertPersistenceAllowed(env, s, now);
+  await assertModelLease(env, lease);
+  await assertPersistenceAllowed(env, s, lease?.now() ?? now);
   const body = stable({
     schema_version: '1',
     snapshot_id: snap.snapshot_id,
@@ -672,22 +716,18 @@ export async function storeModelChunk(
   );
   const cursor = snap.cursor + page.length,
     done = cursor >= p.records.length;
-  await env.PRIVATE_DB.prepare('UPDATE model_snapshots SET cursor=?,stage=? WHERE snapshot_id=?')
-    .bind(done ? 0 : cursor, done ? 'absence' : 'ingest', snap.snapshot_id)
-    .run();
+  await checkpoint(env, snap, done ? 'absence' : 'ingest', done ? 0 : cursor, lease);
 }
 export async function storeModelAbsence(
   env: CollectorEnv,
   s: Source,
   snap: ModelSnapshot,
   now: string,
+  lease?: ModelLease,
 ) {
+  await assertModelLease(env, lease);
   if (!snap.complete_capture || !snap.previous_snapshot_id || snap.revises_snapshot_id) {
-    await env.PRIVATE_DB.prepare(
-      "UPDATE model_snapshots SET stage='finalize',cursor=0 WHERE snapshot_id=?",
-    )
-      .bind(snap.snapshot_id)
-      .run();
+    await checkpoint(env, snap, 'finalize', 0, lease);
     return;
   }
   const rows = (
@@ -710,44 +750,61 @@ export async function storeModelAbsence(
         now,
       ),
     );
-  await assertPersistenceAllowed(env, s, now);
+  await assertModelLease(env, lease);
+  await assertPersistenceAllowed(env, s, lease?.now() ?? now);
   await batches(
     env.PRIVATE_DB,
     events.map((e) => eventStatement(env, e)),
   );
-  await stagePublic(env, s, snap, [], events, '', now);
+  await assertModelLease(env, lease);
+  await stagePublic(env, s, snap, [], events, '', lease?.now() ?? now);
   const body = stable({ snapshot_id: snap.snapshot_id, events });
   await env.EVIDENCE.put(
     'archive/' + s.source_id + '/models/' + snap.snapshot_id + '/absence-' + snap.cursor + '.json',
     body,
     { onlyIf: { etagDoesNotMatch: '*' }, customMetadata: { sha256: await hash(body) } },
   );
-  await env.PRIVATE_DB.prepare('UPDATE model_snapshots SET stage=?,cursor=? WHERE snapshot_id=?')
-    .bind(rows.length < 50 ? 'finalize' : 'absence', snap.cursor + rows.length, snap.snapshot_id)
-    .run();
+  await checkpoint(
+    env,
+    snap,
+    rows.length < 50 ? 'finalize' : 'absence',
+    snap.cursor + rows.length,
+    lease,
+  );
 }
 export async function finalizeModels(
   env: CollectorEnv,
   s: Source,
   snap: ModelSnapshot,
   now: string,
+  lease?: ModelLease,
 ) {
+  await assertModelLease(env, lease);
   const totals = await env.PRIVATE_DB.prepare(
     'SELECT COUNT(*) model_count,COUNT(price_observation_id) price_count,COALESCE(SUM(component_count),0) component_count,COALESCE(SUM(CASE WHEN price_eligible=0 THEN 1 ELSE 0 END),0) quarantined_count,COALESCE(SUM(price_eligible),0) accepted_prices FROM model_snapshot_members WHERE snapshot_id=?',
   )
     .bind(snap.snapshot_id)
     .first<any>();
   const complete = !!snap.complete_capture && totals.model_count === snap.enumerated_count;
+  // A prior public commit may have succeeded even when private completion failed.
+  // Preserve its original as_of boundary while reconciling the remaining database.
+  const publicCompletion = await env.PUBLIC_DB.prepare(
+    "SELECT completed_at FROM publication_batches WHERE batch_id=? AND state='complete'",
+  )
+    .bind(snap.snapshot_id)
+    .first<{ completed_at: string }>();
+  const completedAt = publicCompletion?.completed_at ?? snap.completed_at ?? now;
   const finished: ModelSnapshot = {
     ...snap,
     ...totals,
     state: complete ? 'complete' : 'partial',
     stage: 'done',
-    completed_at: now,
+    completed_at: completedAt,
   };
-  await assertPersistenceAllowed(env, s, now);
+  await assertModelLease(env, lease);
+  await assertPersistenceAllowed(env, s, lease?.now() ?? now);
   await stageSnapshot(env, s, snap, now);
-  if (canPublish(s, now)) {
+  if (canPublish(s, lease?.now() ?? now)) {
     if (complete) {
       const count = await env.PUBLIC_DB.prepare(
         'SELECT COUNT(*) n FROM published_observations WHERE model_snapshot_id=?',
@@ -757,28 +814,35 @@ export async function finalizeModels(
       if (count?.n !== totals.model_count + totals.accepted_prices)
         throw new Error('public_model_count_mismatch');
     }
+    await assertModelLease(env, lease);
+    await assertPersistenceAllowed(env, s, lease?.now() ?? now);
     // One atomic public commit. as_of cannot see staged rows or future completion.
     await env.PUBLIC_DB.batch([
       env.PUBLIC_DB.prepare(
         'UPDATE published_model_snapshots SET state=?,completed_at=?,public_json=? WHERE snapshot_id=?',
-      ).bind(finished.state, now, stable(modelCoverage(s, finished)), snap.snapshot_id),
+      ).bind(finished.state, completedAt, stable(modelCoverage(s, finished)), snap.snapshot_id),
       env.PUBLIC_DB.prepare(
         "UPDATE publication_batches SET state='complete',completed_at=COALESCE(completed_at,?) WHERE batch_id=? AND state='staging'",
-      ).bind(now, snap.snapshot_id),
+      ).bind(completedAt, snap.snapshot_id),
     ]);
   }
-  await env.PRIVATE_DB.prepare(
-    "UPDATE model_snapshots SET state=?,stage='done',completed_at=COALESCE(completed_at,?),model_count=?,price_count=?,component_count=?,quarantined_count=? WHERE snapshot_id=?",
+  const committed = await env.PRIVATE_DB.prepare(
+    "UPDATE model_snapshots SET state=?,stage='done',completed_at=COALESCE(completed_at,?),model_count=?,price_count=?,component_count=?,quarantined_count=? WHERE snapshot_id=?" +
+      (lease
+        ? ' AND EXISTS(SELECT 1 FROM collection_runs WHERE run_id=? AND lease_token=? AND lease_until>?)'
+        : ''),
   )
     .bind(
       finished.state,
-      now,
+      completedAt,
       totals.model_count,
       totals.price_count,
       totals.component_count,
       totals.quarantined_count,
       snap.snapshot_id,
+      ...(lease ? [lease.run_id, lease.token, lease.now()] : []),
     )
     .run();
+  if (!committed.meta.changes) throw new Error('operation_lease_lost');
   return { ...finished, accepted_prices: totals.accepted_prices };
 }

@@ -36,6 +36,10 @@ docs/admin-releases contains three verified historical records. P0 API/Collector
 
 ## Production sequence (requires immediate owner approval)
 
+The 2026-10-04 preflight found Collector version 200edbf6-b7d8-475e-9d4a-f8a4154f0f14, deployed from local commit 1622d2fd47a3e0b48a0c0475d0ea90556ec3db91 after the original P0 baseline. The integrated candidate preserves that commit's models-pipeline.ts and models-store.ts byte for byte: live lease fencing, retry admission, interrupted completion repair, original public completion timestamps and protection of newer source metadata. Its unused operations transport/core and unapplied 0004_operations.sql are not introduced here. The six ordinary-Collector regression cases exercise these guarantees without an operations table or invocation. Coordinate migration numbering with the separate operations and GPU/energy work before either 0004 proposal is deployed.
+
+Owner-approved private 0005 was applied and verified on 2026-10-04. All 942 existing observation IDs/timestamps/fingerprints, existing table counts/schema/triggers, foreign keys, Worker versions/settings and Cron schedules matched the preflight. The release ledger remains empty; recording metadata and either Worker deployment still require their own immediate approval. The local evidence is retained in the enclosing workspace outputs/admin-operations/migration-result.json.
+
 1. Fresh read-only checks: current deployed versions, existing settings/Access/bindings, private migration journal, observation counts/FKs/triggers, and the candidate/SQL digests. Confirm the only intended pending migration in this checkout is 0005. Stop if 0004 or another migration is unexpectedly pending.
 2. Obtain approval for private 0005; apply only that reviewed migration and verify the ledger/index definitions, unchanged observations, foreign keys and immutable triggers. Existing Workers continue running at this point.
 3. Obtain separate approval to upload/activate the frozen Collector candidate; preserve all existing runtime variables, bindings and three Crons. Verify the named AdminRead entrypoint, existing nonpublic exposure and scheduled configuration.
