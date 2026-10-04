@@ -289,7 +289,6 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
         row?.metrics_json,
         typeof row?.recovery_count === 'number' ? row.recovery_count : null,
       );
-      overnight.push(morning);
       if (morning.schema_drift === true && morning.publication_status !== 'complete')
         reports.at(-1)!.signals.push({
           key: s.source_id + ':schema_drift',
@@ -325,6 +324,13 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
                   ? 'configuration_matches'
                   : 'configuration_unverified_or_drifted',
       });
+      overnight.push(
+        overnightSource(
+          reports.at(-1)!,
+          row?.metrics_json,
+          typeof row?.recovery_count === 'number' ? row.recovery_count : null,
+        ),
+      );
     } catch {
       reports.push({
         ...evaluateSource(s, slot, now, {

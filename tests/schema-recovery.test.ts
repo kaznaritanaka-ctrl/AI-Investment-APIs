@@ -384,5 +384,23 @@ describe('failure boundaries and local repair gates', () => {
       severity: 'unknown',
     });
     expect(overnightSource({ ...status, collection: 'missing' }).missing_observation).toBe(true);
+    expect(
+      overnightSource({
+        ...status,
+        collection: 'complete',
+        publication: 'complete',
+        observation_count: 10,
+        accepted_count: 8,
+        signals: [{ key: 'models_dev:quality', condition: 'alert', code: 'quarantine_changed' }],
+      }),
+    ).toMatchObject({
+      severity: 'action_required',
+      remaining_human_action: 'review_operational_alerts',
+      quarantined_observation_count: 2,
+    });
+    expect(
+      overnightSource({ ...status, collection: 'complete', snapshot: 'incomplete' })
+        .missing_observation_count,
+    ).toBeNull();
   });
 });

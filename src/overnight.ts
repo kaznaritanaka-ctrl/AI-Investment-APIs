@@ -9,6 +9,8 @@ type SourceStatus = {
   publication: string;
   observation_count: number | null;
   accepted_count: number | null;
+  snapshot?: string;
+  signals?: { key: string; condition: string; code: string }[];
 };
 // Publication always comes from DB evidence; a patch/reparse success cannot set it.
 export function overnightSource(
@@ -21,30 +23,35 @@ export function overnightSource(
   const disabled = s.collection === 'not_applicable';
   const pending = ['awaiting_start', 'in_progress'].includes(s.collection);
   const unknown = [s.collection, s.publication].some((v) => ['unknown', 'unavailable'].includes(v));
-  const missing =
-    disabled || s.collection === 'complete' ? false : s.collection === 'missing' ? true : null;
+  const alerts = (s.signals ?? []).filter((x) => ['alert', 'unknown'].includes(x.condition));
+  const captureComplete =
+    s.collection === 'complete' &&
+    (!s.snapshot || ['complete', 'not_applicable'].includes(s.snapshot));
+  const missing = disabled || captureComplete ? false : s.collection === 'missing' ? true : null;
   const human =
-    disabled || complete
+    disabled || (complete && !alerts.length)
       ? 'none'
-      : incident?.schema_drift
-        ? incident.diagnostic_codes.some((c) =>
-            [
-              'semantics_changed',
-              'pricing_basis_changed',
-              'identifier_changed',
-              'record_scope_changed',
-              'unknown_pricing_field',
-            ].includes(c),
-          )
-          ? 'confirm_source_semantics'
-          : incident.evidence_state === 'preserved'
-            ? 'review_repair_candidate'
-            : 'evidence_unavailable_do_not_backfill'
-        : pending
-          ? 'none_yet'
-          : unknown
-            ? 'restore_read_access'
-            : 'investigate_collection_or_publication';
+      : complete
+        ? 'review_operational_alerts'
+        : incident?.schema_drift
+          ? incident.diagnostic_codes.some((c) =>
+              [
+                'semantics_changed',
+                'pricing_basis_changed',
+                'identifier_changed',
+                'record_scope_changed',
+                'unknown_pricing_field',
+              ].includes(c),
+            )
+            ? 'confirm_source_semantics'
+            : incident.evidence_state === 'preserved'
+              ? 'review_repair_candidate'
+              : 'evidence_unavailable_do_not_backfill'
+          : pending
+            ? 'none_yet'
+            : unknown
+              ? 'restore_read_access'
+              : 'investigate_collection_or_publication';
   return {
     source_id: s.source_id,
     run_id: s.run_id,
@@ -71,15 +78,34 @@ export function overnightSource(
     reparse_result: 'not_reported',
     observation_count: s.observation_count,
     accepted_count: s.accepted_count,
+    quarantined_observation_count:
+      s.observation_count !== null &&
+      s.accepted_count !== null &&
+      s.observation_count >= s.accepted_count
+        ? s.observation_count - s.accepted_count
+        : null,
+    operational_alerts: alerts,
     missing_observation: missing,
-    missing_observation_count: s.collection === 'complete' ? 0 : null,
+    missing_observation_count: captureComplete ? 0 : null,
+    missing_observation_scope: 'current_run_only',
     remaining_human_action: human,
-    severity:
-      disabled || complete ? 'ok' : pending ? 'pending' : unknown ? 'unknown' : 'action_required',
+    severity: disabled
+      ? 'ok'
+      : unknown
+        ? 'unknown'
+        : alerts.length
+          ? 'action_required'
+          : complete
+            ? 'ok'
+            : pending
+              ? 'pending'
+              : 'action_required',
     briefing: disabled
       ? '対象外'
       : complete
-        ? '収集・公開完了'
+        ? alerts.length
+          ? '収集・公開完了。品質・設定・権利の要確認事項あり'
+          : '収集・公開完了'
         : pending
           ? '収集処理中。完了未確認'
           : unknown

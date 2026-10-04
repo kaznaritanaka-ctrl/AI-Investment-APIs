@@ -49,6 +49,8 @@ const repair = value('--repair')
 const now = new Date().toISOString();
 const result = {
   ...input.overnight,
+  api_reachability: input.api_reachability ?? 'not_reported',
+  external_monitor: input.external_monitor ?? 'not_verified',
   briefing_generated_at: now,
   synthetic: args.includes('--synthetic'),
   notification_delivery: 'not_attempted',
