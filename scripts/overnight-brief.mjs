@@ -2,6 +2,12 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+const stop = () => {
+  console.error('overnight_input_invalid_or_unavailable');
+  process.exit(2);
+};
+process.on('uncaughtException', stop);
+process.on('unhandledRejection', stop);
 // Input is an existing operations:check JSON and optional local repair receipts.
 // No production connections, market-data fetches, LLM calls or notifications.
 const args = process.argv.slice(2);

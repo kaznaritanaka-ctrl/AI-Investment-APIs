@@ -13,6 +13,14 @@ import { spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
 
+// JSON/parser exceptions can quote input. Never emit arbitrary exception text.
+const stop = () => {
+  console.error('repair_process_failed_check_local_prerequisites');
+  process.exit(2);
+};
+process.on('uncaughtException', stop);
+process.on('unhandledRejection', stop);
+
 // Local-only deterministic candidate builder. No credentials, remote git, fetch,
 // AI calls, migration, source activation, notification or deployment capability.
 const args = process.argv.slice(2);
