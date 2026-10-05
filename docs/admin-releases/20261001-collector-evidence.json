@@ -1,0 +1,22 @@
+{
+  "worker": "ai-investment-collector",
+  "version_id": "58f4a924-6c83-4492-8fd9-08194a9b9255",
+  "git_sha": "24768e9e19f26b70555a7d1f738be43cde758d01",
+  "event": "verified",
+  "traffic_percent": 100,
+  "recorded_at": "2026-10-01T02:48:11.440Z",
+  "checks": {
+    "deployment_readback": "passed",
+    "artifact_hash": "passed",
+    "settings_preserved": "passed",
+    "http_smoke": "passed"
+  },
+  "artifact_kind": "frozen_worker_module",
+  "provenance": [
+    {
+      "file": "p0-collector-deploy-result.json",
+      "sha256": "823a30473d3a9935b196baf3b2c7648b9e9138faeaef9c250d090b039e7e7178"
+    }
+  ],
+  "scope": "Verified historical deployment only; current traffic must be checked against Cloudflare."
+}

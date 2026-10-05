@@ -1,1 +1,2 @@
 * text=auto eol=lf
+docs/admin-releases/*.json -text

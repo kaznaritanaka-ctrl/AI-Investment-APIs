@@ -4,7 +4,7 @@ import { canCollect, assertPersistenceAllowed } from './policy';
 import { syncSource } from './publication';
 import { fetchGPURequest, FetchFailure } from './network';
 import { gpuEvidenceFromBody } from './gpu-adapters';
-import { ingestGPUPage, snapshot, publishCoverage, finalizeGPU, GPU_PARSER } from './gpu-store';
+import { ingestGPUPage, snapshot, publishCoverage, finalizeGPU, gpuParser } from './gpu-store';
 import { hash, stable, errorCode, isoTime } from './util';
 import { finalizeGPUMetrics } from './gpu-metrics';
 import { collectionIdentity } from './run-identity';
@@ -26,7 +26,8 @@ export async function collectGPU(
   if (opt.synthetic && env.ENVIRONMENT !== 'test')
     return { ...base, state: 'failed', reason: 'synthetic_data_blocked' };
   let lease: string | null = null,
-    current: string | null = null;
+    current: string | null = null,
+    pocRetryAt: string | null = null;
   try {
     const identity = await collectionIdentity(env.PRIVATE_DB, s.source_id, scheduled);
     run = identity.run_id;
@@ -75,7 +76,7 @@ export async function collectGPU(
         adapter: s.adapter,
         endpoint: s.endpoint,
         partition,
-        classification_version: GPU_PARSER,
+        classification_version: gpuParser(s),
         page_size: s.gpu.page_size,
         region_map: s.gpu.region_map,
         market_scope: 'observed_search_only',
@@ -142,17 +143,98 @@ export async function collectGPU(
         if (saved) evidence = await saved.json<Evidence>();
         else {
           if (opt.savedOnly) continue;
+          if (s.adapter === 'price_of_compute') {
+            // Different slots may race, but only one source run may make a fresh request.
+            // Same-slot concurrency is already serialized by the run lease above.
+            const otherLease = await env.PRIVATE_DB.prepare(
+              "SELECT lease_until FROM collection_runs WHERE source_id=? AND run_id<>? AND state='fetching' AND lease_token IS NOT NULL AND lease_until>? ORDER BY lease_until DESC LIMIT 1",
+            )
+              .bind(s.source_id, run, now())
+              .first<{ lease_until: string }>();
+            if (otherLease) throw new FetchFailure('source_backoff', otherLease.lease_until);
+            // Conservatively pause the entire source for >=1h after any HTTP 2xx,
+            // including parse/content failures. Only approved attempt metadata is retained;
+            // malformed payloads are never cached. Saved same-slot evidence bypasses HTTP.
+            const recent = await env.PRIVATE_DB.prepare(
+              'SELECT a.started_at,a.duration_ms FROM fetch_attempts a JOIN collection_runs r USING(run_id) WHERE r.source_id=? AND a.status>=200 AND a.status<300 AND a.started_at>=? ORDER BY a.started_at DESC,a.id DESC LIMIT 1',
+            )
+              .bind(s.source_id, new Date(Date.parse(now()) - 2 * 3600000).toISOString())
+              .first<{ started_at: string; duration_ms: number }>();
+            if (recent) {
+              const until = new Date(
+                Date.parse(recent.started_at) + Math.max(0, recent.duration_ms) + 3600000,
+              ).toISOString();
+              if (until > now()) throw new FetchFailure('price_of_compute_success_cache', until);
+            }
+            // A 2xx body/attempt-log failure can leave no fetch_attempt row. Its run
+            // retry deadline is also a durable source-wide backoff across new slots.
+            const deferred = await env.PRIVATE_DB.prepare(
+              'SELECT next_attempt_at FROM collection_runs WHERE source_id=? AND next_attempt_at>? ORDER BY next_attempt_at DESC LIMIT 1',
+            )
+              .bind(s.source_id, now())
+              .first<{ next_attempt_at: string }>();
+            if (deferred) throw new FetchFailure('source_backoff', deferred.next_attempt_at);
+          }
           const response = await fetchGPURequest(s, env, partition, page, scheduled, {
             ...opt.network,
             now,
+            fetcher:
+              s.adapter === 'price_of_compute'
+                ? ((async (input: RequestInfo | URL, init?: RequestInit) => {
+                    // Reserve before *each* HTTP attempt, not after a response. Include
+                    // the entire bounded request duration so total DB loss after a 2xx
+                    // cannot shorten the >=1h budget. Never invent successful-attempt data.
+                    const reservationAt = new Date(
+                      Date.parse(now()) + 3600000 + (opt.network?.timeout_ms ?? 20000),
+                    ).toISOString();
+                    pocRetryAt = [pocRetryAt, reservationAt]
+                      .filter((v): v is string => v !== null)
+                      .sort()
+                      .at(-1)!;
+                    try {
+                      const reserved = await env.PRIVATE_DB.prepare(
+                        "UPDATE collection_runs SET next_attempt_at=CASE WHEN next_attempt_at IS NULL OR next_attempt_at<? THEN ? ELSE next_attempt_at END WHERE run_id=? AND lease_token=? AND state='fetching'",
+                      )
+                        .bind(reservationAt, reservationAt, run, lease)
+                        .run();
+                      const verified = await env.PRIVATE_DB.prepare(
+                        'SELECT next_attempt_at FROM collection_runs WHERE run_id=? AND lease_token=?',
+                      )
+                        .bind(run, lease)
+                        .first<{ next_attempt_at: string }>();
+                      if (
+                        !reserved.meta.changes ||
+                        !verified?.next_attempt_at ||
+                        verified.next_attempt_at < reservationAt
+                      )
+                        throw new Error('reservation_not_verified');
+                      // A timed-out attempt's write may finish after a newer reservation.
+                      // The persisted deadline and fallback must never move backward.
+                      pocRetryAt = [pocRetryAt, verified.next_attempt_at]
+                        .filter((v): v is string => v !== null)
+                        .sort()
+                        .at(-1)!;
+                    } catch {
+                      throw new FetchFailure('price_of_compute_reservation_failed', reservationAt);
+                    }
+                    // The body timer starts before reservation I/O; never send after it elapsed.
+                    if (init?.signal?.aborted) throw new FetchFailure('timeout', reservationAt);
+                    return (opt.network?.fetcher ?? fetch)(input, init);
+                  }) as typeof fetch)
+                : opt.network?.fetcher,
             onAttempt: async (a) => {
               await env.PRIVATE_DB.prepare(
                 'INSERT INTO fetch_attempts(run_id,attempt,started_at,status,code,duration_ms) VALUES (?,?,?,?,?,?)',
               )
                 .bind(run, a.attempt, a.started_at, a.status, a.code, a.duration_ms)
                 .run();
+              // A durable attempt record now covers this request; the reservation may
+              // be replaced by a response/retry deadline or cleared after safe replay.
+              if (s.adapter === 'price_of_compute') pocRetryAt = null;
             },
           });
+          if (s.adapter === 'price_of_compute')
+            pocRetryAt = new Date(Date.parse(response.observed_at) + 3600000).toISOString();
           evidence = await gpuEvidenceFromBody(
             s,
             partition,
@@ -172,6 +254,7 @@ export async function collectGPU(
           saved = await env.EVIDENCE.get(artifact);
           if (!saved) throw new Error('evidence_write_failed');
           evidence = await saved.json<Evidence>();
+          pocRetryAt = null; // Replay is now safe without another HTTP request.
           await opt.afterEvidenceSaved?.();
         }
         if (evidence.gpu_page?.page_number !== page) throw new Error('gpu_page_mismatch');
@@ -199,7 +282,7 @@ export async function collectGPU(
           artifact,
           evidence,
           now(),
-          opt.parser ?? GPU_PARSER,
+          opt.parser ?? gpuParser(s),
         );
         budget--;
         snap = await snapshot(env, id);
@@ -265,7 +348,14 @@ export async function collectGPU(
     };
   } catch (error) {
     const code = errorCode(error),
-      retry = error instanceof FetchFailure ? error.retry_at : null;
+      failureRetry = error instanceof FetchFailure ? error.retry_at : null,
+      retry =
+        s.adapter === 'price_of_compute'
+          ? ([failureRetry, pocRetryAt]
+              .filter((v): v is string => v !== null)
+              .sort()
+              .at(-1) ?? null)
+          : failureRetry;
     if (lease) {
       await env.PRIVATE_DB.prepare(
         "UPDATE collection_runs SET state='failed',error_code=?,next_attempt_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?",

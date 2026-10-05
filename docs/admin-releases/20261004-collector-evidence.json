@@ -1,0 +1,43 @@
+{
+  "worker": "ai-investment-collector",
+  "version_id": "764bb171-582b-47a0-ad40-5d6aadc61ee6",
+  "git_sha": "a534ff06c776987844dad68ad7112501b52fc82b",
+  "event": "verified",
+  "traffic_percent": 100,
+  "recorded_at": "2026-10-04T05:03:40.541Z",
+  "checks": {
+    "deployment_readback": "passed",
+    "artifact_hash": "passed",
+    "settings_preserved": "passed",
+    "authenticated_read_smoke": "passed",
+    "observation_preservation": "passed",
+    "access_preserved": "passed"
+  },
+  "artifact_kind": "frozen_worker_module",
+  "deployment_id": "cd8258f7-630b-4c41-8583-06152b6ed6eb",
+  "deployed_at": "2026-10-04T04:27:29.533893Z",
+  "provenance": [
+    {
+      "file": "outputs/admin-operations/collector-deploy-result.json",
+      "sha256": "bee3de9ffa0117471adcf8ae200e87f2007c3990489369e7da8cc5228199b4ab"
+    },
+    {
+      "file": "outputs/admin-operations/admin-browser-verification.json",
+      "sha256": "bc843caeb6259225aa72cc0868a25ed7e4a6d8cd0f0b37eaff1682db23ca26c9"
+    },
+    {
+      "file": "outputs/admin-operations/admin-browse-readback.json",
+      "sha256": "5643223f21a419907451b5e7c527441e3ce82dd93f808015816e633152ba91fc"
+    },
+    {
+      "file": "outputs/admin-operations/admin-access-after.json",
+      "sha256": "9922da1626cd5335ced086d6ac581185841c11a0b0ca9c2cbcc856fb21a3732f"
+    }
+  ],
+  "scope": "Confirmed production deployment and read-only browsing. This is a verified event, not an authorization for collection, migration or later deployments.",
+  "limitations": [
+    "Direct navigation to JSON in a separate in-app tab returned net::ERR_BLOCKED_BY_CLIENT; successful application GET requests were verified through the UI and observed resource paths.",
+    "The exact server module and served stylesheet digests were read back. The JavaScript client was matched by its content-hashed filename and approved frozen upload; no separate client-byte download was performed.",
+    "GET-only, origin rejection, DTO edge cases and hidden polling are covered by the previously passed local automated tests; no production mutation request was sent."
+  ]
+}

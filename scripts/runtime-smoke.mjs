@@ -19,7 +19,23 @@ const bundled = await build({
         "if(new URL(request.url).pathname.startsWith('/models-'))return modelsRuntime(request,env);\nif(new URL(request.url).pathname!=='/')",
       )
       .replace('XML_BODY', JSON.stringify(xml))
-      .replace('CATALOG_BODY', JSON.stringify(catalog)),
+      .replace('CATALOG_BODY', JSON.stringify(catalog))
+      .replace(
+        'export default {',
+        "import {operationsRuntime} from './tests/operations-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        "async fetch(request,env){\nif(new URL(request.url).pathname==='/operations')return operationsRuntime(env);",
+      )
+      .replace(
+        'export default {',
+        "import {recoveryRuntime} from './tests/recovery-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        "async fetch(request,env){\nif(new URL(request.url).pathname==='/schema-recovery')return recoveryRuntime(env);",
+      ),
     resolveDir: process.cwd(),
     sourcefile: 'runtime-harness.ts',
     loader: 'ts',
@@ -66,6 +82,41 @@ try {
   assert(result.body.data.every((o) => o.data_origin === 'synthetic'));
   console.log(
     'Workerd runtime smoke passed: 2 synthetic sources, 1 blocked source, D1/R2 pipeline and public API. No external HTTP.',
+  );
+  const operations = await (await mf.dispatchFetch('https://local.test/operations')).json();
+  assert.equal(operations.collection, 'complete');
+  assert.equal(operations.publication, 'complete');
+  assert.equal(operations.dry.eligible, 1);
+  assert.equal(operations.dryCalls, 0);
+  assert.equal(operations.failed.state, 'pending');
+  assert.equal(operations.recovered.sent, 1);
+  assert.equal(operations.calls, 2);
+  const recovery = await (await mf.dispatchFetch('https://local.test/schema-recovery')).json();
+  assert.equal(recovery.reason, 'schema_drift_detected');
+  assert.equal(recovery.state, 'failed');
+  assert.equal(recovery.calls, 1);
+  assert.equal(recovery.observations, 0);
+  assert.equal(recovery.publicRows, 0);
+  assert.equal(recovery.evidence_preserved, true);
+  assert.equal(recovery.reparse, 'passed');
+  assert.equal(recovery.records, 5);
+  assert(recovery.payload_bytes > 8 * 1024 * 1024);
+  assert(recovery.retained_bytes < 10000);
+  assert.equal(recovery.gate.production_deploy_allowed, false);
+  console.log(
+    'Workerd schema drift: authorized evidence preserved, publication held, saved response reparsed offline. Synthetic only.',
+  );
+  await mkdir('work', { recursive: true });
+  await writeFile(
+    'work/runtime-recovery-report.json',
+    JSON.stringify(
+      { ...recovery, synthetic: true, cloud_cpu_measured: false, external_http_requests: 0 },
+      null,
+      2,
+    ) + '\n',
+  );
+  console.log(
+    'Workerd operational check, notification dry-run, failure and recovery passed. Synthetic delivery only.',
   );
   let steps = 0,
     maxBatch = 0,

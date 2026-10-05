@@ -1,3 +1,5 @@
+> 現在地（2026-10-04）: P0、private 0005、AdminRead、Admin詳細画面と台帳5件は反映済みです。以下の初期導入手順を本番の未実装一覧と扱わず、[受け入れ記録](operations-acceptance.md)と実状態を照合してください。
+
 # 初期設定
 
 2026-10-01の本番候補はstage=enabled、Workers Paid、Collector CPU 5,000ms、D1 Time Travel 30日です。既存Account/zone/domain/D1 ID、3 CronとAPI routeを維持します。scope・権利・容量審査は[専用手順](models-enablement.md)を参照してください。本番反映はmigrationとWorkerごとの別途承認が必要です。通知先・外部監視は未設定です。

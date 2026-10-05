@@ -7,6 +7,7 @@ import { collectSource, type RunResult } from './pipeline';
 import { canCollect } from './policy';
 import { collectionIdentity, minuteSlot } from './run-identity';
 import { observe, newlyCompleted, type ProcessKind, type SourceObserver } from './telemetry';
+export { deliverNotifications } from './notifications';
 
 export async function recordSummary(
   env: CollectorEnv,
@@ -44,79 +45,10 @@ export async function recordSummary(
     environment: env.ENVIRONMENT,
   };
   const id = await hash(summary.process_kind + '|' + slot + '|' + now + '|' + stable(results));
-  const previous = await env.PRIVATE_DB.prepare(
-    "SELECT summary_json FROM daily_summaries WHERE json_extract(summary_json,'$.process_kind')=? AND json_array_length(summary_json,'$.sources')>0 ORDER BY recorded_at DESC LIMIT 1",
-  )
-    .bind(summary.process_kind)
-    .first<{ summary_json: string }>();
-  const digest = (s: typeof summary) =>
-    stable({
-      states: s.sources.map((r) => [r.source_id, r.state, r.reason ?? null]),
-      changed: s.changed,
-      anomalies: s.anomalies,
-    });
   await env.PRIVATE_DB.prepare('INSERT OR IGNORE INTO daily_summaries VALUES (?,?,?)')
     .bind(id, now, stable(summary))
     .run();
-  if (
-    results.length &&
-    (!previous || digest(JSON.parse(previous.summary_json)) !== digest(summary))
-  ) {
-    await env.PRIVATE_DB.prepare(
-      "INSERT OR IGNORE INTO notification_outbox(notification_id,payload_json,state,recorded_at) VALUES (?,?,'pending',?)",
-    )
-      .bind(id, stable(summary), now)
-      .run();
-  }
   return summary;
-}
-export async function deliverNotifications(
-  env: CollectorEnv,
-  now: string,
-  fetcher: typeof fetch = fetch,
-) {
-  if (!env.ALERT_WEBHOOK_URL) return { state: 'not_configured', sent: 0 };
-  const url = new URL(env.ALERT_WEBHOOK_URL);
-  if (
-    url.protocol !== 'https:' ||
-    url.username ||
-    url.password ||
-    url.port ||
-    /^(localhost|127\.|10\.|192\.168\.|169\.254\.|0\.|\[)/i.test(url.hostname)
-  )
-    return { state: 'invalid_configuration', sent: 0 };
-  const pending = await env.PRIVATE_DB.prepare(
-    "SELECT notification_id,payload_json FROM notification_outbox WHERE state='pending' AND attempts<3 ORDER BY recorded_at LIMIT 5",
-  ).all<{ notification_id: string; payload_json: string }>();
-  let sent = 0;
-  for (const row of pending.results) {
-    try {
-      await env.PRIVATE_DB.prepare(
-        'UPDATE notification_outbox SET attempts=attempts+1,last_attempt_at=? WHERE notification_id=?',
-      )
-        .bind(now, row.notification_id)
-        .run();
-      const r = await fetcher(url.toString(), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'idempotency-key': row.notification_id },
-        body: row.payload_json,
-        signal: AbortSignal.timeout(5000),
-        redirect: 'error',
-      });
-      await r.body?.cancel();
-      if (r.ok) {
-        await env.PRIVATE_DB.prepare(
-          "UPDATE notification_outbox SET state='sent',sent_at=? WHERE notification_id=?",
-        )
-          .bind(now, row.notification_id)
-          .run();
-        sent++;
-      }
-    } catch {
-      /* Persisted pending outbox survives; never log URL or response body. */
-    }
-  }
-  return { state: sent === pending.results.length ? 'delivered' : 'pending', sent };
 }
 export async function watchdog(
   env: CollectorEnv,

@@ -15,6 +15,9 @@ export type NetworkOptions = {
   random?: () => number;
   timeout_ms?: number;
   onAttempt?: (attempt: Attempt) => Promise<void>;
+  // Validated bounded body only; never headers, credentials, redirects or OAuth responses.
+  // Persistence failures must not be retried as a new market-data acquisition.
+  onBody?: (body: { text: string; observed_at: string }) => Promise<void>;
   validators?: { etag: string | null; last_modified: string | null };
 };
 export class FetchFailure extends Error {
@@ -53,6 +56,13 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
   const now = opt.now ?? (() => new Date().toISOString());
   const fetcher = opt.fetcher ?? fetch,
     sleep = opt.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const recordAttempt = async (a: Attempt) => {
+    try {
+      await opt.onAttempt?.(a);
+    } catch {
+      throw new FetchFailure('attempt_log_failed');
+    }
+  };
   for (let attempt = 1; attempt <= 3; attempt++) {
     const started = now(),
       clock = Date.now(),
@@ -80,7 +90,7 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
       );
       status = response.status;
       if (status === 304) {
-        await opt.onAttempt?.({
+        await recordAttempt({
           attempt,
           status,
           code: 'revalidated',
@@ -141,26 +151,48 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
         void reader.cancel().catch(() => {});
       }
       if (!text.trim()) throw new FetchFailure('empty_response');
-      await opt.onAttempt?.({
+      const observed_at = now();
+      clearTimeout(timer);
+      try {
+        await opt.onBody?.({ text, observed_at });
+      } catch {
+        throw new FetchFailure('recovery_capture_failed');
+      }
+      await recordAttempt({
         attempt,
         status,
         code: 'success',
         started_at: started,
         duration_ms: Date.now() - clock,
       });
-      return { text, status, headers: response.headers, observed_at: now() };
+      return { text, status, headers: response.headers, observed_at };
     } catch (error) {
       const e =
         error instanceof FetchFailure
           ? error
           : new FetchFailure(controller.signal.aborted ? 'timeout' : 'network_error');
-      await opt.onAttempt?.({
-        attempt,
-        status,
-        code: e.message,
-        started_at: started,
-        duration_ms: Date.now() - clock,
-      });
+      // PoC's success-cache budget applies even when a 2xx body is malformed,
+      // interrupted or undecodable, and even if attempt metadata cannot be logged.
+      const pocRetryAt =
+        source.adapter === 'price_of_compute' && status !== null && status >= 200 && status < 300
+          ? new Date(Date.parse(now()) + 3600000).toISOString()
+          : null;
+      if (e.message !== 'attempt_log_failed') {
+        try {
+          await recordAttempt({
+            attempt,
+            status,
+            code: e.message,
+            started_at: started,
+            duration_ms: Date.now() - clock,
+          });
+        } catch (error) {
+          if (pocRetryAt) throw new FetchFailure('attempt_log_failed', pocRetryAt);
+          throw error;
+        }
+      }
+      // Never issue an internal sub-second retry after a PoC HTTP 2xx.
+      if (pocRetryAt) throw new FetchFailure(e.message, pocRetryAt);
       if (
         attempt === 3 ||
         !['retryable_429', 'retryable_5xx', 'timeout', 'network_error'].includes(e.message)
@@ -214,7 +246,7 @@ export async function fetchGPURequest(
           },
           body: 'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope',
         },
-        opt,
+        { ...opt, onBody: undefined },
       );
       const body = JSON.parse(response.text);
       if (

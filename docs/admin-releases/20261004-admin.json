@@ -1,0 +1,23 @@
+{
+  "record_id": "20261004-admin-97277de-verified",
+  "worker": "ai-investment-admin",
+  "version_id": "51e3f59d-1586-4507-8370-fdca8823e9f4",
+  "git_sha": "97277dee49f888c69e54cef72e8566d1d432ef73",
+  "tree_sha": "892d6b742c536e35c9e7f4b48e9aae3e856b9bbd",
+  "artifact_sha256": "582bc8c781f1e152135e1ac7b8649ab25774716c8ec671c60b59ebd8c446eaec",
+  "event": "verified",
+  "recorded_at": "2026-10-04T05:03:40.541Z",
+  "traffic_percent": 100,
+  "evidence_ref": "outputs/admin-operations/release-records/20261004-admin-evidence.json",
+  "evidence_sha256": "cd506b8429b4333325ba234a05049e793d6b77446e29f856f6030548b4be3589",
+  "checks": {
+    "deployment_readback": "passed",
+    "artifact_hash": "passed",
+    "settings_preserved": "passed",
+    "authenticated_read_smoke": "passed",
+    "observation_preservation": "passed",
+    "access_preserved": "passed"
+  },
+  "migration_names": [],
+  "github_url": null
+}

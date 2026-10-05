@@ -47,6 +47,11 @@ export function isoTime(s: string): boolean {
     new Date(s).toISOString() === s.replace(/Z$/, s.includes('.') ? 'Z' : '.000Z')
   );
 }
+export function notificationEpoch(at: string | undefined, now: string): string | null {
+  return at && isoTime(at) && isoTime(now) && Date.parse(at) <= Date.parse(now)
+    ? new Date(at).toISOString()
+    : null;
+}
 export async function batches(db: D1Database, statements: D1PreparedStatement[]) {
   const metrics = { rows_read: 0, rows_written: 0, sql_statements: statements.length };
   for (let i = 0; i < statements.length; i += 20)

@@ -1,0 +1,22 @@
+{
+  "worker": "ai-investment-admin",
+  "version_id": "2aa88e1d-ca7d-4fbc-9414-d1984001dcb8",
+  "git_sha": "c711de5e99d448b41fffe5d37f62244389f06f13",
+  "event": "verified",
+  "traffic_percent": 100,
+  "recorded_at": "2026-10-03T10:50:50.077Z",
+  "checks": {
+    "deployment_readback": "passed",
+    "artifact_hash": "passed",
+    "settings_preserved": "passed",
+    "http_smoke": "passed"
+  },
+  "artifact_kind": "historical_asset_hash_manifest",
+  "provenance": [
+    {
+      "file": "admin-ecb-release-c711de5.json",
+      "sha256": "ac3e2303ec3074a335feee792c6ea754745822cd51be357841844c7a43cd6e40"
+    }
+  ],
+  "scope": "Verified historical deployment only; current traffic must be checked against Cloudflare."
+}

@@ -1,0 +1,28 @@
+{
+  "record_id": "20261004-collector-a534ff0-verified",
+  "worker": "ai-investment-collector",
+  "version_id": "764bb171-582b-47a0-ad40-5d6aadc61ee6",
+  "git_sha": "a534ff06c776987844dad68ad7112501b52fc82b",
+  "tree_sha": "0ac8dc59eba8d964e49bff29d232f0f496dc7ed1",
+  "artifact_sha256": "145c6db6f83d66b60c7ee38c4693759880fcfdf635045d837a8869cde805e8ed",
+  "event": "verified",
+  "recorded_at": "2026-10-04T05:03:40.541Z",
+  "traffic_percent": 100,
+  "evidence_ref": "outputs/admin-operations/release-records/20261004-collector-evidence.json",
+  "evidence_sha256": "39609c93e14f01b231bddaacd9afa1003588874393954c670281837af134aa0d",
+  "checks": {
+    "deployment_readback": "passed",
+    "artifact_hash": "passed",
+    "settings_preserved": "passed",
+    "authenticated_read_smoke": "passed",
+    "observation_preservation": "passed",
+    "access_preserved": "passed"
+  },
+  "migration_names": [
+    "0001_initial.sql",
+    "0002_gpu.sql",
+    "0003_models_catalog.sql",
+    "0005_admin_release_ledger.sql"
+  ],
+  "github_url": null
+}

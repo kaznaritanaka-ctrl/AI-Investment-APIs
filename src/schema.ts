@@ -254,7 +254,9 @@ export type CollectorEnv = {
   EVIDENCE: R2Bucket;
   ENVIRONMENT: 'production' | 'test' | 'development';
   ALERT_WEBHOOK_URL?: string;
+  NOTIFICATIONS_ACTIVE_FROM?: string;
   AGENT_ENABLED?: string;
+  SCHEMA_RECOVERY_ENABLED?: string;
   COLLECTION_CRON?: string;
   COLLECTION_HOUR?: string;
   COLLECTION_MINUTE?: string;

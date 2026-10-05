@@ -5,6 +5,9 @@ import { assertPersistenceAllowed, canPublish } from './policy';
 import { publicObservation } from './publication';
 import { hash, stable, D, batches } from './util';
 export const GPU_PARSER = 'gpu-20260927.1';
+export const PRICE_OF_COMPUTE_PARSER = 'gpu-price-of-compute-20261005.2';
+export const gpuParser = (s: Source) =>
+  s.adapter === 'price_of_compute' ? PRICE_OF_COMPUTE_PARSER : GPU_PARSER;
 export type Snapshot = {
   snapshot_id: string;
   run_id: string;
@@ -49,7 +52,7 @@ export async function ingestGPUPage(
   artifact: string,
   e: Evidence,
   now: string,
-  parser = GPU_PARSER,
+  parser = gpuParser(s),
 ) {
   await assertPersistenceAllowed(env, s, now);
   const page = e.gpu_page;

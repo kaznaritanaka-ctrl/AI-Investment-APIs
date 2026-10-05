@@ -4,7 +4,8 @@ import { collectSource, type RunResult } from '../src/pipeline';
 import { recordSummary, watchdog } from '../src/operations';
 import { sourceObserver, safeLogCode } from '../src/telemetry';
 import { revokeSource } from '../src/publication';
-import collector from '../src/collector';
+// Node exercises the unchanged scheduled handler; admin-rpc.test covers the workerd entrypoint.
+import collector from '../src/collector-handlers';
 import { stable } from '../src/util';
 import { source, fxFetch, time } from './helpers';
 
@@ -152,7 +153,7 @@ it('keeps idle continuation summaries but creates no idle notifications or fresh
   ).toBe(5);
   expect(
     await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM notification_outbox').first('n'),
-  ).toBe(2);
+  ).toBe(0);
   const failure: RunResult = {
     source_id: 'ecb',
     run_id: 'a'.repeat(64),
@@ -164,11 +165,11 @@ it('keeps idle continuation summaries but creates no idle notifications or fresh
   });
   expect(
     await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM notification_outbox').first('n'),
-  ).toBe(3);
+  ).toBe(0);
   expect(checked.freshness_evaluation).toBe('source_calendar_not_evaluated');
 });
 
-it('retains untyped legacy summary/outbox rows and compares only the same process kind', async () => {
+it('retains legacy summary/outbox rows without converting them into active incidents', async () => {
   const legacy = JSON.stringify({ sources: [], changed: 0, anomalies: 0 });
   await local.env.PRIVATE_DB.prepare('INSERT INTO daily_summaries VALUES (?,?,?)')
     .bind('legacy', time, legacy)

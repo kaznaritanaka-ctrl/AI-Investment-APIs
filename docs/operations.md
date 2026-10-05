@@ -1,14 +1,17 @@
-# 自動運転と例外対応
+# 運用手順（現在地: 2026-10-04）
+
+[本番対応・受け入れ記録](operations-acceptance.md)を先に参照。0005/現Collector/Admin/台帳5件は反映済み、通知0006とそのcodeは候補です。
+
 
 通常: Cronが取得→R2証拠→正規化/検証→private D1→許可済みpublic D1→summary/outboxを実行する。agent_enabled=falseで完走する。価格変化が無くても翌日の観測行を残す。取得していない日を0や前日価格の新観測で埋めない。
 
 取得: sourceごと同時数1、20秒timeout（bodyを含む）、最大3試行、429 Retry-After、有限backoff。30秒を超えるRetry-Afterはその場で待ち続けずnext_attempt_atを記録。403・redirectは追わない。異なる実行スロットでの失敗が続くと24時間のsource circuitを開く。他ソースは続行する。
 
-watchdog: 同日予定runの欠落/未完了を検出。保存済みR2があるrunだけ再処理し、全ソースの再取得はしない。復旧は最大3回。欠測はmissingで残る。watchdog自身と日次Cronの双方が停止したケースはCloudflareのplatform health監視が必要で、外部死活監視は未接続。
+watchdog: 同日予定runの欠落/未完了を検出。保存済みR2があるrunだけ再処理し、全ソースの再取得はしない。復旧は最大3回。欠測はmissingで残る。watchdog自身と日次Cronの双方が停止したケースはCloudflare外で動くread-only監視と監視自体のreceipt欠落確認が必要で、確認したCloudflare/ローカル予約内では稼働中の独立監視を確認できていません。
 
-通知: summaryはprivate D1へ先に保存。collection／watchdog／continuationを区別し、同じ処理種別の非空summaryから状態・変更・異常件数が変化した場合にoutboxを作る。対象なしcontinuationは記録だけ残し、通知しない。復旧も状態変化になる。Webhook未設定はnot_configured、失敗はpendingのまま保持、最大3送信試行。Webhook受信側はidempotency-keyで重複を防ぐ。Webhook URL、認証header、応答bodyはログに出さない。通知不達でもsummaryを失わない。既存pendingはWebhook設定後に送信対象になるため、設定前に個別の扱いを承認する。
+通知: summaryはprivate D1へ保存。現本番では状態・変化のsummaryから旧outboxを作成し、Webhookは未設定です。今回の候補は0006と通知epochを用い、異常/継続24時間/復旧だけを通知します。旧pendingを再送・削除・sent化しません。具体的な有効化条件、dry-run、有限再試行とrollbackは[受け入れ手順](operations-acceptance.md)を参照。
 
-2026-09-30のslot互換修正、安全なログ、pending分類、性能比較と本番反映案は[Collector継続運用リリース計画](collector-reliability-release.md)を参照。実装は本番反映待ちであり、旧誤missing記録を削除・更新していない。価格不変の正常再観測、Collector実行だけの完了、sourceの日付更新は別の事実として扱う。
+2026-09-30のslot互換修正、安全なログ、pending分類、性能比較と本番反映案は[Collector継続運用リリース計画](collector-reliability-release.md)を参照。当時のslot互換修正は現本番に含まれ、旧誤missing記録を削除・更新していない。価格不変の正常再観測、Collector実行だけの完了、sourceの日付更新は別の事実として扱う。
 
 品質: 欠損、未知tier、不正値、選定カタログの不完全性、大きな同条件変化を隔離。元証拠とprivate観測/品質イベントは保持。大幅変化を市場シグナルや誤りと断定しない。APIが前回正常値を返す場合はheld_atによるstale_reasonを表示。古い値は鮮度が回復したように更新しない。
 
@@ -28,7 +31,7 @@ watchdog: 同日予定runの欠落/未完了を検出。保存済みR2があるr
 
 毎回の成功したprivate書込み後、正規化観測と変更イベント、policy版をprivate R2 archiveへ追記する。bodyを含むraw証拠とは別。archiveのSHA-256をR2 metadataに付ける。raw_artifactsのexpires_atはcollectorが削除し、監査metadataは残す。R2 lifecycleは孤立raw/未登録オブジェクトとarchiveの上限も担うため初期設定必須。
 
-D1はCloudflare Time Travel（Free 7日、Paid 30日）を一次復元手段とする。[公式復元資料](https://developers.cloudflare.com/d1/reference/time-travel/)。復元時はまず公開を停止し、対象時刻とDB IDを確認し、別環境で復元検証。private/publicを同じ復元境界へ合わせ、現在の権限設定を再適用してから公開する。古い権限を復元で復活させない。
+D1はCloudflare Time Travel（Free 7日、Paid 30日）を一次復元手段とする。[公式復元資料](https://developers.cloudflare.com/d1/reference/time-travel/)。Time Travelは同じDBを上書きし、別DBへのclone/forkは未対応です。対象DB/時刻・直前bookmark・影響範囲の個別承認を得て実施します。別環境の訓練には別途承認したSQL export/importを使います。private/publicを同じ復元境界へ合わせ、現在の権限設定を再適用してから公開する。古い権限を復元で復活させない。
 
 R2証拠が残る期間はparser再実行で履歴・公開投影を再構築できる。原SQL DB全体をR2から自動リストアするコマンド、archive-onlyの長期一括restoreと大規模移行は後続。現段階で災害復旧訓練済みとは主張しない。
 
@@ -44,7 +47,7 @@ GPU訂正の内部入口はsrc/gpu-corrections.tsのcorrectGPUPageです。保�
 
 正規化retentionは1回につき1source/snapshot、最大50行を削除し、先にpublicをwithdrawします。raw/archiveのexpiry処理とsource別R2 lifecycleを併用します。大量削除の遅れが許諾期限を超えないよう、開始前のretention/capture容量審査で余裕を持たせます。復元時は公開停止→現行policy/retentionの適用→検証→再公開です。
 
-healthのlast_collector_completed_atはcollector処理が最後まで走った時刻で、全source成功や市場正常を保証しません。monitor_connected=0は外部監視未接続です。通知Webhook未設定は既存outboxにpendingで保存し、送信済みとはしません。collector自体が起動しない障害の検出には外部read-only監視を別途接続します。
+healthのlast_collector_completed_atはcollector処理が最後まで走った時刻で、全source成功や市場正常を保証しません。monitor_connected=0は接続の記録がないことを示し、外部監視の不存在は別途設定/実行証拠で確認します。現在の本番はWebhook未設定で旧summaryをoutboxのpendingとして保存しており、送信済みではありません。今回の未配信候補では、正常summaryを通知にせず、承認したNOTIFICATIONS_ACTIVE_FROMのepochで異常/復旧を管理します。collector自体が起動しない障害の検出には外部read-only監視を別途接続します。
 
 ## Models.dev P0の運用
 
@@ -54,4 +57,4 @@ healthのlast_collector_completed_atはcollector処理が最後まで走った�
 
 失敗したrunは最大3回の復旧予算、取得1回内は最大3 HTTP試行です。証拠が保存済みなら再HTTPしません。未取得runは予定から6時間を過ぎるとcapture_window_expired。collection_runsのlease・next_attempt_at・recovery_countで有限再開し、過去値を作りません。再解析は`collectModels`のreview付きrevisionで、元観測時刻と別parser版を使います。根拠のない大幅価格変化の隔離は翌日の反復だけでは解除しません。
 
-有効化・停止・復元の一度だけの操作は[専用手順](models-enablement.md)。通知/外部監視の未設定、現行Freeでの実行予算不足、scope権利の未承認を明示します。追加の公開HTTP操作口、日常のCSV移動、定常LLMはありません。
+有効化・停止・復元の一度だけの操作は[専用手順](models-enablement.md)。現本番はPaid/承認済みv3です。通知送達・独立監視・新版7日間実測の未受け入れは別に明示します。追加の公開HTTP操作口、日常のCSV移動、定常LLMはありません。
