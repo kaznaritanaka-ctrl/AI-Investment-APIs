@@ -171,14 +171,28 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
         error instanceof FetchFailure
           ? error
           : new FetchFailure(controller.signal.aborted ? 'timeout' : 'network_error');
-      if (e.message !== 'attempt_log_failed')
-        await recordAttempt({
-          attempt,
-          status,
-          code: e.message,
-          started_at: started,
-          duration_ms: Date.now() - clock,
-        });
+      // PoC's success-cache budget applies even when a 2xx body is malformed,
+      // interrupted or undecodable, and even if attempt metadata cannot be logged.
+      const pocRetryAt =
+        source.adapter === 'price_of_compute' && status !== null && status >= 200 && status < 300
+          ? new Date(Date.parse(now()) + 3600000).toISOString()
+          : null;
+      if (e.message !== 'attempt_log_failed') {
+        try {
+          await recordAttempt({
+            attempt,
+            status,
+            code: e.message,
+            started_at: started,
+            duration_ms: Date.now() - clock,
+          });
+        } catch (error) {
+          if (pocRetryAt) throw new FetchFailure('attempt_log_failed', pocRetryAt);
+          throw error;
+        }
+      }
+      // Never issue an internal sub-second retry after a PoC HTTP 2xx.
+      if (pocRetryAt) throw new FetchFailure(e.message, pocRetryAt);
       if (
         attempt === 3 ||
         !['retryable_429', 'retryable_5xx', 'timeout', 'network_error'].includes(e.message)

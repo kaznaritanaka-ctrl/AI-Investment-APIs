@@ -4,7 +4,7 @@ import { minuteSlot } from './run-identity';
 import { visibleJoin, visibleSQL } from './publication';
 import { PARSER_VERSION } from './ingest';
 import { MODELS_PARSER } from './models';
-import { GPU_PARSER } from './gpu-store';
+import { gpuParser } from './gpu-store';
 
 export const COLLECTOR_VERSION = 'collector-reliability-20260930.1';
 export type ProcessKind = 'collection' | 'watchdog' | 'continuation';
@@ -36,6 +36,8 @@ const codes = new Set([
   'retryable_429',
   'retryable_5xx',
   'source_backoff',
+  'price_of_compute_success_cache',
+  'price_of_compute_reservation_failed',
   'timeout',
   'network_error',
   'attempts_exhausted',
@@ -98,7 +100,7 @@ export function sourceObserver(
       configured_parser_version: source.models
         ? MODELS_PARSER
         : source.gpu
-          ? GPU_PARSER
+          ? gpuParser(source)
           : PARSER_VERSION,
       process_kind: process,
       run_kind: 'collection',

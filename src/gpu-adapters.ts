@@ -3,6 +3,8 @@ import { type Source, type Evidence, type Candidate } from './schema';
 import {
   GPURentalSchema,
   GPUSecondarySchema,
+  PriceOfComputeMetadata,
+  gpuRecordKey,
   identifyGPU,
   classifyListing,
   type GPURental,
@@ -10,6 +12,7 @@ import {
 } from './gpu';
 import { type Partition, validateNextURL } from './request-plan';
 import { stable, hash, decimal, D, isoTime, isoDate } from './util';
+import { projectPriceOfCompute } from './price-of-compute';
 type Obj = Record<string, unknown>;
 const object = (v: unknown): Obj => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('gpu_schema_invalid');
@@ -153,7 +156,11 @@ export async function gpuEvidenceFromBody(
   observed: string,
   synthetic: boolean,
 ): Promise<Evidence> {
-  const root = object(parseLossless(text, undefined, (token) => token));
+  // PoC parses actual LosslessNumber tokens itself. Do not run the generic token-to-string
+  // path, which would also turn numeric provider identifiers into apparently valid labels.
+  const poc =
+    s.adapter === 'price_of_compute' ? projectPriceOfCompute(text, p.query.sku, observed) : null;
+  const root = poc ? {} : object(parseLossless(text, undefined, (token) => token));
   if (root.error || root.errors) throw new Error('gpu_error_response');
   const records: (GPURental | GPUSecondary)[] = [],
     issues: string[] = [];
@@ -284,27 +291,42 @@ export async function gpuEvidenceFromBody(
           return GPURentalSchema.parse(d);
         });
     }
-  } else if (s.adapter === 'price_of_compute') {
-    if (typeof root.sku !== 'string' || !Array.isArray(root.providers))
-      throw new Error('gpu_schema_invalid');
-    received = root.providers.length;
+  } else if (poc) {
+    if (page !== 0) throw new Error('pagination_unsupported');
+    received = poc.records.length;
     total = received;
-    for (const [index, value] of root.providers.entries())
-      keep(() => {
-        const row = object(value),
-          provider = str(row.provider),
-          d = emptyRental(provider, p.query.sku, String(root.sku).replaceAll('-', ' '), synthetic);
-        Object.assign(d, {
-          amount_decimal: decimal(row.usd_per_gpu_hr),
-          billing_unit: 'gpu_hour',
-          secondary_source: true,
-          origin_source_id: provider,
-          origin_offer_id: null,
-          evidence_pointer: 'providers/' + index,
-        });
-        d.contract_type = row.pricing_type === 'on_demand' ? 'on_demand' : 'unknown';
-        return GPURentalSchema.parse(d);
+    const { records: _rows, ...metadata } = poc;
+    // Reject the whole response on a changed contract before evidence persistence.
+    for (const [index, row] of poc.records.entries()) {
+      const d = emptyRental(
+        row.provider,
+        row.requested_sku,
+        row.source_sku.replaceAll('-', ' '),
+        synthetic,
+      );
+      Object.assign(d, {
+        amount_decimal: row.amount_decimal,
+        billing_unit: 'gpu_hour',
+        region: row.source_region,
+        region_evidence: row.source_region ? 'providers/' + index + '/region' : null,
+        contract_type:
+          row.source_pricing_type === 'community' ? 'unknown' : row.source_pricing_type,
+        secondary_source: true,
+        origin_source_id: row.origin_source_id,
+        origin_offer_id: null,
+        evidence_pointer: 'providers/' + index,
+        price_of_compute: {
+          ...metadata,
+          requested_sku: row.requested_sku,
+          source_sku: row.source_sku,
+          source_pricing_type: row.source_pricing_type,
+          source_observed_at: row.source_observed_at,
+        },
       });
+      if (p.models.length && (!d.accelerator_model || !p.models.includes(d.accelerator_model)))
+        d.exclusion_reasons.push('outside_selected_models');
+      records.push(GPURentalSchema.parse(d));
+    }
   } else throw new Error('gpu_adapter_not_implemented');
   if (records.length > s.max_records) throw new Error('page_record_limit_exceeded');
   if (
@@ -314,7 +336,9 @@ export async function gpuEvidenceFromBody(
     )
   )
     issues.push('future_listing_date');
-  const body = stable({ records });
+  const { records: _rows, ...pocMetadata } = poc ?? { records: [] };
+  const metadata = poc ? PriceOfComputeMetadata.parse(pocMetadata) : null;
+  const body = stable({ records, ...(metadata ? { price_of_compute: metadata } : {}) });
   return {
     format: 'gpu_projection_v1',
     body,
@@ -346,6 +370,21 @@ export function parseGPUProjection(s: Source, e: Evidence): Candidate[] {
   const root = object(JSON.parse(e.body));
   if (!Array.isArray(root.records) || root.records.length > s.max_records)
     throw new Error('gpu_evidence_invalid');
+  const metadata =
+    s.adapter === 'price_of_compute' ? PriceOfComputeMetadata.parse(root.price_of_compute) : null;
+  if (
+    metadata &&
+    (metadata.retrieved_at !== e.observed_at ||
+      metadata.source_day > e.observed_at.slice(0, 10) ||
+      Date.parse(metadata.source_updated_at) > Date.parse(e.observed_at))
+  )
+    throw new Error('gpu_source_time_mismatch');
+  const partition = s.gpu?.partitions.find((p) => p.id === e.gpu_page!.partition_id);
+  if (
+    metadata &&
+    metadata.source_url !== 'https://priceofcompute.com/api/v1/prices/' + partition?.query.sku
+  )
+    throw new Error('gpu_source_metadata_mismatch');
   return root.records.map((value) => {
     const domain =
       s.dataset_type === 'gpu_rental'
@@ -355,20 +394,49 @@ export function parseGPUProjection(s: Source, e: Evidence): Candidate[] {
           : null;
     if (!domain) throw new Error('gpu_dataset_mismatch');
     if (domain.synthetic !== e.synthetic) throw new Error('synthetic_origin_mismatch');
-    const key =
-      'listing_id' in domain
-        ? domain.listing_id
-        : domain.provider + '|' + domain.offer_id + '|' + (domain.region ?? 'unknown');
+    const poc = 'price_of_compute' in domain ? domain.price_of_compute : undefined;
+    if (s.adapter === 'price_of_compute') {
+      if (
+        !poc ||
+        !metadata ||
+        stable({
+          projection: poc.projection,
+          source_id: poc.source_id,
+          source_url: poc.source_url,
+          source_day: poc.source_day,
+          source_updated_at: poc.source_updated_at,
+          retrieved_at: poc.retrieved_at,
+          attribution: poc.attribution,
+        }) !== stable(metadata)
+      )
+        throw new Error('gpu_source_metadata_mismatch');
+      if (
+        poc.requested_sku !== partition?.query.sku ||
+        poc.source_sku.toLowerCase() !== poc.requested_sku ||
+        poc.source_url !== 'https://priceofcompute.com/api/v1/prices/' + poc.requested_sku ||
+        (poc.source_observed_at && Date.parse(poc.source_observed_at) > Date.parse(e.observed_at))
+      )
+        throw new Error('gpu_source_metadata_mismatch');
+    } else if (poc) throw new Error('gpu_source_metadata_mismatch');
+    const key = gpuRecordKey(domain);
     return {
       dataset: s.dataset_type as 'gpu_rental' | 'gpu_secondary',
       domain,
       entity_key: key,
       source_record_key: key,
-      source_date: null,
+      source_date: poc?.source_day ?? null,
+      // Source update time is retained explicitly; it is not an established publication time.
       source_published_at: null,
       source_effective_at: null,
       observation_basis: domain.observation_basis,
-      quality_flags: [],
+      quality_flags: poc
+        ? [
+            ...('amount_decimal' in domain && domain.amount_decimal === '0'
+              ? ['zero_price_reported']
+              : []),
+            ...(poc.source_observed_at ? [] : ['provider_observation_time_missing']),
+          ]
+        : [],
     };
   });
 }

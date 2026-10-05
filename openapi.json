@@ -4596,6 +4596,102 @@
                   "serving_provider": {
                     "type": "string"
                   },
+                  "price_of_compute": {
+                    "type": "object",
+                    "properties": {
+                      "projection": {
+                        "type": "string",
+                        "const": "poc_private_projection_v1"
+                      },
+                      "source_id": {
+                        "type": "string",
+                        "const": "price_of_compute"
+                      },
+                      "source_url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "source_day": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "source_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      "retrieved_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      "attribution": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string",
+                            "const": "Data: Price of Compute"
+                          },
+                          "url": {
+                            "type": "string",
+                            "const": "https://www.priceofcompute.com/"
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "requested_sku": {
+                        "type": "string",
+                        "enum": [
+                          "h100-sxm",
+                          "a100-pcie-80gb",
+                          "b200",
+                          "b300"
+                        ]
+                      },
+                      "source_sku": {
+                        "type": "string"
+                      },
+                      "source_pricing_type": {
+                        "type": "string",
+                        "enum": [
+                          "on_demand",
+                          "spot",
+                          "community"
+                        ]
+                      },
+                      "source_observed_at": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "projection",
+                      "source_id",
+                      "source_url",
+                      "source_day",
+                      "source_updated_at",
+                      "retrieved_at",
+                      "attribution",
+                      "requested_sku",
+                      "source_sku",
+                      "source_pricing_type",
+                      "source_observed_at"
+                    ],
+                    "additionalProperties": false
+                  },
                   "sale_unit": {
                     "type": "string",
                     "enum": [
@@ -6315,6 +6411,102 @@
           },
           "serving_provider": {
             "type": "string"
+          },
+          "price_of_compute": {
+            "type": "object",
+            "properties": {
+              "projection": {
+                "type": "string",
+                "const": "poc_private_projection_v1"
+              },
+              "source_id": {
+                "type": "string",
+                "const": "price_of_compute"
+              },
+              "source_url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "source_day": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "source_updated_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "retrieved_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "attribution": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "const": "Data: Price of Compute"
+                  },
+                  "url": {
+                    "type": "string",
+                    "const": "https://www.priceofcompute.com/"
+                  }
+                },
+                "required": [
+                  "text",
+                  "url"
+                ],
+                "additionalProperties": false
+              },
+              "requested_sku": {
+                "type": "string",
+                "enum": [
+                  "h100-sxm",
+                  "a100-pcie-80gb",
+                  "b200",
+                  "b300"
+                ]
+              },
+              "source_sku": {
+                "type": "string"
+              },
+              "source_pricing_type": {
+                "type": "string",
+                "enum": [
+                  "on_demand",
+                  "spot",
+                  "community"
+                ]
+              },
+              "source_observed_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "projection",
+              "source_id",
+              "source_url",
+              "source_day",
+              "source_updated_at",
+              "retrieved_at",
+              "attribution",
+              "requested_sku",
+              "source_sku",
+              "source_pricing_type",
+              "source_observed_at"
+            ],
+            "additionalProperties": false
           },
           "sale_unit": {
             "type": "string",

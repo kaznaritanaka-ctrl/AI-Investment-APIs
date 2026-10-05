@@ -3,8 +3,9 @@ import { GPURentalSchema, GPUSecondarySchema, gpuRecordKey, type GPUDomain } fro
 import { assertPersistenceAllowed, canPublish } from './policy';
 import { syncSource } from './publication';
 import { hash, stable, isoTime } from './util';
-import { snapshot, ingestGPUPage, finalizeGPU, publishCoverage, GPU_PARSER } from './gpu-store';
+import { snapshot, ingestGPUPage, finalizeGPU, publishCoverage, gpuParser } from './gpu-store';
 import { finalizeGPUMetrics } from './gpu-metrics';
+import { parseGPUProjection } from './gpu-adapters';
 // Offline administrative entry point: one saved page per call, no HTTP control route.
 export async function correctGPUPage(
   env: CollectorEnv,
@@ -16,7 +17,7 @@ export async function correctGPUPage(
 ) {
   if (
     !revision.review_ref ||
-    revision.parser === GPU_PARSER ||
+    revision.parser === gpuParser(s) ||
     !/^[a-zA-Z0-9._-]{1,80}$/.test(revision.parser) ||
     !isoTime(revision.recorded_at)
   )
@@ -52,8 +53,10 @@ export async function correctGPUPage(
     throw new Error('correction_record_set_changed');
   const run = await hash(s.source_id + '|' + now),
     id = await hash(originalID + '|' + revision.parser + '|' + now),
-    body = stable({ records }),
+    body = stable({ ...JSON.parse(evidence.body), records }),
     evidenceHash = await hash(body);
+  // Check source-specific semantics before fixing an immutable correction envelope.
+  parseGPUProjection(s, { ...evidence, body, evidence_hash: evidenceHash });
   await env.PRIVATE_DB.prepare(
     "INSERT OR IGNORE INTO collection_runs(run_id,source_id,scheduled_for,state) VALUES (?,?,?,'correction_pending')",
   )
