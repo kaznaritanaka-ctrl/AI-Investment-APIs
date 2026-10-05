@@ -12,6 +12,7 @@ import {
 } from './admin-read';
 import type { Row, PageContext } from './admin-read';
 import { visibleJoin, visibleSQL, MIT_NOTICE } from './publication';
+import { ATTRIBUTION } from './price-of-compute';
 
 // Only normalized contract fields may leave the private store. Never forward metadata_json,
 // domain_json, error text, artifact paths or unknown keys, even to authenticated clients.
@@ -36,6 +37,9 @@ const scalarFields = [
   'tax_status',
   'gpu_sku_id',
   'provider',
+  'secondary_source',
+  'origin_source_id',
+  'origin_offer_id',
   'region',
   'country',
   'contract_type',
@@ -86,6 +90,18 @@ const scalarFields = [
 export function domainFields(value: unknown): FieldDTO[] {
   const d = obj(value),
     out: FieldDTO[] = [];
+  // Prioritize the source-native conditions and clocks so they survive list-view limits.
+  // Flatten only these known scalars; never forward the nested object or evidence fields.
+  const poc = obj(d.price_of_compute);
+  for (const name of [
+    'source_sku',
+    'source_pricing_type',
+    'source_day',
+    'source_updated_at',
+    'source_observed_at',
+    'retrieved_at',
+  ])
+    if (Object.hasOwn(poc, name)) out.push(field('price_of_compute.' + name, poc[name]));
   for (const name of scalarFields)
     if (Object.hasOwn(d, name))
       out.push(
@@ -134,6 +150,8 @@ const knownQuality = new Set([
   'zero_not_confirmed_free',
   'missing_input_output',
   'invalid_price',
+  'zero_price_reported',
+  'provider_observation_time_missing',
   'negative_price',
   'price_parse_error',
   'missing_required_field',
@@ -333,7 +351,10 @@ async function project(
             completed_at: stamp(pub?.completed_at),
           },
       issues,
-      attribution: source?.attribution_text ?? '',
+      attribution:
+        source?.adapter === 'price_of_compute'
+          ? ATTRIBUTION.text
+          : (source?.attribution_text ?? ''),
       source_url: safeURL(source?.source_url),
       conditions: source?.policy.conditions ?? [],
       license_notice: source?.adapter === 'models_dev' ? MIT_NOTICE : null,

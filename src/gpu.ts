@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DecimalString, type Source, type Evidence } from './schema';
 import catalogData from '../config/gpu-catalog.json';
+import { ATTRIBUTION, PROJECTION_VERSION } from './price-of-compute';
 const currency = z.string().regex(/^[A-Z]{3}$/);
 const country = z
   .string()
@@ -70,10 +71,31 @@ function regionAndAvailability(
 }
 export const GPUSchema = rentalBase.superRefine(regionAndAvailability);
 export type GPUQuote = z.infer<typeof GPUSchema>;
+export const PriceOfComputeMetadata = z
+  .object({
+    projection: z.literal(PROJECTION_VERSION),
+    source_id: z.literal('price_of_compute'),
+    source_url: z.string().url(),
+    source_day: z.iso.date(),
+    source_updated_at: z.iso.datetime(),
+    retrieved_at: z.iso.datetime(),
+    attribution: z
+      .object({ text: z.literal(ATTRIBUTION.text), url: z.literal(ATTRIBUTION.url) })
+      .strict(),
+  })
+  .strict();
+const PriceOfComputeQuote = PriceOfComputeMetadata.extend({
+  requested_sku: z.enum(['h100-sxm', 'a100-pcie-80gb', 'b200', 'b300']),
+  source_sku: z.string(),
+  source_pricing_type: z.enum(['on_demand', 'spot', 'community']),
+  source_observed_at: z.iso.datetime().nullable(),
+}).strict();
 export const GPURentalObject = rentalBase
   .extend({
     ...GPUIdentity.shape,
     serving_provider: z.string(),
+    // Additive and source-scoped: legacy GPU records keep their shape and identity.
+    price_of_compute: PriceOfComputeQuote.optional(),
     sale_unit: z.enum(['single_gpu', 'multi_gpu_lot', 'server', 'rack', 'unknown']),
     price_scope: z.enum(['public', 'account_specific', 'promotion', 'unknown']),
     minimum_gpu_count: z.number().int().positive().nullable(),
@@ -225,7 +247,14 @@ export function gpuAmount(d: GPUDomain) {
 export function gpuRecordKey(d: GPUDomain) {
   return 'listing_id' in d
     ? d.listing_id
-    : d.provider + '|' + d.offer_id + '|' + (d.region ?? 'unknown');
+    : d.price_of_compute
+      ? JSON.stringify([
+          d.price_of_compute.requested_sku,
+          d.provider,
+          d.price_of_compute.source_pricing_type,
+          d.region,
+        ])
+      : d.provider + '|' + d.offer_id + '|' + (d.region ?? 'unknown');
 }
 export function gpuComparison(d: GPUDomain) {
   if ('listing_id' in d)
@@ -259,6 +288,7 @@ export function gpuComparison(d: GPUDomain) {
     sale_unit: d.sale_unit,
     count: d.gpu_count,
     contract: d.contract_type,
+    ...(d.price_of_compute ? { source_pricing_type: d.price_of_compute.source_pricing_type } : {}),
     interruptible: d.interruptible,
     minimum_term: d.minimum_term,
     commitment: d.commitment,

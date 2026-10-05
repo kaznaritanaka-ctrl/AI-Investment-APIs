@@ -163,6 +163,8 @@ it('marks Price of Compute provider quotes secondary and leaves availability unk
     time,
     stable({
       sku: 'H100-SXM',
+      day: '2026-10-03',
+      updated_at: '2026-10-03T18:00:00Z',
       providers: [{ provider: 'synthetic', pricing_type: 'on_demand', usd_per_gpu_hr: '7' }],
     }),
     time,

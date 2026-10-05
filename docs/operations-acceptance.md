@@ -215,3 +215,22 @@ private 0006未適用、private適用済み0001/0002/0003/0005、public適用済
 自動production deploy・未検証の自動公開は意図的に無効で、今回有効化する残件には数えない。価格/単位/意味の推測、前日値による欠測補完、source rights/retentionの自動変更も許可しない。ECB/Modelsの内部policy再確認期限2026-12-26（30日前11月26日、7日前12月19日）は既存の将来確認事項であり、元ライセンスの失効日ではない。
 
 独立GPU checkoutと元`work/p0-main-integration`の未コミット文書は変更していない。既に完了したP0、ECB表示修正、8管理ページ、0005、a534ff06/97277deeの配信、配信台帳5件は保留に戻さない。
+
+## 2026-10-05 Price of Compute統合候補（未有効化・未配信）
+
+所有者提供の`price-of-compute-private-readiness-20261005.zip`を検査し、最新API branchの`b50edd3`へ統合した。添付文書は権利・保持期間・本番操作への新しい承認とは扱っていない。コード候補は`0d00e7f7062bb8e310623864be00281eaecf60a7`、[Draft PR #8](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/8)は#7のbranchを土台とする。main mergeと本番反映は行っていない。入力hash、変更内容、権利境界、独立GPU branchとの照合は[PoC統合記録](price-of-compute-integration.md)に記載した。
+
+provider・pricing type・regionの識別、提供元と取得側の時刻、private表示の出典、保存済みEvidenceの再利用、HTTP 2xx後のsource単位cooldownを追加した。レビューで見つかったrootの未知フィールドを無視する経路を修正し、pagination・currency・unit・basis・scopeの未確認変更は公開前に停止する。PoC専用parserは`gpu-price-of-compute-20261005.2`、他sourceのparser版は維持した。
+
+同じ固定コードで、2026-10-05 10:49:37–11:00:54 JSTのローカル再実行は**24 files / 248 tests、型・境界、runtime、Collector/API dry-run build、offline preflight/checker、生成物差分の全工程が成功**した。[GitHub CI 37252486501](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/actions/runs/37252486501)も対象head`0d00e7f`で248件と全CI工程が成功。最初のローカル実行はesbuildのsandbox内ディレクトリ読取り拒否で既存Admin RPCが1件失敗したが、同一コードを通常権限で全工程再実行した。初回247件・重点54件・添付元244件を足し合わせていない。検証中の並行編集はなく、この記録追記は文書のみの変更である。
+
+| 残件 | 現在の境界・必要な対応 |
+|---|---|
+| PoCのprivate policy・対象SKU・保持条件 | sourceは無効、9用途すべて`review_required`のまま。H100のみ、Evidence/archive/正規化/backupの7/7/180/30日は未適用の提案であり、権利・保持の新しいpolicy承認が必要 |
+| 日次の取得予算 | 現実装は1回の呼出しにつき最大3試行とsource全体の2xx後cooldown。提案の「SKU別1日3回」を保証するdurable集計は未実装。複数SKU化では共有capture windowも再検証する |
+| 監視と鮮度 | operations checker/overnightはECB・Modelsのみ。PoC対応と提供元価格の鮮度表示は未実装で、取得時刻の新しさを価格の新しさと扱わない。runner・schedule・Secrets・実通知は別承認 |
+| schema障害の再解析 | 許可済みprojectionを保存できた場合は再利用可能。PoCのprojection前の拒否本文は保存しないため、その日の本文を後から再解析できるとは扱わない。raw保存の権利を推定しない |
+| live・本番反映 | 今回live価格APIは呼んでいない。実scope/単位/条件、CPU/容量、初回収集は未検証。source有効化、最終artifact、deployは別途レビューと直前承認が必要 |
+| 独立GPU・電力との合流 | `a0196dc`は変更していない。読み取りのmerge simulationで8ファイルの競合を記録した。後日、両方の変更を維持して解消し、統合後の全体検証をやり直す |
+
+PoC固有のmigrationは追加していない。親候補のprivate0006未適用という既存の反映条件は残り、独立した0004とは混在させない。通知無効、旧Collectorへのrollback時のWebhook Secret不存在確認または別承認済み無効化、Secrets・権利・保持期間を変更しない境界も継続する。ECB/Modelsの本番設定、Admin checkout、元operations文書は変更していない。
