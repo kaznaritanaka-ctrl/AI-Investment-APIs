@@ -61,7 +61,7 @@ try {
   for (const count of [100, 1000, 10000]) {
     await db
       .prepare(
-        `WITH RECURSIVE numbers(n) AS (SELECT ? UNION ALL SELECT n+1 FROM numbers WHERE n<?)
+        `WITH RECURSIVE numbers(n) AS (SELECT CAST(? AS INTEGER) UNION ALL SELECT n+1 FROM numbers WHERE n<?)
       INSERT INTO published_observations(observation_id,batch_id,source_id,policy_version,dataset,entity_key,observed_at,recorded_at,public_json)
       SELECT 'synthetic-'||n,'synthetic-batch','synthetic','v1','fx','entity-'||(n%10),
       '2026-10-04T18:17:00.000Z','2026-10-04T18:18:00.000Z',
@@ -79,7 +79,7 @@ try {
       const started = performance.now();
       const response = await mf.dispatchFetch('https://synthetic.test' + path);
       const r = await response.json();
-      assert.equal(r.status, 200);
+      assert.equal(r.status, 200, path + ' ' + JSON.stringify(r.body));
       results.push({
         synthetic_rows: count,
         path,
