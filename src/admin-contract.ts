@@ -83,6 +83,87 @@ export const Invocation = z
     sent_at: time,
   })
   .strict();
+// Operational metadata only. Never include evidence paths, payloads or arbitrary errors.
+export const RunRecovery = z
+  .object({
+    state: z.enum(['recorded', 'not_reported', 'unavailable_at_as_of']),
+    detected_at: time,
+    classification: z
+      .enum([
+        'authentication',
+        'rate_limit',
+        'transport',
+        'response_contract',
+        'storage_or_publication',
+        'schema_drift',
+        'unclassified',
+      ])
+      .nullable(),
+    stage: z
+      .enum(['http', 'body', 'projection', 'parser', 'private_store', 'publication'])
+      .nullable(),
+    schema_drift: z.boolean().nullable(),
+    diagnostic_codes: z
+      .array(
+        z.enum([
+          'json_shape',
+          'wrapper_changed',
+          'pagination_contract',
+          'semantics_changed',
+          'field_type_or_enum',
+          'field_type',
+          'unknown_pricing_field',
+          'pricing_basis_changed',
+          'record_scope_changed',
+          'required_field_missing',
+          'identifier_or_shape_changed',
+          'identifier_changed',
+          'contract_failure',
+        ]),
+      )
+      .max(64),
+    evidence_state: z.enum([
+      'preserved',
+      'partial',
+      'metadata_only',
+      'not_captured',
+      'unavailable',
+      'expired',
+      'not_reported',
+    ]),
+    evidence_hash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable(),
+    evidence_expires_at: time,
+    recovery_result: z.enum([
+      'completed_after_failure',
+      'not_needed',
+      'in_progress',
+      'not_completed',
+    ]),
+    // No external agent receipts have been imported. Do not infer agent activity.
+    agent_status: z.literal('not_reported'),
+    repair_patch: z.literal('not_reported'),
+    regression_result: z.literal('not_reported'),
+    reparse_result: z.literal('not_reported'),
+    missing_observation: z.boolean().nullable(),
+    missing_observation_count: count,
+    missing_observation_scope: z.literal('current_run_only'),
+    remaining_human_action: z.enum([
+      'none',
+      'none_yet',
+      'review_operational_alerts',
+      'confirm_source_semantics',
+      'review_repair_candidate',
+      'evidence_unavailable_do_not_backfill',
+      'restore_read_access',
+      'investigate_collection_or_publication',
+      'review_historical_state',
+    ]),
+    briefing: text,
+  })
+  .strict();
 export const Run = z
   .object({
     run_id: text,
@@ -100,6 +181,7 @@ export const Run = z
     error_code: text.nullable(),
     recovery_count: count,
     next_attempt_at: time,
+    recovery: RunRecovery.optional(),
     publication: Publication,
     checkpoints: z
       .array(
@@ -321,6 +403,7 @@ export const AdminReport = z
   .strict();
 export type Report = z.infer<typeof AdminReport>;
 export type RunDTO = z.infer<typeof Run>;
+export type RunRecoveryDTO = z.infer<typeof RunRecovery>;
 export type SourceDTO = z.infer<typeof SourceStatus>;
 export type DataDTO = z.infer<typeof DataRow>;
 export type PolicyDTO = z.infer<typeof PolicyRow>;
