@@ -26,7 +26,10 @@ const commands = {
     ['node_modules/typescript/bin/tsc', '--noEmit'],
     ['scripts/check-boundaries.mjs'],
   ],
-  test: [['node_modules/vitest/vitest.mjs', 'run', ...extra]],
+  test: [
+    ['node_modules/vitest/vitest.mjs', 'run', ...extra],
+    ['--test', 'scripts/resilience.test.mjs'],
+  ],
   build: [
     [
       'node_modules/wrangler/bin/wrangler.js',

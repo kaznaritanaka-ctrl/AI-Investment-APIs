@@ -109,6 +109,7 @@ export async function handle(
       status: 405,
       headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store' },
     });
+  if (request.url.length > 8192) return error('invalid_query', 400);
   const url = new URL(request.url),
     path = url.pathname;
   try {
@@ -119,8 +120,11 @@ export async function handle(
           key: request.headers.get('CF-Connecting-IP') ?? 'anonymous',
         })
       ).success
-    )
-      return error('rate_limited', 429);
+    ) {
+      const response = error('rate_limited', 429);
+      response.headers.set('Retry-After', '60');
+      return response;
+    }
     if (path.startsWith('/v1/gpu/')) return await gpuAPI(url, env, now);
     if (path.startsWith('/v1/models/')) return await modelsAPI(url, env, now);
     if (path === '/openapi.json') return json(openapi);
