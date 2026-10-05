@@ -2,7 +2,7 @@
 
 2026-10-05 JST。基準はAPI `cf726bd52db57f90ffb6299402982e8b6bb77d03`。作業先は独立した `codex/schema-drift-recovery-20261005`。既存のoperations作業、Admin、GPU/電力作業のcheckoutは編集しない。本番の調査結果ではなく、基準コードの調査とローカル合成データによる実装・検証である。実際の本番schema drift発生を確認したとの主張ではない。
 
-初版は **Evidenceの確保 → 機械的診断 → ローカル修復候補 → 回帰検証 → 保存Evidence再解析 → briefing用JSON**。`SCHEMA_RECOVERY_ENABLED` は未設定のまま、Wrangler設定を変更していない。自動production deploy・自動公開・外部LLM呼出し・新scheduleは実装上も無効。公開前のGitHub push/PR保留を継続する。
+初版は **Evidenceの確保 → 機械的診断 → ローカル修復候補 → 回帰検証 → 保存Evidence再解析 → briefing用JSON**。`SCHEMA_RECOVERY_ENABLED` は未設定のまま、Wrangler設定を変更していない。自動production deploy・自動公開・外部LLM呼出し・新scheduleは実装上も無効。2026-10-05に所有者がNetlifyを問題なしと確認し、対象repoのGitHub push/PR保留を解除した。[Draft PR #7](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/7)と現在の残件は[受け入れ記録](operations-acceptance.md)を参照。
 
 ## 1. 基準コードでどこまで復旧できるか
 
@@ -107,7 +107,7 @@ runnerはmetadataの読取権限、承認済みEvidenceのprivate read、local b
 
 ## 6. 本番運用を始めるための承認
 
-1. GitHub: Netlify対象repo/branch/preview公開経路の確認後、所有者がpush/PR保留を明示解除する。現branch/commitと生成patchを提示する。安全確認だけで解除しない。
+1. GitHub: 所有者確認によるpush/PR保留解除と作業branchの公開、Draft PR #7作成は2026-10-05に完了。main mergeは別承認。合成repair例のbranchは公開しておらず、実障害のpatchはその都度内容と公開範囲を確認する。
 2. Collector: 最終commit/artifact、既存Cron/bindings/rights/retentionの不変、追加R2容量・CPU、private bucket/lifecycle適合、rollbackをレビューしてupload/切替を直前承認する。`SCHEMA_RECOVERY_ENABLED=true` は別途その設定差分も承認する。初回は通知無効のまま。
 3. migration: このschema recovery自体に追加migrationはない。ただし基準cf726bdは未適用0006候補を含む。[operations-acceptance.md](operations-acceptance.md)のprivate-only 0006手順を別承認するか、0006依存を除く別候補を再レビューする。通常設定で未適用SQLを一括applyしない。0004 GPU/電力は混在させない。
 4. 外部運用: runner、5分確認schedule/独立heartbeat、最小read権限、Evidenceのprivate取得/一時保存/削除、briefingの宛先、Secrets登録、初回実通知はそれぞれ具体的差分を提示して別承認する。現時点では未設定。
@@ -149,6 +149,6 @@ runtimeでは8,391,612 bytesの合成responseから許可fieldのbody 2,272 byte
 
 予備検証では旧候補 `a6f181c8e84a1b37` の195件中1件が、修復checkoutの `work/` を既存testより先に作っていなかったためENOENTで失敗した。gateは不合格となり、朝向けJSONも `failed_or_unverified` を保持した。148774bで作業フォルダーの準備を直し、既存test本文を変えずに**上表の両方の全体検証を最初から再実行**した。旧候補の194件成功、旧本体9db86ffの成功、途中の部分検証を最終件数へ足していない。失敗記録は消していない。
 
-未検証なのは実sourceの未知変更、本番Cloudflare CPU/容量、private R2 lifecycleとの適合、現行本番に対するremote checker到達性、独立runner・heartbeat、実通知送達、実Evidenceの本番再解析/公開、GitHub CIである。capture flagの有効化・新規runner/schedule/Secrets登録・production deployは実施していない。7日間の自然実行実績を今回追加取得したり、候補の実績へ合算したりしていない。
+本候補を凍結した時点ではGitHub CIも未実行だったが、2026-10-05にcommit 32f85f3の[CI 37246616324](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/actions/runs/37246616324)が194 tests・型・preflight・runtime・dry-run build・生成物確認に成功した。未検証なのは実sourceの未知変更、本番Cloudflare CPU/容量、private R2 lifecycleとの適合、現行本番に対するremote checker到達性、独立runner・heartbeat、実通知送達、実Evidenceの本番再解析/公開である。capture flagの有効化・新規runner/schedule/Secrets登録・production deployは実施していない。7日間の自然実行実績を今回追加取得したり、候補の実績へ合算したりしていない。
 
 元operations checkoutはcf726bdのままで、既存未コミット文書のSHA256 `3f83d39af6eed049a38eba0800e7b56220d52ab8d2fa211e27a420ec46854932` も不変。Adminは `ff46be8ecf20f9df8df52374e3991c5a217e21fe`、独立GPU作業は `a0196dc24348cb7185a37e6762ecd9a7c136c288` で、ともにcleanなまま。source権利・保持設定・既存migration・Wrangler設定・GitHub Actionsに本体候補の差分はない。

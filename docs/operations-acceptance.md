@@ -1,5 +1,7 @@
 # 継続運用の受け入れ・本番保全（2026-10-04）
 
+最新のGitHub反映・Netlify保留解除・残件は末尾の「2026-10-05 GitHubレビュー再開と残件」を参照。以下の10月4日の記録は当時の結果であり、push保留・CI未実行という記述を現在の状態と混同しない。
+
 2026-10-04の最終確認です。ローカル検証は22:58–23:16 JST、本番の最小メタデータの再照合は22:59–23:10 JSTに実施しました。機能・コード・テストは変更せず、下記の固定状態で全検証を再実行しています。GitHub pushは所有者指定の保留を継続し、PR作成・main merge・本番deploy・remote migration・実通知・Secrets変更・監視schedule追加・保存期間変更は行っていません。
 
 ## 固定した検証対象
@@ -171,3 +173,45 @@ rollback候補は現Collector `764bb171-582b-47a0-ad40-5d6aadc61ee6` / a534ff0�
 新候補は既存metrics/raw_artifactsを使い、schema recovery用migrationは追加しない。0006候補への依存、0004分離、通知無効、旧Collector rollback時のWebhook不存在確認、GitHub push/PR保留は継続する。`SCHEMA_RECOVERY_ENABLED`、独立runner/schedule、Secrets、実通知、本番反映を有効にしていない。
 
 新候補の最終コードは `148774babd9d1ad476ab9d4b5f64a95ba589bfbb`。2026-10-05 02:22–02:40 JSTに固定状態で194件全test、型・境界検査、runtime、dry-run build、offline preflight/checker、生成物差分確認を通した。別branchの合成修復候補 `3490e2083b2fbf7b716dc03d192432e4b6839d80` は195件全testと同じ5種類の候補検証・保存Evidence再解析がPASS。上記cf726bdの検証結果との合算ではなく、GitHub CI・本番反映の成功でもない。失敗した予備候補を含む詳細とhashは[今回の検証記録](schema-drift-recovery.md#検証結果)に記載した。
+
+## 2026-10-05 GitHubレビュー再開と残件
+
+所有者の「Netlifyは問題ないのでそちらも進めて」に基づき、対象2 repoのGitHub push/PR保留を解除した。根拠は所有者の確認であり、こちらでNetlifyのrepo/branch/preview設定を再認証して検査したという意味ではない。Netlifyの設定変更・deployは行っていない。main merge、本番deploy、remote migration、実通知、Secrets、新schedule、権利・保存期間変更の承認には拡張しない。
+
+指定された本番Collector `a534ff06c776987844dad68ad7112501b52fc82b` とAdmin `97277dee49f888c69e54cef72e8566d1d432ef73` は、それぞれ最新作業branchの祖先で、GitHubでも取得できる。通常push後にremote headを照合した。API mainは `dd43e543ced4703819b68a9e061c20a85f997376`、Admin mainは `5ed8eb66312d3f1e88714d447ea4a58c7b89b375` のまま。force-push、main mergeはしていない。
+
+| repo | 公開・CI検証済みcommit | GitHub CI | Draft PR |
+|---|---|---|---|
+| API | `32f85f3e2eff60d0a3f8a0d5fb70c25d7d829c4e`（コード基準148774b、後続は検証記録） | [37246616324](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/actions/runs/37246616324)：09:17 JST完了。22 file / 194 tests、型・境界、preflight、runtime、dry-run build、生成物差分が成功 | [#7](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/7) |
+| Admin | `ff46be8ecf20f9df8df52374e3991c5a217e21fe` | [37246640534](https://github.com/kaznaritanaka-ctrl/AI-Investment-Admin/actions/runs/37246640534)：09:14 JST完了。8 file / 93 tests、14 browser tests、型、build/client境界、lockfile/差分が成功 | [#3](https://github.com/kaznaritanaka-ctrl/AI-Investment-Admin/pull/3) |
+
+この追記では文書・作業境界の記録だけを更新する。上記成功を文書更新後の新しいCI実行結果と呼ばず、各runの対象commitを保持する。今回の公開前検査ではAPI 88 / Admin 75の未公開blobと履歴を確認し、共通credentialパターン・認証ファイル名に該当する追加はなかった。完全な秘密情報不存在の証明ではない。合成repair例3490e208とその195件を本PRの194件へ合算せず、その例branchも公開していない。
+
+### 実装済みだが反映・受け入れを保留しているもの
+
+| 項目 | 現在の状態 | 残る条件・承認 |
+|---|---|---|
+| GitHub mainへの統合 | 最新2 branchのpush・CI・Draft PR作成まで完了 | PRレビューとmain mergeの明示承認。Netlifyは現在のblockerではない |
+| 運用判定・通知incident管理 | checker、通知epoch、有限retry、旧pending除外は実装・合成検証済み。本番は従来版 | private `0006_notification_incidents.sql`だけの直前承認と、最終Collector候補のupload/切替承認。初回はactivation未設定・Webhook Secret不存在を維持。0004は含めない |
+| Schema drift capture/診断 | private quarantine、権利/field whitelist、構造診断、fail closedは実装済み。`SCHEMA_RECOVERY_ENABLED`は未設定 | 最終artifact、実CPU/追加容量、R2 private/lifecycle・期限処理を確認し、Collector反映とflag有効化を個別承認 |
+| remote operations checker | 固定GET/SELECT経路を実装。既存MCP読取り結果は取得済み | 前回確認時にCLI用の適切な最小権限tokenがなく、`--remote --allow-network`は未検証。Admin Secret取出し・権限拡大で代用しない |
+| 実通知の有効化 | 送信判定・冪等性/retryのローカル検証済み。宛先未接続・実送達未検証 | 宛先、activation日時、Secrets登録、初回送達確認を別承認。旧pendingを再送しない |
+| GPU・電力の実収集 | 独立`codex/gpu-energy-expansion` / `a0196dc`にLambda・Sakura DOK・EIA月次・JEPXの実装と159件の合成試験。eBay Browse/Price of Compute latestも既存adapterあり。実sourceは停止中 | 現行v3 Collectorとの統合・再検証、用途別権利、キー、実plan/metadata、live収集、共有capture枠・CPU/容量、独立0004とdeployの承認。キー未準備は最後の所有者回答であり今回再確認していない |
+| 本番運用の受け入れ | 過去のread-only照合・合成復元は実施済み | 同じ本番versionで7日間の自然実行、実通知/独立監視、実R2/隔離DBの復元訓練、新候補の実CPU/長期retention負荷は未受け入れ。今回は自然枠を追加取得せず、待機・手動起動・監視予約もしない |
+
+private 0006未適用、private適用済み0001/0002/0003/0005、public適用済み0001/0002/0003、Webhook不存在という本番根拠は10月4日22:59–23:10 JSTの照合である。今回新たに本番DBやSecretsを照会した値ではない。実適用直前に再照合する。上のcf726bd用artifact `c7c7ea5e…` を最新schema recovery候補へ転用せず、最新を配信するならコード基準148774bを含む最終HEAD/artifactを改めて固定する。旧Collector rollbackでは、戻し先の実効Webhook Secret不存在または別承認済み無効化の確認を必須とする。
+
+### まだ実装・接続していないもの
+
+| 項目 | 既にあるもの | 未実装・未接続の範囲 |
+|---|---|---|
+| 夜間の独立監視と朝briefing | source別overnight JSONと修復receiptの結合CLI、03:20–09:20/5分＋09:25最終の無効なschedule案 | 外部runner、定期起動、独立heartbeat/死活監視、宛先への自動送達。runner/認証/非公開artifact保持/schedule/Secrets/実通知は別承認 |
+| 汎用のrepair候補生成 | Models.dev既知wrapper変更の決定的patch、parser版更新、合成contract、回帰・保存Evidence再解析 | field rename、pagination metadata、ECB/GPUの一般的な修復、外部AI runner、同じ本文の別runへの候補再利用・receipt再検証 |
+| 本番の保存Evidenceからの復旧完了 | ローカルのpatch/test/reparse/gateと既存の訂正基盤 | quarantineから通常Evidenceへの昇格、対象run/hash/parser版を固定した本番の再解析・訂正・公開を完了する運用経路。再解析PASSだけでは公開完了にしない |
+| 追加ソース・長期履歴取得 | GPU共通基盤、辞書、source調査/提案 | Runpodの比較条件付きadapter、Highreso/そろばん・CCIR・日本中古の許諾feed、Price of Compute history、一般backfill。EIA RTO時間別需給、メモリ/DC供給網・rates-credit・capex-utilizationは設計/候補段階 |
+| 5年以上の保存と復元 | 現行Models正規化1095日・R2 archive365日、容量推定、manifest/分割配置の設計 | 長期R2履歴の検索・読戻し・一括restore/移行、成長時のD1分割、全DBの自動restore。新保持policy・容量・削除義務・隔離復元の検証と承認が必要 |
+| Adminの操作機能 | Overviewと専用7ページ、読み取り/検索/比較は配信済み | 画面からの再実行、設定変更、権利変更。初版で予定した次段階のため、今回のGitHub保全には追加しない |
+
+自動production deploy・未検証の自動公開は意図的に無効で、今回有効化する残件には数えない。価格/単位/意味の推測、前日値による欠測補完、source rights/retentionの自動変更も許可しない。ECB/Modelsの内部policy再確認期限2026-12-26（30日前11月26日、7日前12月19日）は既存の将来確認事項であり、元ライセンスの失効日ではない。
+
+独立GPU checkoutと元`work/p0-main-integration`の未コミット文書は変更していない。既に完了したP0、ECB表示修正、8管理ページ、0005、a534ff06/97277deeの配信、配信台帳5件は保留に戻さない。
