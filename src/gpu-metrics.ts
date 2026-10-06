@@ -180,6 +180,16 @@ export async function finalizeGPUMetrics(
   now: string,
 ) {
   if (snap.state !== 'complete') return;
+  // The approved private PoC rollout stores provider observations, not an index.
+  // Avoid spending one continuation per provider on unrequested aggregate work.
+  if (s.adapter === 'price_of_compute' && !canPublish(s, now)) {
+    await env.PRIVATE_DB.prepare(
+      "UPDATE gpu_snapshots SET processing_stage='done' WHERE snapshot_id=? AND state='complete'",
+    )
+      .bind(snap.snapshot_id)
+      .run();
+    return;
+  }
   const cohorts = await env.PRIVATE_DB.prepare(
     "SELECT DISTINCT cohort_key FROM gpu_snapshot_members WHERE snapshot_id=? AND NOT EXISTS(SELECT 1 FROM gpu_metric_jobs j WHERE j.snapshot_id=gpu_snapshot_members.snapshot_id AND j.cohort_key=gpu_snapshot_members.cohort_key AND j.state='complete') ORDER BY cohort_key LIMIT 1",
   )

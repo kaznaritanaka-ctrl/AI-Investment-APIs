@@ -370,11 +370,14 @@ it('uses source-scoped parser metadata in telemetry and rejects corrections usin
     ),
   ).rejects.toThrow('correction_review_required');
   expect(sources.find((s) => s.source_id === 'price_of_compute')).toMatchObject({
-    enabled: false,
+    enabled: true,
     policy: {
       rights: {
-        automated_collection: 'review_required',
-        private_storage: 'review_required',
+        automated_collection: 'allowed',
+        private_storage: 'allowed',
+        internal_analysis: 'allowed',
+        external_llm_processing: 'denied',
+        raw_redistribution: 'denied',
         public_display: 'review_required',
       },
     },

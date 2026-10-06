@@ -149,8 +149,35 @@ export function inspectPreflight(
         2;
       require(slots <= 72, s.source_id +
         ':models_daily_capacity_exceeds_existing_72_continuations');
-      require(!sources.some((x) => x.enabled && x.gpu), s.source_id +
+      const gpu = sources.filter((x) => x.enabled && x.gpu);
+      const isolatedPrivatePoC =
+        deployment.collection_workload_mode === 'models_then_private_poc_v1' &&
+        deployment.shared_collection_budget_review_ref &&
+        gpu.length === 1 &&
+        gpu[0].source_id === 'price_of_compute' &&
+        gpu[0].adapter === 'price_of_compute' &&
+        gpu[0].max_records <= 50 &&
+        gpu[0].max_bytes <= 1000000 &&
+        gpu[0].gpu.max_pages === 1 &&
+        gpu[0].gpu.pages_per_invocation === 1 &&
+        gpu[0].gpu.partitions.length === 1 &&
+        gpu[0].gpu.partitions[0].id === 'h100-sxm' &&
+        gpu[0].gpu.partitions[0].query.sku === 'h100-sxm' &&
+        gpu[0].gpu.snapshot_max_age_minutes === 360 &&
+        collector.vars.COLLECTION_CRON === '17 18 * * *' &&
+        collector.vars.GPU_RESUME_CRON === '*/5 18-23 * * *' &&
+        [
+          'public_display',
+          'normalized_redistribution',
+          'derived_redistribution',
+          'commercial_redistribution',
+        ].every((key) => ['denied', 'review_required'].includes(gpu[0].policy.rights[key]));
+      require(!gpu.length || isolatedPrivatePoC, s.source_id +
         ':shared_gpu_models_budget_requires_separate_review');
+      if (gpu.length && isolatedPrivatePoC)
+        // 68 continuation slots follow 18:17 UTC before the existing window ends.
+        require(slots + 6 <= 68, s.source_id +
+          ':combined_daily_capacity_exceeds_existing_68_continuations');
       if (s.policy.retention_limit_days)
         require(Math.max(
           m.retention.evidence_days,

@@ -35,6 +35,14 @@ const bundled = await build({
       .replace(
         'async fetch(request,env){',
         "async fetch(request,env){\nif(new URL(request.url).pathname==='/schema-recovery')return recoveryRuntime(env);",
+      )
+      .replace(
+        'export default {',
+        "import {collectionRuntime} from './tests/collection-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        "async fetch(request,env){\nif(new URL(request.url).pathname.startsWith('/collection-'))return collectionRuntime(request,env);",
       ),
     resolveDir: process.cwd(),
     sourcefile: 'runtime-harness.ts',
@@ -117,6 +125,84 @@ try {
   );
   console.log(
     'Workerd operational check, notification dry-run, failure and recovery passed. Synthetic delivery only.',
+  );
+  const collectionProfiles = [];
+  const collectionStep = async (path) => {
+    const response = await mf.dispatchFetch('https://local.test/collection-' + path);
+    assert.equal(response.status, 200);
+    const step = await response.json();
+    assert(step.sql_statements < 1000, JSON.stringify(step));
+    assert(step.max_batch <= 20, JSON.stringify(step));
+    if (path !== 'verify') collectionProfiles.push({ path, ...step });
+    return step.result;
+  };
+  assert.equal((await collectionStep('poc-intake')).state, 'pending');
+  assert.equal((await collectionStep('models-intake')).state, 'pending');
+  let modelSteps = 0;
+  let pocSteps = 1; // Its saved first page is held while Models owns the next slots.
+  let collectionDone = false;
+  for (let i = 0; i < 60; i++) {
+    const resumed = await collectionStep('resume');
+    const verified = await collectionStep('verify');
+    assert.equal(resumed.results.length, 1);
+    if (resumed.models_work) {
+      modelSteps++;
+      assert.equal(resumed.results[0].source_id, 'synthetic_collection_models');
+      assert.equal(verified.poc.processing_stage, 'metrics');
+    } else {
+      pocSteps++;
+      assert.equal(verified.models.state, 'complete');
+      assert.equal(resumed.results[0].source_id, 'price_of_compute');
+      collectionDone = resumed.results[0].state === 'complete';
+    }
+    if (collectionDone) break;
+  }
+  assert(collectionDone);
+  assert(modelSteps <= 33);
+  assert(pocSteps <= 3);
+  const privateResult = await collectionStep('verify');
+  assert.equal(privateResult.models.model_count, 500);
+  assert.equal(privateResult.models.price_count, 500);
+  assert.equal(privateResult.private_count, 50);
+  assert.equal(privateResult.public_count, 0);
+  assert.equal(privateResult.derived_count, 0);
+  assert.deepEqual(privateResult.fk, []);
+  assert.equal(privateResult.status.sources[0].snapshot, 'complete');
+  assert.equal(privateResult.status.sources[0].publication, 'not_applicable');
+  assert.equal(privateResult.status.overnight.sources[0].severity, 'ok');
+  assert.equal((await collectionStep('retire')).deleted, 50);
+  assert.equal((await collectionStep('retire')).deleted, 0);
+  const retired = await collectionStep('verify');
+  assert.equal(retired.private_count, 0);
+  assert.equal(retired.poc.state, 'purged');
+  assert.deepEqual(retired.fk, []);
+  assert.equal(
+    collectionProfiles.reduce((n, p) => n + p.mock_http_requests, 0),
+    2,
+  );
+  await writeFile(
+    'work/runtime-private-collection-report.json',
+    JSON.stringify(
+      {
+        synthetic: true,
+        external_http_requests: 0,
+        cloud_cpu_measured: false,
+        models: 500,
+        private_provider_rows: 50,
+        model_continuations: modelSteps,
+        poc_collection_invocations: pocSteps,
+        poc_retention_invocations: 2,
+        max_sql_statements_per_invocation: Math.max(
+          ...collectionProfiles.map((p) => p.sql_statements),
+        ),
+        profiles: collectionProfiles,
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+  console.log(
+    'Private PoC workerd passed: 50 rows, Models 500 priority, no public values or derived metrics, bounded retention. Synthetic only.',
   );
   let steps = 0,
     maxBatch = 0,

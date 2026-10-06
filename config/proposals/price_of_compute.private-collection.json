@@ -19,49 +19,49 @@
   "rights_evidence_ref": "docs/price-of-compute-integration.md#private-collection-proposal-20261006",
   "attribution_text": "Data: Price of Compute — https://www.priceofcompute.com/",
   "known_limitations": [
-    "Approved private scope; production activation awaits validated Collector deployment and R2 retention rules.",
+    "Unapplied private-collection proposal; owner/retention approval and source activation remain pending.",
     "Secondary listed provider prices; retrieval success is not proof of current provider quotes or availability.",
     "Only H100-SXM, one complete bounded response, at most 50 provider rows.",
     "Unknown shape or semantics fail closed before projection storage; rejected raw bodies cannot be reparsed.",
     "No external LLM processing or public data release; no history backfill."
   ],
-  "enabled": true,
+  "enabled": false,
   "adapter": "price_of_compute",
   "selection": [],
   "max_bytes": 1000000,
   "max_records": 50,
   "policy": {
-    "version": "price_of_compute-20261006-private-v1",
+    "version": "price_of_compute-20261006-private-proposal",
     "rights": {
-      "automated_collection": "allowed",
-      "private_storage": "allowed",
-      "internal_analysis": "allowed",
-      "external_llm_processing": "denied",
+      "automated_collection": "review_required",
+      "private_storage": "review_required",
+      "internal_analysis": "review_required",
+      "external_llm_processing": "review_required",
       "public_display": "review_required",
-      "raw_redistribution": "denied",
+      "raw_redistribution": "review_required",
       "normalized_redistribution": "review_required",
       "derived_redistribution": "review_required",
       "commercial_redistribution": "review_required"
     },
     "fields": ["gpu_projection_v1"],
     "conditions": [
-      "Owner approved 2026-10-06: H100-SXM daily acquisition, private storage and internal analysis only. Publication and external LLM processing are not authorized.",
+      "PROPOSAL ONLY: automatic collection, private storage and internal analysis are proposed; all nine grants remain review_required until owner approval.",
       "Whitelist: requested sku; source day/updated_at; provider label/pricing_type/usd_per_gpu_hr/region/observed_at; fixed attribution; retrieval time and integrity hashes.",
       "Do not persist raw response, upstream aggregate prices, arbitrary text, URLs or unreviewed fields.",
       "One H100-SXM partition per daily slot; existing source-wide >=1h successful-response/reservation cooldown; <=3 attempts per network invocation, not an enforced three-per-day limit.",
-      "Approved evidence/archive/normalized/backup limits are 7/7/180/30 days; original absolute expiry applies.",
-      "No public display, normalized/raw/derived/commercial redistribution or external LLM processing is authorized."
+      "Proposed evidence/archive/normalized/backup limits are 7/7/180/30 days; original absolute expiry applies.",
+      "No public display, normalized/raw/derived/commercial redistribution or external LLM grant in this proposal."
     ],
     "valid_from": "2026-10-06T00:00:00.000Z",
     "valid_until": "2027-01-05T00:00:00.000Z",
     "retention_days": 7,
     "retention_limit_days": null,
-    "decision_actor": "Owner approved the exact private collection scope and retention on 2026-10-06; production deployment/R2 changes require separate immediate approval.",
-    "evidence_version": "Official API/attribution documentation reviewed 2026-10-06; owner approved private H100 scope and retention; no live acquisition yet.",
+    "decision_actor": "Owner review pending; implementation proposal only",
+    "evidence_version": "Official API and attribution documentation checked 2026-10-06; not a live price acquisition",
     "evidence_refs": ["https://www.priceofcompute.com/api", "https://www.priceofcompute.com/press"]
   },
   "gpu": {
-    "owner_approval_ref": "owner-private-collection-20261006-h100-sxm",
+    "owner_approval_ref": null,
     "partitions": [
       {
         "id": "h100-sxm",
@@ -80,7 +80,7 @@
       "archive_days": 7,
       "normalized_days": 180,
       "backup_days": 30,
-      "reviewed_ref": "owner-private-collection-20261006-retention-7-7-180-30"
+      "reviewed_ref": null
     },
     "region_map": {}
   }

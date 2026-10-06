@@ -5,6 +5,7 @@ import { runDTO } from './admin-read';
 import type { RunDTO } from './admin-contract';
 import { isoTime, stable } from './util';
 import { overnightSource } from './overnight';
+import { readGPUCollectionEvidence } from './operational-gpu';
 
 export type Condition = 'alert' | 'clear' | 'pending' | 'unknown' | 'not_applicable';
 export type Signal = { key: string; condition: Condition; code: string };
@@ -15,6 +16,7 @@ export type SourceEvidence = {
   quality: Quality | null;
   previousQuality: Quality | null;
   sourceDate: string | null;
+  priceClocks?: Awaited<ReturnType<typeof readGPUCollectionEvidence>>['priceClocks'];
 };
 // Configured Models capture window is six hours; progress is normally five-minute
 // checkpoints. Twenty minutes permits four missed checkpoints without interpreting
@@ -32,6 +34,16 @@ export function evaluateSource(s: Source, slot: string, now: string, e: SourceEv
     signals.push({ key: s.source_id + ':' + facet, condition, code });
   const elapsed = age(now, slot),
     run = e.run;
+  const isSnapshot = !!s.models || !!s.gpu;
+  const publicationRequired = canPublish(s, now)
+    ? true
+    : ['public_display', 'normalized_redistribution', 'commercial_redistribution'].every((key) =>
+          ['review_required', 'denied'].includes(
+            s.policy.rights[key as keyof typeof s.policy.rights],
+          ),
+        )
+      ? false
+      : null;
   let collection: string = 'unknown',
     snapshot: string = 'unknown',
     publication: string = 'unknown';
@@ -57,11 +69,14 @@ export function evaluateSource(s: Source, slot: string, now: string, e: SourceEv
     } else if (run.state === 'policy_skipped') {
       collection = 'policy_stopped';
       add('collection', 'alert', 'unexpected_policy_stop');
-    } else if (['pending', 'processing', 'in_progress', 'deferred'].includes(run.state)) {
+    } else if (
+      ['pending', 'fetching', 'processing', 'in_progress', 'deferred'].includes(run.state)
+    ) {
       const progress = run.last_progress_at ?? run.started_at ?? slot;
       const overdue =
         elapsed >
-        (s.models ? operationsTiming.modelsDeadlineMinutes : operationsTiming.startGraceMinutes);
+        (s.gpu?.snapshot_max_age_minutes ??
+          (s.models ? operationsTiming.modelsDeadlineMinutes : operationsTiming.startGraceMinutes));
       const stalled =
         elapsed > operationsTiming.startGraceMinutes &&
         age(now, progress) > operationsTiming.progressGraceMinutes;
@@ -73,25 +88,36 @@ export function evaluateSource(s: Source, slot: string, now: string, e: SourceEv
         : 'unknown';
       add('collection', collection === 'unknown' ? 'unknown' : 'alert', 'run_' + collection);
     }
-    snapshot = !s.models
+    snapshot = !isSnapshot
       ? 'not_applicable'
       : collection === 'complete' &&
           e.completeCapture === true &&
-          run?.checkpoints.some((c) => c.kind === 'models' && c.state === 'complete')
+          (s.gpu
+            ? run?.checkpoints.filter((c) => c.kind === 'gpu').length === s.gpu.partitions.length &&
+              run.checkpoints
+                .filter((c) => c.kind === 'gpu')
+                .every((c) => c.state === 'complete' && c.stage === 'done')
+            : run?.checkpoints.some((c) => c.kind === 'models' && c.state === 'complete'))
         ? 'complete'
         : collection === 'in_progress'
           ? 'in_progress'
           : 'incomplete';
-    if (s.models)
+    if (isSnapshot)
       add(
         'snapshot',
         snapshot === 'complete' ? 'clear' : collection === 'complete' ? 'alert' : 'pending',
         'snapshot_' + snapshot,
       );
     if (!canPublish(s, now)) {
-      publication = 'policy_stopped';
-      add('publication', 'not_applicable', 'publication_not_permitted');
-    } else if (collection !== 'complete' || (s.models && snapshot !== 'complete')) {
+      publication = publicationRequired === false ? 'not_applicable' : 'policy_stopped';
+      add(
+        'publication',
+        publicationRequired === false ? 'not_applicable' : 'alert',
+        publicationRequired === false
+          ? 'private_only_publication_not_requested'
+          : 'publication_not_permitted',
+      );
+    } else if (collection !== 'complete' || (isSnapshot && snapshot !== 'complete')) {
       publication = 'awaiting_collection';
       add('publication', 'pending', publication);
     } else {
@@ -118,7 +144,7 @@ export function evaluateSource(s: Source, slot: string, now: string, e: SourceEv
       ? Object.keys(q.reasons).filter((c) => q.reasons[c] > (previous.reasons[c] ?? 0))
       : [];
   const delta = q && previous ? q.count - previous.count : null;
-  const qualityState = !s.models
+  const qualityState = !isSnapshot
     ? 'not_applicable'
     : collection !== 'complete'
       ? 'pending'
@@ -126,20 +152,24 @@ export function evaluateSource(s: Source, slot: string, now: string, e: SourceEv
         ? 'unknown'
         : q.count === 0
           ? 'clear'
-          : !previous ||
-              !Object.keys(q.reasons).length ||
-              Object.keys(q.reasons).length >= 40 ||
-              'unclassified' in q.reasons
-            ? 'unknown'
-            : increasedCodes.length || (delta ?? 0) > 0
-              ? 'alert'
-              : 'clear';
-  if (s.models)
+          : s.gpu
+            ? 'alert'
+            : !previous ||
+                !Object.keys(q.reasons).length ||
+                Object.keys(q.reasons).length >= 40 ||
+                'unclassified' in q.reasons
+              ? 'unknown'
+              : increasedCodes.length || (delta ?? 0) > 0
+                ? 'alert'
+                : 'clear';
+  if (isSnapshot)
     add(
       'quality',
       qualityState,
       qualityState === 'alert'
-        ? 'quarantine_changed'
+        ? s.gpu
+          ? 'quarantined_observations'
+          : 'quarantine_changed'
         : qualityState === 'clear' && q?.count
           ? 'quarantine_unchanged'
           : 'quality_' + qualityState,
@@ -166,6 +196,7 @@ export function evaluateSource(s: Source, slot: string, now: string, e: SourceEv
     collection,
     snapshot,
     publication,
+    publication_required: publicationRequired,
     observation_count: run?.observation_count ?? null,
     accepted_count: run?.accepted_count ?? null,
     quality: {
@@ -179,6 +210,7 @@ export function evaluateSource(s: Source, slot: string, now: string, e: SourceEv
     },
     source_date: e.sourceDate,
     source_calendar_evaluation: 'not_evaluated',
+    price_freshness: e.priceClocks ?? null,
     signals,
   };
 }
@@ -210,7 +242,9 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
   const slot = dailyCollectionSlot(env.COLLECTION_CRON, Date.parse(now));
   const reports: ReturnType<typeof evaluateSource>[] = [];
   const overnight: ReturnType<typeof overnightSource>[] = [];
-  for (const s of sources.filter((s) => ['ecb', 'models_dev'].includes(s.source_id))) {
+  for (const s of sources.filter((s) =>
+    ['ecb', 'models_dev', 'price_of_compute'].includes(s.source_id),
+  )) {
     try {
       const configured = await env.PRIVATE_DB.prepare(
         'SELECT config_json=? AS matches,enabled,suspended FROM sources WHERE source_id=?',
@@ -272,13 +306,15 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
               .bind(identity.run_id)
               .first<{ source_date: string | null }>()
           : null;
+      const gpu = s.gpu ? await readGPUCollectionEvidence(env, s, identity.run_id, now, run) : null;
       reports.push(
         evaluateSource(s, slot, now, {
           run,
-          completeCapture: snaps.results[0]?.complete_capture === 1,
-          quality: quality[0] ?? null,
+          completeCapture: gpu?.completeCapture ?? snaps.results[0]?.complete_capture === 1,
+          quality: gpu?.quality ?? quality[0] ?? null,
           previousQuality: quality[1] ?? null,
           sourceDate: fx?.source_date ?? null,
+          priceClocks: gpu?.priceClocks,
         }),
       );
       reports
@@ -289,16 +325,13 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
         row?.metrics_json,
         typeof row?.recovery_count === 'number' ? row.recovery_count : null,
       );
-      if (morning.schema_drift === true && morning.publication_status !== 'complete')
+      if (morning.schema_drift === true && !morning.processing_complete)
         reports.at(-1)!.signals.push({
           key: s.source_id + ':schema_drift',
           condition: 'alert',
           code: 'schema_drift_detected',
         });
-      else if (
-        morning.collection_status === 'complete' &&
-        morning.publication_status === 'complete'
-      )
+      else if (morning.processing_complete)
         reports.at(-1)!.signals.push({
           key: s.source_id + ':schema_drift',
           condition: 'clear',
