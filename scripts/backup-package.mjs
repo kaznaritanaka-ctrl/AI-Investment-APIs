@@ -83,7 +83,8 @@ export function validatePlan(plan, now = Date.now()) {
     plan.inventory_complete !== true ||
     !Array.isArray(plan.files) ||
     plan.files.length < 2 ||
-    plan.files.length > 100000
+    plan.files.length > 100000 ||
+    (plan.capture_audit_sha256 !== undefined && !digest(plan.capture_audit_sha256))
   )
     fail('backup_plan_invalid');
   const seen = new Set();
@@ -195,6 +196,7 @@ export async function packageBackup(
     captured_at: plan.captured_at,
     delete_after: plan.delete_after,
     inventory_complete: true,
+    ...(plan.capture_audit_sha256 ? { capture_audit_sha256: plan.capture_audit_sha256 } : {}),
     files: files.map(({ path, sha256, bytes, delete_after, cipher }) => ({
       path,
       sha256,
@@ -327,6 +329,9 @@ export async function decryptBackup(
     files: manifest.files.length,
     database_import_performed: false,
     publication_allowed: false,
+    ...(manifest.capture_audit_sha256
+      ? { capture_audit_sha256: manifest.capture_audit_sha256 }
+      : {}),
   };
 }
 

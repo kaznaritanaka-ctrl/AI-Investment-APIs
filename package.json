@@ -29,7 +29,8 @@
     "overnight:brief": "node scripts/overnight-brief.mjs",
     "health:check": "node scripts/health-check.mjs",
     "backup:package": "node scripts/backup-package.mjs",
-    "test:backup": "node --test scripts/backup-roundtrip.test.mjs"
+    "backup:capture": "node scripts/backup-capture.mjs",
+    "test:backup": "node --test scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",
