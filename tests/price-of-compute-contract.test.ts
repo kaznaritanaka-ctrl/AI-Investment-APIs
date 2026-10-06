@@ -243,6 +243,12 @@ test('preserves pricing type, region, source clocks, and distinct identity throu
 test('existing gates support an isolated synthetic private-only policy without publication', () => {
   const source = structuredClone(sourceConfig) as Source;
   source.enabled = true;
+  // Synthetic policy dates and grants must not follow the production rollout.
+  source.policy.version = 'synthetic-private-poc-gates';
+  source.policy.valid_from = '2026-01-01T00:00:00.000Z';
+  source.policy.valid_until = '2030-01-01T00:00:00.000Z';
+  for (const key of Object.keys(source.policy.rights) as Array<keyof typeof source.policy.rights>)
+    source.policy.rights[key] = 'review_required';
   source.policy.fields = ['gpu_projection_v1'];
   source.gpu!.owner_approval_ref = 'synthetic-owner-review';
   source.gpu!.retention = {
