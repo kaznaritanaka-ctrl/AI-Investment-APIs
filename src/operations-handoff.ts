@@ -49,7 +49,11 @@ export async function operationsHandoff(input: unknown, logicalSlot: string, now
       throw new Error('invalid_run_identity');
     const healthy =
       run.state === 'complete' &&
-      run.publication.state === 'complete' &&
+      (run.capture_verified === undefined || run.capture_verified === true) &&
+      (run.publication.state === 'complete' ||
+        (run.publication.state === 'not_applicable' &&
+          run.capture_verified === true &&
+          run.recovery?.remaining_human_action === 'none')) &&
       run.quarantined_count === 0 &&
       run.checkpoints.every((c) => c.state === 'complete');
     if (healthy || run.state === 'policy_skipped') continue;

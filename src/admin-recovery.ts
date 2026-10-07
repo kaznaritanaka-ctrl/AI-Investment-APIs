@@ -27,9 +27,14 @@ export function runRecovery(
             ? 'not_applicable'
             : run.state,
       publication: historical ? 'unknown' : run.publication.state,
+      publication_required: run.publication.state === 'not_applicable' ? false : undefined,
       observation_count: run.observation_count,
       accepted_count: run.accepted_count,
-      snapshot: run.checkpoints.every((c) => c.state === 'complete') ? 'complete' : 'partial',
+      snapshot:
+        (run.capture_verified === undefined || run.capture_verified === true) &&
+        run.checkpoints.every((c) => c.state === 'complete')
+          ? 'complete'
+          : 'partial',
       signals:
         run.quarantined_count && run.quarantined_count > 0
           ? [

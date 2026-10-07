@@ -56,7 +56,14 @@ export const Field = z
   .strict();
 export const Publication = z
   .object({
-    state: z.enum(['complete', 'staging', 'held', 'not_published', 'unavailable']),
+    state: z.enum([
+      'complete',
+      'staging',
+      'held',
+      'not_published',
+      'not_applicable',
+      'unavailable',
+    ]),
     original_count: count,
     derived_count: count,
     visible_count: count,
@@ -181,6 +188,7 @@ export const Run = z
     error_code: text.nullable(),
     recovery_count: count,
     next_attempt_at: time,
+    capture_verified: z.boolean().nullable().optional(),
     recovery: RunRecovery.optional(),
     publication: Publication,
     checkpoints: z
@@ -257,6 +265,7 @@ export const Overview = z
     expected: count,
     completed: count,
     published: count,
+    publication_expected: count.optional(),
     fresh: count,
     checked_sources: count,
     attention: z.array(AttentionItem).max(300),

@@ -19,6 +19,7 @@ import { safeLogCode } from './telemetry';
 import { MIT_NOTICE, visibleJoin, visibleSQL } from './publication';
 import { readData } from './admin-read-data';
 import { runRecovery } from './admin-recovery';
+import { readGPUCollectionEvidence } from './operational-gpu';
 
 export type Row = Record<string, unknown>;
 export const obj = (v: unknown): Row => {
@@ -290,6 +291,7 @@ export async function runDTO(
   now: string,
   detail = false,
   asOf = now,
+  currentSource = configuredSources.find((s) => s.source_id === r.source_id),
 ): Promise<RunDTO> {
   const id = String(r.run_id),
     source = String(r.source_id),
@@ -382,6 +384,44 @@ export async function runDTO(
     result.next_attempt_at = null;
     result.checkpoints = [];
     if (result.started_at && result.started_at > asOf) result.started_at = null;
+  }
+  if (currentSource?.source_id === 'price_of_compute') {
+    result.capture_verified = null;
+    // A private-only policy must be explicit and match the stored runtime config.
+    // An unavailable public read or unexpected public rows never become N/A.
+    const stored = (
+      await rows(
+        env.PRIVATE_DB,
+        'SELECT source_id,policy_version,enabled,suspended,config_json FROM sources WHERE source_id=?',
+        [source],
+      )
+    )[0];
+    if (
+      !laterProgress &&
+      canCollect(currentSource, now) &&
+      internalReadAllowed(currentSource, stored, now) &&
+      stored?.enabled === 1
+    ) {
+      try {
+        result.capture_verified = (
+          await readGPUCollectionEvidence(env, currentSource, id, asOf, result)
+        ).completeCapture;
+      } catch {
+        // The run's complete flag alone cannot prove the configured capture scope.
+      }
+      if (
+        ['public_display', 'normalized_redistribution', 'commercial_redistribution'].every((key) =>
+          ['review_required', 'denied'].includes(
+            currentSource.policy.rights[key as keyof typeof currentSource.policy.rights],
+          ),
+        ) &&
+        publication.state === 'not_published' &&
+        publication.original_count === 0 &&
+        publication.derived_count === 0 &&
+        publication.visible_count === 0
+      )
+        publication.state = 'not_applicable';
+    }
   }
   result.recovery = runRecovery(result, r.metrics_json, now, asOf);
   if (!detail) return result;
@@ -521,7 +561,7 @@ export async function sourceStatuses(
             : 'healthy',
       freshness_reason:
         age?.stale_reason ?? (!observed && s.enabled ? 'no_live_observation' : null),
-      last_run: last ? await runDTO(env, last, now, false, asOf) : null,
+      last_run: last ? await runDTO(env, last, now, false, asOf, s) : null,
       source_url: safeURL(s.source_url),
       attribution: s.attribution_text,
       coverage: s.models ? s.models.providers.map((x) => x + '/*') : s.selection,
@@ -565,7 +605,7 @@ export function summarize(
         page: 'rights',
         ...link,
       });
-    if (s.publication_blockers?.length)
+    if (s.publication_blockers?.length && s.last_run?.publication.state !== 'not_applicable')
       attention.push({
         id: s.source_id + ':rights',
         severity: 'warning',
@@ -598,6 +638,18 @@ export function summarize(
         ...link,
       });
     const run = s.last_run?.logical_slot === slot ? s.last_run : null;
+    if (
+      run?.state === 'complete' &&
+      run.capture_verified !== undefined &&
+      run.capture_verified !== true
+    )
+      attention.push({
+        id: s.source_id + ':capture',
+        severity: run.capture_verified === null ? 'unknown' : 'warning',
+        message: s.source_id + '：取得範囲・snapshot・件数の整合を確認できません',
+        page: 'runs',
+        ...link,
+      });
     if (!run)
       attention.push({
         id: s.source_id + ':unconfirmed',
@@ -663,10 +715,17 @@ export function summarize(
   return {
     logical_slot: slot,
     expected: measured ? eligible.length : null,
+    publication_expected:
+      measured && publicationKnown
+        ? currentRuns.filter((r) => r?.publication.state !== 'not_applicable').length
+        : null,
     completed:
       measured && collectionKnown
         ? eligible.filter(
-            (s) => s.last_run?.logical_slot === slot && s.last_run.state === 'complete',
+            (s) =>
+              s.last_run?.logical_slot === slot &&
+              s.last_run.state === 'complete' &&
+              (s.last_run.capture_verified === undefined || s.last_run.capture_verified === true),
           ).length
         : null,
     published:
@@ -750,9 +809,16 @@ export async function readAdmin(
       for (let offset = 0; offset < Math.min(found.length, q.limit); offset += 4)
         report.runs.push(
           ...(await Promise.all(
-            found
-              .slice(offset, Math.min(offset + 4, q.limit))
-              .map((r) => runDTO(env, r, now, !!(q.id || q.run), page.asOf)),
+            found.slice(offset, Math.min(offset + 4, q.limit)).map((r) =>
+              runDTO(
+                env,
+                r,
+                now,
+                !!(q.id || q.run),
+                page.asOf,
+                sources.find((s) => s.source_id === r.source_id),
+              ),
+            ),
           )),
         );
       if (found.length > q.limit) {

@@ -264,3 +264,13 @@ Source inventoryの6列に旧4列の幅が適用されていた崩れを修正�
 残件はPoCの権利/対象SKU/保持・日次quota・監視/価格鮮度判定・live受け入れ、schema recovery flag、外部runner/自動briefing/実通知、独立GPU/電力統合と0004、7日間の自然実績・実負荷・復元訓練。既存の独立GPU worktreeは`a0196dc`のcleanを維持し、元operations文書の未コミット差分も保持した。
 
 今回の実行/前後照合/SQL/ブラウザ測定はGit対象外`outputs/production-20261005/`に保全。公開可能な配信record/evidenceは[Collector record](admin-releases/20261005-collector.json)と同ディレクトリ、Admin repoの`docs/releases/20261005-admin*.json`へbyteを変えず複写した。Secret値・private本文・認証情報はGitへ含めない。
+
+## 2026-10-08 運用候補の統合と非公開収集の判定
+
+作業branch `codex/operations-ready-20261008` / [PR #10](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/10)は、本番Collector `01a3060`を基点にAPI負荷対策、Adminの障害診断、metadata限定の`operations:handoff`、NAS取得/暗号化候補を統合する。既存の未反映候補230b6cfまでの履歴を保持し、PoCの承認済みH100-SXM非公開収集、保持7/7/180/30日、Cron、bindingsは変更しない。
+
+NAS取得候補はECB/Modelsに加え、明示承認したsource hashを持つPoCだけを許可する。snapshot/pageとEvidence/archive索引、scope、hash、原観測からの削除期限を照合し、未知ソース・期限超過・未索引・不一致なら完了bundleを作らない。GPU archiveにR2 custom metadataがない場合は、private D1のimmutable artifact hashを使う。実ageによる合成暗号化/復号、DB復元と外部キー/immutable triggerの検証を`pnpm test:backup`で行う。現行CIにはageがないため、backup検証はローカル結果と区別する。実D1 export、NAS実機復元、期限削除、Drive複製、scheduleはこのコード統合では開始しない。
+
+Adminとの結合確認で、公開を求めない正常なPoCを未公開障害として扱う経路を修正した。現在の実効sourceとDB設定・private権利が一致し、公開先の読み取りで0件が確認された場合だけ、公開を`not_applicable`にする。全partition・scope・policy・件数を照合できないcaptureは正常にしない。Overviewの公開対象数も収集対象数から分け、公開未承認という恒常設定はRightsに残す。読み取り失敗や設定差、snapshot不整合を対象外/0件へ置き換えない。
+
+反映順は対応Admin→Collector、rollbackはCollector→Admin。APIは別の配信単位で、稼働24768e9からの差にはURL長上限・Retry-After・latest SQLに加え、既存のGPU/PoC共有schema差もある。どれも本番直前承認が必要。新migrationはなく、適用済み0006を再実行せず、独立GPUの0004も含めない。通知・AGENT・schema recovery flagは現状を維持する。DotsのMCP接続と、夜間実行・結果保存が実際に動くことを区別し、未報告の結果は正常や完了にしない。

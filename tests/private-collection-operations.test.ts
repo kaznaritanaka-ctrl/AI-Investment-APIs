@@ -4,7 +4,8 @@ import { gpuSource, finishGPU } from './gpu-helpers';
 import { readOperationalStatus, evaluateSource } from '../src/operational-status';
 import { readGPUCollectionEvidence } from '../src/operational-gpu';
 import { overnightSource } from '../src/overnight';
-import { runDTO } from '../src/admin-read';
+import { runDTO, readAdmin } from '../src/admin-read';
+import { operationsHandoff } from '../src/operations-handoff';
 import { syncSource } from '../src/publication';
 import { SourceSchema, type Source } from '../src/schema';
 import { canCollect } from '../src/policy';
@@ -86,6 +87,36 @@ it('reports private collection success without claiming publication or fresh pro
     missing_observation_count: 0,
     briefing: '非公開の収集完了。公開は対象外',
   });
+  const admin = await readAdmin(
+    'runs',
+    { source: s.source_id, from: slot, to: checked },
+    local.env,
+    checked,
+    [s],
+  );
+  expect(admin.state).toBe('ready');
+  expect(admin.runs![0]).toMatchObject({
+    capture_verified: true,
+    publication: { state: 'not_applicable', visible_count: 0 },
+    recovery: {
+      recovery_result: 'not_needed',
+      missing_observation: false,
+      missing_observation_count: 0,
+      remaining_human_action: 'none',
+      briefing: '非公開の収集完了。公開は対象外',
+    },
+  });
+  expect((await operationsHandoff(admin, slot, checked)).items).toEqual([]);
+  const overview = await readAdmin('overview', {}, local.env, checked, [s]);
+  expect(overview.overview).toMatchObject({
+    expected: 1,
+    completed: 1,
+    published: 0,
+    publication_expected: 0,
+  });
+  expect(
+    overview.overview!.attention.filter((a) => /:(rights|publication|capture)$/.test(a.id)),
+  ).toEqual([]);
   expect(JSON.stringify(result)).not.toContain('synthetic-private-provider');
   expect(JSON.stringify(result)).not.toContain('1.234567');
   expect(await count()).toBe(before);
@@ -94,6 +125,73 @@ it('reports private collection success without claiming publication or fresh pro
   ).toBe(0);
   for (const table of ['published_observations', 'published_gpu_metrics', 'published_coverage'])
     expect(await local.env.PUBLIC_DB.prepare('SELECT COUNT(*) n FROM ' + table).first('n')).toBe(0);
+});
+
+it('Admin and handoff keep incomplete private snapshots, configuration drift and public read failures actionable', async () => {
+  const s = privateSource();
+  await finishGPU(local.env, s, fetcher, slot);
+  await local.env.PRIVATE_DB.prepare(
+    'UPDATE gpu_snapshots SET reported_total=received_count+1',
+  ).run();
+  const admin = await readAdmin(
+    'runs',
+    { source: s.source_id, from: slot, to: checked },
+    local.env,
+    checked,
+    [s],
+  );
+  expect(admin.runs![0]).toMatchObject({
+    capture_verified: false,
+    publication: { state: 'not_applicable' },
+    recovery: {
+      recovery_result: 'not_completed',
+      missing_observation: null,
+      remaining_human_action: 'investigate_collection_or_publication',
+    },
+  });
+  expect((await operationsHandoff(admin, slot, checked)).items).toHaveLength(1);
+  const overview = await readAdmin('overview', {}, local.env, checked, [s]);
+  expect(overview.overview!.completed).toBe(0);
+  expect(overview.overview!.attention.some((a) => a.id.endsWith(':capture'))).toBe(true);
+  await local.env.PRIVATE_DB.prepare(
+    'UPDATE gpu_snapshots SET reported_total=received_count',
+  ).run();
+  const brokenPublic = {
+    ...local.env,
+    PUBLIC_DB: new Proxy(local.env.PUBLIC_DB, {
+      get(target, key) {
+        if (key === 'prepare')
+          return () => {
+            throw new Error('synthetic database unavailable');
+          };
+        return Reflect.get(target, key);
+      },
+    }),
+  };
+  const unavailable = await readAdmin(
+    'runs',
+    { source: s.source_id, from: slot, to: checked },
+    brokenPublic,
+    checked,
+    [s],
+  );
+  expect(unavailable.runs![0].publication.state).toBe('unavailable');
+  expect(unavailable.runs![0].recovery!.remaining_human_action).not.toBe('none');
+  await local.env.PRIVATE_DB.prepare(
+    "UPDATE sources SET policy_version='unreviewed' WHERE source_id=?",
+  )
+    .bind(s.source_id)
+    .run();
+  const drift = await readAdmin(
+    'runs',
+    { source: s.source_id, from: slot, to: checked },
+    local.env,
+    checked,
+    [s],
+  );
+  expect(drift.runs![0].capture_verified).toBeNull();
+  expect(drift.runs![0].publication.state).not.toBe('not_applicable');
+  expect(drift.runs![0].recovery!.remaining_human_action).not.toBe('none');
 });
 
 it('does not turn a missing private run into zero records or successful acquisition', async () => {
