@@ -1,0 +1,24 @@
+# A one-shot candidate. No schedule, restart loop, ports or Docker socket.
+# Synthetic offline verification only; no production configuration or credentials.
+services:
+  verify:
+    image: ai-investment-backup:reviewed-local
+    build:
+      context: ../..
+      dockerfile: deploy/nas-backup/Dockerfile
+      args:
+        NODE_IMAGE: ${NAS_BACKUP_NODE_IMAGE:?Set an official Node 24 image digest}
+        AGE_SHA256: ${NAS_BACKUP_AGE_SHA256:?Set the verified Linux age checksum}
+        AGE_KEYGEN_SHA256: ${NAS_BACKUP_AGE_KEYGEN_SHA256:?Set the verified keygen checksum}
+    network_mode: none
+    read_only: true
+    user: '10001:10001'
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 1g
+    memswap_limit: 1g
+    tmpfs:
+      - /app/work:rw,noexec,nosuid,nodev,size=536870912,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=16777216,uid=10001,gid=10001,mode=0700
+    restart: 'no'

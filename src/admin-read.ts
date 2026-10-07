@@ -18,6 +18,7 @@ import { hash, stable, notificationEpoch } from './util';
 import { safeLogCode } from './telemetry';
 import { MIT_NOTICE, visibleJoin, visibleSQL } from './publication';
 import { readData } from './admin-read-data';
+import { runRecovery } from './admin-recovery';
 
 export type Row = Record<string, unknown>;
 export const obj = (v: unknown): Row => {
@@ -382,6 +383,7 @@ export async function runDTO(
     result.checkpoints = [];
     if (result.started_at && result.started_at > asOf) result.started_at = null;
   }
+  result.recovery = runRecovery(result, r.metrics_json, now, asOf);
   if (!detail) return result;
   const canonical = await rows(env.PRIVATE_DB, canonicalRunsSQL + ' AND source_id=?', [
     minuteSlot(scheduled),
@@ -614,7 +616,9 @@ export function summarize(
             : ['failed', 'missing'].includes(run.state)
               ? 'error'
               : 'warning',
-        message: s.source_id + '：収集 ' + run.state,
+        message:
+          s.source_id +
+          (run.recovery?.schema_drift ? '：schema drift・障害詳細を確認' : '：収集 ' + run.state),
         page: 'runs',
         ...link,
       });
