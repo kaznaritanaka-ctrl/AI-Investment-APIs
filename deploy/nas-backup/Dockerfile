@@ -10,9 +10,9 @@ RUN test "${#AGE_SHA256}" -eq 64 && test "${#AGE_KEYGEN_SHA256}" -eq 64 \
     && printf '%s  /usr/local/bin/age\n%s  /usr/local/bin/age-keygen\n' "$AGE_SHA256" "$AGE_KEYGEN_SHA256" | sha256sum -c - \
     && chmod 0555 /usr/local/bin/age /usr/local/bin/age-keygen
 WORKDIR /app
-COPY scripts/backup-package.mjs scripts/backup-capture.mjs scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs ./scripts/
+COPY scripts/backup-package.mjs scripts/backup-capture.mjs scripts/backup-maintenance.mjs scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs scripts/backup-maintenance.test.mjs ./scripts/
 COPY config/sources/ecb.json config/sources/models_dev.json config/sources/price_of_compute.json ./config/sources/
 ENV AGE_BINARY=/usr/local/bin/age
 USER 10001:10001
 ENTRYPOINT ["node"]
-CMD ["--test", "scripts/backup-roundtrip.test.mjs", "scripts/backup-capture.test.mjs"]
+CMD ["--test", "--test-concurrency=1", "scripts/backup-roundtrip.test.mjs", "scripts/backup-capture.test.mjs", "scripts/backup-maintenance.test.mjs"]

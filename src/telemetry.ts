@@ -66,6 +66,15 @@ export function safeLogCode(code?: string) {
   if (!code) return null;
   return codes.has(code) || /^http_[45]\d{2}$/.test(code) ? code : 'operation_failed';
 }
+// Fetch outcomes include successful requests; error-only sanitization must not
+// turn them into failures. Never infer success from an HTTP status by itself.
+export function safeAttemptCode(code: string | undefined, status: number | null) {
+  if (code === 'success')
+    return status !== null && status >= 200 && status < 300 ? code : 'unknown';
+  if (code === 'revalidated') return status === 304 ? code : 'unknown';
+  if (!code) return 'unknown';
+  return codes.has(code) || /^http_[45]\d{2}$/.test(code) ? code : 'unknown';
+}
 const states = new Set([
   'complete',
   'failed',

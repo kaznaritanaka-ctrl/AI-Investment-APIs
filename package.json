@@ -25,12 +25,14 @@
     "deploy:plan": "node scripts/preflight.mjs --plan",
     "operations:check": "node scripts/operations-check.mjs",
     "operations:handoff": "node scripts/operations-handoff.mjs",
+    "operations:cases": "node scripts/operations-cases.mjs",
     "repair:prepare": "node scripts/repair-candidate.mjs",
     "overnight:brief": "node scripts/overnight-brief.mjs",
     "health:check": "node scripts/health-check.mjs",
     "backup:package": "node scripts/backup-package.mjs",
     "backup:capture": "node scripts/backup-capture.mjs",
-    "test:backup": "node --test scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs"
+    "backup:maintenance": "node scripts/backup-maintenance.mjs",
+    "test:backup": "node --test scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs scripts/backup-maintenance.test.mjs"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

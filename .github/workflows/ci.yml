@@ -24,6 +24,24 @@ jobs:
       - run: pnpm check
       - run: node scripts/preflight.mjs --allow-unconfigured
       - run: pnpm test
+      - name: Verify synthetic backup roundtrip and expiry with pinned age
+        run: |
+          mkdir "$RUNNER_TEMP/backup-age"
+          curl --fail --location --proto '=https' --tlsv1.2 --max-time 120 \
+            https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz \
+            -o "$RUNNER_TEMP/backup-age/release.tar.gz"
+          printf '%s  %s\n' cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10 "$RUNNER_TEMP/backup-age/release.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/backup-age/release.tar.gz" -C "$RUNNER_TEMP/backup-age" age/age age/age-keygen
+          AGE_BINARY="$RUNNER_TEMP/backup-age/age/age" pnpm test:backup
+      - name: Verify the isolated NAS container with synthetic data
+        env:
+          NAS_BACKUP_NODE_IMAGE: node:24.19.0-bookworm-slim@sha256:e5a8dee7bc1e6a215d224a7ef8206f7e77271bc3cabd5febf2beafac0674f174
+          NAS_BACKUP_AGE_SHA256: eb7dd1b518f0a307c99cd97782623c5321da049154b04acd2d98d21aa7bc9b2c
+          NAS_BACKUP_AGE_KEYGEN_SHA256: 0a0009db842259d6717f7eeb30acb6b90d2a2eb924c6acd0a0db0ca1f1537899
+        run: |
+          mkdir -p deploy/nas-backup/vendor
+          cp "$RUNNER_TEMP/backup-age/age/age" "$RUNNER_TEMP/backup-age/age/age-keygen" deploy/nas-backup/vendor/
+          docker compose -f deploy/nas-backup/compose.yaml run --build --rm verify
       - run: pnpm test:runtime
       - run: pnpm build
         env:

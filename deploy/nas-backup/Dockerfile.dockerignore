@@ -2,8 +2,10 @@
 !scripts/
 !scripts/backup-package.mjs
 !scripts/backup-capture.mjs
+!scripts/backup-maintenance.mjs
 !scripts/backup-roundtrip.test.mjs
 !scripts/backup-capture.test.mjs
+!scripts/backup-maintenance.test.mjs
 !config/
 !config/sources/
 !config/sources/ecb.json

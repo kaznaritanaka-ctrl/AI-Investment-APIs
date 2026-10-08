@@ -15,7 +15,7 @@ import { canCollect, canPublish, modelsAuthorizationReady, gpuAuthorizationReady
 import { dailyCollectionSlot, minuteSlot } from './run-identity';
 import { freshness } from './fx';
 import { hash, stable, notificationEpoch } from './util';
-import { safeLogCode } from './telemetry';
+import { safeLogCode, safeAttemptCode } from './telemetry';
 import { MIT_NOTICE, visibleJoin, visibleSQL } from './publication';
 import { readData } from './admin-read-data';
 import { runRecovery } from './admin-recovery';
@@ -440,7 +440,7 @@ export async function runDTO(
     attempt: Number(x.attempt),
     started_at: stamp(x.started_at),
     status: num(x.status),
-    code: safeLogCode(str(x.code) ?? undefined) ?? 'unknown',
+    code: safeAttemptCode(str(x.code) ?? undefined, num(x.status)),
     duration_ms: num(x.duration_ms),
   }));
   const summaries = await rows(
