@@ -1,6 +1,6 @@
 # 継続運用の受け入れ・本番保全（2026-10-04）
 
-最新のGitHub反映・Netlify保留解除・残件は末尾の「2026-10-05 GitHubレビュー再開と残件」を参照。以下の10月4日の記録は当時の結果であり、push保留・CI未実行という記述を現在の状態と混同しない。
+最新の本番反映は末尾の「2026-10-05 本番反映とSource inventory修正」を参照。以下の過去の記録は当時の結果であり、push保留・CI未実行・0006未適用という記述を現在の状態と混同しない。
 
 2026-10-04の最終確認です。ローカル検証は22:58–23:16 JST、本番の最小メタデータの再照合は22:59–23:10 JSTに実施しました。機能・コード・テストは変更せず、下記の固定状態で全検証を再実行しています。GitHub pushは所有者指定の保留を継続し、PR作成・main merge・本番deploy・remote migration・実通知・Secrets変更・監視schedule追加・保存期間変更は行っていません。
 
@@ -234,3 +234,43 @@ provider・pricing type・regionの識別、提供元と取得側の時刻、pri
 | 独立GPU・電力との合流 | `a0196dc`は変更していない。読み取りのmerge simulationで8ファイルの競合を記録した。後日、両方の変更を維持して解消し、統合後の全体検証をやり直す |
 
 PoC固有のmigrationは追加していない。親候補のprivate0006未適用という既存の反映条件は残り、独立した0004とは混在させない。通知無効、旧Collectorへのrollback時のWebhook Secret不存在確認または別承認済み無効化、Secrets・権利・保持期間を変更しない境界も継続する。ECB/Modelsの本番設定、Admin checkout、元operations文書は変更していない。
+
+## 2026-10-05 本番反映とSource inventory修正
+
+所有者の「本番環境に適用していって」に基づき、検証済みコードと必要なprivate 0006を反映した。ソースの有効化・権利・保持期間・通知・schema recovery flagの有効化とは区別する。対象を固定した順序はprivate 0006 → Collector → Admin → 検証済み配信台帳2件。mainのmergeは行っていない。
+
+| 対象 | 実行結果（JST） |
+|---|---|
+| private 0006 | 21:30:25適用。SQL SHA-256 `7a289907203ad8663920072784828bc09e4e193f48ee208ad48c55ea9d25db8b`。同名SQL1件だけの専用migrationディレクトリ・private binding・既存d1_migrationsを使用 |
+| Collector | 21:31:36、`41ed514f51302f51354007ed61f829b50d057e8f` → version `f689aa5e-7e3c-47dc-a21b-34394c3f5158`を100%。配信moduleは検証済みSHA-256 `7dde07e303babe6dcdadb1a48f922ce9bde6ad5b67043525e798d94e3a3cc803`とbyte一致 |
+| Admin | 21:33:03、`d08ad3a14d04fae1963620cdacc4ae5c35c21af7` → version `f377d281-a964-4902-bb08-0566571dccdb`を100%。配信module SHA-256 `84203d42a3007e47a6499edcfc09aff3ac1a4aaeb6f22e340bb326e4a45e9549`とbyte一致 |
+| 配信台帳 | 21:37–21:38、今回のverified 2件を追記。既存5件不変、合計7件。Admin Releasesで稼働version・Git SHA・0006適用記録を照合 |
+| public API / public D1 / 0004 | 今回の変更なし。APIはversion `d51a23b0-afbb-4c49-b3ef-a220d1b5ff4f` / `24768e9`を維持 |
+
+事前・適用後・配信後・認証済み画面閲覧後に照合し、private 1,254観測・public 1,081観測のID/時刻/fingerprint等のmetadata digest、privateの権利記録、旧outbox 20件の本文digest/state/attempts/時刻は不変。外部キー違反なし、既存schema/immutable trigger維持。0006のincident表・nullable 3列・indexを確認した。読み取りAPIの閲覧による収集・DB更新は確認されず、手動Collector起動・実通知は0件。
+
+Collector CPU 5000ms、日次03:17 JST・watchdog03:47・既存continuation、DB/R2 bindings、Access・Custom Domain、workers.dev/preview無効を維持した。`ALERT_WEBHOOK_URL`と`NOTIFICATIONS_ACTIVE_FROM`は不存在、`SCHEMA_RECOVERY_ENABLED`も未設定。PoCを含む既存の無効ソース設定と9目的の権利状態は変更していない。Adminに新しいDB/R2 bindingはない。
+
+事前調査で現Collectorが`82a908c6-caa2-453b-b123-e36a2977d27f`へ変わっていたが、`764bb171…`とscript etagが同じでa534ff06のコードを保持していた。差は所有者が追加したGPU用Secretの存在であり、値を取り出さず新versionでも名前/型の保持を確認した。最新のrollback候補はこの`82a908c6…`で、古いSecret追加前versionへ戻さない。**旧codeへ戻す直前には、戻し先versionのWebhook Secret不存在、または別途承認済み無効化を再確認する。activation未設定だけでは旧pendingの誤送信を防げない。** rollback時もadditiveな0006を残し、旧通知の削除・書換えは行わない。
+
+配信前のWrangler OAuthは期限切れだったため、既存refresh tokenで同じ接続を更新した。Accessを読めないWrangler認証の権限を拡大せず、既存Cloudflare MCPで直前/直後のAccess・Domainを照合した。未認証GETは引き続きAccessへリダイレクトする。これは最小権限tokenによる`operations:check --remote --allow-network`の検証成功を意味しない。
+
+Collectorは既存の固定コード検証248件、runtime・型/境界・build・offline preflight/checker・生成差分、[配信HEADのCI 37254001689](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/actions/runs/37254001689)成功を使用し、source/設定/テストを変更していない。配信前に成果物を固定してversions upload dry-runのbyte一致を追加確認した。Adminの最終d08ad3aは21:20:28–21:21:13に固定して型・93 unit・16 browser・build/client境界・dry-runがすべて成功し、[同HEADのCI 37309297109](https://github.com/kaznaritanaka-ctrl/AI-Investment-Admin/actions/runs/37309297109)も成功。途中候補の成功と合算していない。後続の本書・配信metadata追記は文書のみで、配信SHAは上表のままである。
+
+Source inventoryの6列に旧4列の幅が適用されていた崩れを修正し、Overviewと共通の480px上限・領域内スクロール・固定見出しを採用した。本番は一覧パネル約9,217px→約556px、行高約600px→約68px、全15ソース/6列維持。Overviewは6ソース/高さ458px、共通上限480px。デスクトップと390px幅の合成回帰で、末尾行・キーボード・見出し固定・ページ横溢れ防止も検証。[Admin PR #4](https://github.com/kaznaritanaka-ctrl/AI-Investment-Admin/pull/4)は既存PR #3に積み重ねて保存した。
+
+認証済み本番Sources/Overview/Settings/Releasesを確認。Overviewは収集2/2・公開2/2・鮮度2/2・要確認0。これは10月5日03:17の**旧a534ff06コード**による自然実行で、ECBは2観測/2受入、Modelsは310観測/265受入（差分45件は品質隔離、全件受入とは扱わない）。今回の新Collectorによる次の自然日次枠は未実行で、同versionの7日間受け入れは0/7。待機・手動収集・監視予約は追加していない。
+
+残件はPoCの権利/対象SKU/保持・日次quota・監視/価格鮮度判定・live受け入れ、schema recovery flag、外部runner/自動briefing/実通知、独立GPU/電力統合と0004、7日間の自然実績・実負荷・復元訓練。既存の独立GPU worktreeは`a0196dc`のcleanを維持し、元operations文書の未コミット差分も保持した。
+
+今回の実行/前後照合/SQL/ブラウザ測定はGit対象外`outputs/production-20261005/`に保全。公開可能な配信record/evidenceは[Collector record](admin-releases/20261005-collector.json)と同ディレクトリ、Admin repoの`docs/releases/20261005-admin*.json`へbyteを変えず複写した。Secret値・private本文・認証情報はGitへ含めない。
+
+## 2026-10-08 運用候補の統合と非公開収集の判定
+
+作業branch `codex/operations-ready-20261008` / [PR #10](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/10)は、本番Collector `01a3060`を基点にAPI負荷対策、Adminの障害診断、metadata限定の`operations:handoff`、NAS取得/暗号化候補を統合する。既存の未反映候補230b6cfまでの履歴を保持し、PoCの承認済みH100-SXM非公開収集、保持7/7/180/30日、Cron、bindingsは変更しない。
+
+NAS取得候補はECB/Modelsに加え、明示承認したsource hashを持つPoCだけを許可する。snapshot/pageとEvidence/archive索引、scope、hash、原観測からの削除期限を照合し、未知ソース・期限超過・未索引・不一致なら完了bundleを作らない。GPU archiveにR2 custom metadataがない場合は、private D1のimmutable artifact hashを使う。実ageによる合成暗号化/復号、DB復元と外部キー/immutable triggerの検証を`pnpm test:backup`で行う。現行CIにはageがないため、backup検証はローカル結果と区別する。実D1 export、NAS実機復元、期限削除、Drive複製、scheduleはこのコード統合では開始しない。
+
+Adminとの結合確認で、公開を求めない正常なPoCを未公開障害として扱う経路を修正した。現在の実効sourceとDB設定・private権利が一致し、公開先の読み取りで0件が確認された場合だけ、公開を`not_applicable`にする。全partition・scope・policy・件数を照合できないcaptureは正常にしない。Overviewの公開対象数も収集対象数から分け、公開未承認という恒常設定はRightsに残す。読み取り失敗や設定差、snapshot不整合を対象外/0件へ置き換えない。
+
+反映順は対応Admin→Collector、rollbackはCollector→Admin。APIは別の配信単位で、稼働24768e9からの差にはURL長上限・Retry-After・latest SQLに加え、既存のGPU/PoC共有schema差もある。どれも本番直前承認が必要。新migrationはなく、適用済み0006を再実行せず、独立GPUの0004も含めない。通知・AGENT・schema recovery flagは現状を維持する。DotsのMCP接続と、夜間実行・結果保存が実際に動くことを区別し、未報告の結果は正常や完了にしない。

@@ -259,7 +259,7 @@ export async function readOperationalStatus(env: CollectorEnv, sources: Source[]
             .bind(identity.run_id)
             .first<Record<string, unknown>>()
         : null;
-      const run = row ? await runDTO(env, row, now) : null;
+      const run = row ? await runDTO(env, row, now, false, now, s) : null;
       const snaps = await env.PRIVATE_DB.prepare(
         'SELECT snapshot_id,complete_capture,quarantined_count,scope_hash,policy_version,observed_at FROM model_snapshots WHERE run_id=? AND recorded_at<=? ORDER BY recorded_at DESC,snapshot_id DESC LIMIT 1',
       )

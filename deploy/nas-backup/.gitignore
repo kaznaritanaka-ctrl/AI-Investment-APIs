@@ -1,0 +1,5 @@
+vendor/
+.env
+capture.private.json
+*.key
+*token*

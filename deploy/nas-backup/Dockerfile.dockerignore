@@ -1,0 +1,17 @@
+**
+!scripts/
+!scripts/backup-package.mjs
+!scripts/backup-capture.mjs
+!scripts/backup-roundtrip.test.mjs
+!scripts/backup-capture.test.mjs
+!config/
+!config/sources/
+!config/sources/ecb.json
+!config/sources/models_dev.json
+!config/sources/price_of_compute.json
+!deploy/
+!deploy/nas-backup/
+!deploy/nas-backup/Dockerfile
+!deploy/nas-backup/vendor/
+!deploy/nas-backup/vendor/age
+!deploy/nas-backup/vendor/age-keygen

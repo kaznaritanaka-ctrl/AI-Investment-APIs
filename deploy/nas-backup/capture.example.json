@@ -1,0 +1,15 @@
+{
+  "schema_version": "nas-capture-v1",
+  "account_id": "REVIEW_REQUIRED",
+  "private_database_id": "REVIEW_REQUIRED",
+  "public_database_id": "REVIEW_REQUIRED",
+  "bucket": "REVIEW_REQUIRED",
+  "approval_ref": "REVIEW_REQUIRED",
+  "window_start": null,
+  "window_end": null,
+  "export_hosts": [],
+  "max_total_bytes": 268435456,
+  "max_file_bytes": 134217728,
+  "source_config_sha256": { "ecb": null, "models_dev": null, "price_of_compute": null },
+  "schema_sha256": { "private": null, "public": null }
+}
