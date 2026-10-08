@@ -10,3 +10,4 @@ coverage/
 *.sqlite*
 *.db
 *.log
+deploy/nas-backup/vendor/

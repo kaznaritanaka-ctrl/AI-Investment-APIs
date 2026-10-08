@@ -274,3 +274,15 @@ NAS取得候補はECB/Modelsに加え、明示承認したsource hashを持つPo
 Adminとの結合確認で、公開を求めない正常なPoCを未公開障害として扱う経路を修正した。現在の実効sourceとDB設定・private権利が一致し、公開先の読み取りで0件が確認された場合だけ、公開を`not_applicable`にする。全partition・scope・policy・件数を照合できないcaptureは正常にしない。Overviewの公開対象数も収集対象数から分け、公開未承認という恒常設定はRightsに残す。読み取り失敗や設定差、snapshot不整合を対象外/0件へ置き換えない。
 
 反映順は対応Admin→Collector、rollbackはCollector→Admin。APIは別の配信単位で、稼働24768e9からの差にはURL長上限・Retry-After・latest SQLに加え、既存のGPU/PoC共有schema差もある。どれも本番直前承認が必要。新migrationはなく、適用済み0006を再実行せず、独立GPUの0004も含めない。通知・AGENT・schema recovery flagは現状を維持する。DotsのMCP接続と、夜間実行・結果保存が実際に動くことを区別し、未報告の結果は正常や完了にしない。
+
+## 2026-10-08 運用の後続候補
+
+`codex/operations-followup-20261008`は配信済み`8c58c92`を基点とする。取得試行の表示は、HTTP 2xxの`success`と304の`revalidated`を許可した専用変換へ変更する。不整合・未知コードを成功へ補完せず、既知の取得エラーとSecret非表示を維持する。Collectorの読み取り表示のみの差分で、収集・公開の判定やAPI/Adminの実装は変更しない。
+
+ローカルの`operations:cases --report <runs.json> --slot <UTC> --directory <private-directory>`は、現在のAdmin読み取り結果からmetadataだけの案件を記録する。同じsource・予定枠の同じ診断を重複記録せず、診断が変われば上書きせず別revisionへ残す。1受付10 revision、1案件8 revision、保存先1,000案件が上限で、到達時は停止/制限を明示する。古い・不完全な読み取りは再取得が必要で、ページ送り途中を全件確認済みとしない。実際のagent起動、調査済み判定、Adminへの結果保存、定期実行は未接続。
+
+`backup:maintenance`は元の絶対期限を使い、暗号化bundleの完全性と期限を確認する候補。`init <root>`は空の専用privateディレクトリだけを初期化し、`plan <root> <plan.json>`は取得処理と共通の一時lockを使って削除候補を作る。planはroot外へ保存する。`apply --allow-delete --plan-sha256 <hash> <root> <plan.json>`は30分以内の確認済みplanと全inventoryを再照合し、期限切れの明示ファイルだけを削除する。期限内・未知ファイル・不完全bundle・hash不一致・リンク・取得中のlockは削除しない。保持延長、広い再帰削除、鍵の読み取り、外部接続はない。途中のI/O失敗は不完全として停止するため、所有者が残存ファイルを確認する。管理者以外から書換え不能な専用保存先と単一writerが前提。
+
+終了コードはplanの正常0、期限切れ/26時間超/欠落/要確認2、入力・lock・処理失敗1。暗号化ファイルの照合ができても、実復元・別拠点複製を検証済みとしない。Linux CIへ公式age v1.3.2の固定checksumとNode 24 image digestを使う合成検証を追加し、ネットワークなし・非root・読み取り専用のNAS候補コンテナも検証対象にする。実NAS、実D1 export、定期実行、削除運用の開始とは区別する。
+
+本番で必要な変更は取得表示を直すCollectorの候補配信だけ。NAS本稼働、Dotsのrunner接続、Secret/token、通知、schedule、結果保存の書込み入口は引き続き具体的な範囲で別承認とする。権利・保持・Cron・既存GPU作業・適用済みmigrationは変更しない。詳細な実環境の証跡・設定・承認事項は既存の非公開運用guideへ保存する。
