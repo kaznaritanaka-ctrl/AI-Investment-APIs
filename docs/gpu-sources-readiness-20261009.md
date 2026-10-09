@@ -82,7 +82,7 @@ Could you confirm whether this use is permitted, how the automated-retrieval pro
 - [How We Publish](https://ccir.io/documents/how-we-publish)
 - [Daily Rates](https://ccir.io/rates)
 
-2026-10-06版Data Termsは、継続・大量取得、系列や履歴の再配布、商用再包装・商用派生利用を書面許諾の対象にしています。内部引用の許可を、日次取得・長期履歴への許可として使用しません。公開downloadの現行print＋30日履歴より長い利用やmachine delivery等も照会対象です。
+2026-10-09確認時のData Terms（ページ表示はas published 2026-10-08）は、継続・大量取得、系列や履歴の再配布、商用再包装・商用派生利用を書面許諾の対象にしています。内部引用の許可を、日次取得・長期履歴への許可として使用しません。公開downloadの現行print＋30日履歴より長い利用やmachine delivery等も照会対象です。
 
 HardwareのDCF推計、実売集計、posted ask集計と、Rental CRIを別系列にします。CCIRは二次集計ソースとして明示し、個別売買・出品に偽装したGPUSecondary行を作りません。他の直接取得providerの独立サンプルに重ねて加算しません。
 
