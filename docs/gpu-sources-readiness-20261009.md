@@ -114,4 +114,4 @@ Under your Data Terms, could you advise the required permission or license, avai
 
 ## この変更の検証
 
-ドキュメント1ファイルのみ。基準branchの3source設定、AGENTS、architecture、rights policy、既存GPU型/adapter/network/pipelineを照合し、公式リンクの到達と仕様・条件を確認しました。コード・設定・grant・migrationは変更せず、コードテストを今回実行したとは報告しません。
+ドキュメント2ファイルのみ。基準branchの3source設定、AGENTS、architecture、rights policy、既存GPU型/adapter/network/pipelineを照合し、公式リンクの到達と仕様・条件を確認しました。コード・設定・grant・migrationは変更せず、コードテストを今回実行したとは報告しません。
