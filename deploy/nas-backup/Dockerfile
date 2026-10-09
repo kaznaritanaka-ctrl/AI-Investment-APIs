@@ -12,6 +12,10 @@ RUN test "${#AGE_SHA256}" -eq 64 && test "${#AGE_KEYGEN_SHA256}" -eq 64 \
 WORKDIR /app
 COPY scripts/backup-package.mjs scripts/backup-capture.mjs scripts/backup-maintenance.mjs scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs scripts/backup-maintenance.test.mjs ./scripts/
 COPY config/sources/ecb.json config/sources/models_dev.json config/sources/price_of_compute.json ./config/sources/
+# Private NAS/SMB build inputs can be owner-only. Normalize only the copied
+# image files so the non-root verifier can read them without changing host ACLs.
+RUN chmod 0555 /app /app/scripts /app/config /app/config/sources \
+    && chmod 0444 /app/scripts/*.mjs /app/config/sources/*.json
 ENV AGE_BINARY=/usr/local/bin/age
 USER 10001:10001
 ENTRYPOINT ["node"]
