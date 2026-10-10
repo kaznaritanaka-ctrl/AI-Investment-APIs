@@ -41,6 +41,8 @@ jobs:
         run: |
           mkdir -p deploy/nas-backup/vendor
           cp "$RUNNER_TEMP/backup-age/age/age" "$RUNNER_TEMP/backup-age/age/age-keygen" deploy/nas-backup/vendor/
+          # Reproduce owner-only NAS/SMB inputs; the image must stay readable by UID 10001.
+          chmod 0600 scripts/backup-*.mjs config/sources/ecb.json config/sources/models_dev.json config/sources/price_of_compute.json
           docker compose -f deploy/nas-backup/compose.yaml run --build --rm verify
       - run: pnpm test:runtime
       - run: pnpm build
