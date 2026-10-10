@@ -1,7 +1,7 @@
 # One-shot production export candidate; separate immediate approval required.
 services:
   capture:
-    image: ai-investment-backup:reviewed-local
+    image: ${NAS_BACKUP_IMAGE_ID:?Set the verified local sha256 image ID}
     pull_policy: never
     command: [scripts/backup-capture.mjs, --remote, --allow-network, /run/capture.json, /backup]
     read_only: true
@@ -14,6 +14,7 @@ services:
     environment:
       BACKUP_STAGING_ROOT: /staging
       BACKUP_CLOUDFLARE_TOKEN_FILE: /run/cloudflare-token
+      BACKUP_R2_CREDENTIALS_FILE: /run/r2-readonly.json
       BACKUP_AGE_RECIPIENT: ${NAS_BACKUP_AGE_RECIPIENT:?Supply only the public age recipient}
     volumes:
       - type: bind
@@ -23,6 +24,10 @@ services:
       - type: bind
         source: ${NAS_BACKUP_TOKEN_FILE:?Set the protected token file path}
         target: /run/cloudflare-token
+        read_only: true
+      - type: bind
+        source: ${NAS_BACKUP_R2_CREDENTIALS_FILE:?Set the protected bucket-read-only S3 credentials file}
+        target: /run/r2-readonly.json
         read_only: true
       - type: bind
         source: ${NAS_BACKUP_OUTPUT_DIR:?Set a dedicated private backup folder}

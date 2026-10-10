@@ -1,0 +1,8 @@
+{
+  "schema_version": "backup-notification-v1",
+  "enabled": false,
+  "approval_ref": "REVIEW_REQUIRED",
+  "endpoint": "https://REVIEW_REQUIRED/v1/backup-status",
+  "window_start": null,
+  "window_end": null
+}

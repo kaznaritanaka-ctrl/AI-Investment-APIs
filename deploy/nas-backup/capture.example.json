@@ -1,5 +1,6 @@
 {
-  "schema_version": "nas-capture-v1",
+  "schema_version": "nas-capture-v2",
+  "r2_api": "s3",
   "account_id": "REVIEW_REQUIRED",
   "private_database_id": "REVIEW_REQUIRED",
   "public_database_id": "REVIEW_REQUIRED",

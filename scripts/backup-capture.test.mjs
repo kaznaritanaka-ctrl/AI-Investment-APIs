@@ -14,6 +14,7 @@ import {
   QUERIES,
 } from './backup-capture.mjs';
 import { decryptBackup } from './backup-package.mjs';
+import { inspectGeneration, decryptGeneration } from './backup-generation.mjs';
 
 const NOW = Date.parse('2026-10-06T01:00:00.000Z');
 const DAY = 86400000;
@@ -785,4 +786,53 @@ test('synthetic paged acquisition -> real age -> offline SQLite restore preserve
     manifest.capture_audit_sha256,
     sha(await readFile(join(directory, 'capture-audit.json'))),
   );
+});
+
+test('v2 capture groups near-expiry PoC without shortening the two-DB recovery point or resetting evidence expiry', async () => {
+  const f = pocFixture(6.99),
+    d = await dirs(),
+    ageBinary = process.env.AGE_BINARY;
+  assert.ok(ageBinary);
+  const identity = join(d.root, 'synthetic-v2.key');
+  const keygen = spawnSync(
+    join(dirname(ageBinary), process.platform === 'win32' ? 'age-keygen.exe' : 'age-keygen'),
+    ['-o', identity],
+    { windowsHide: true, stdio: 'pipe' },
+  );
+  assert.equal(keygen.status, 0);
+  const recipient = keygen.stderr.toString().match(/age1[a-z0-9]{58}/)?.[0];
+  const c = { ...f.config, schema_version: 'nas-capture-v2', r2_api: 's3' };
+  const { result, directory } = await captureBackup(c, {
+    client: f.client,
+    reviewedSources: f.reviewedSources,
+    outputRoot: d.output,
+    stagingRoot: d.staging,
+    recipient,
+    ageBinary,
+    now: () => NOW,
+  });
+  assert.equal(result.database_delete_after, iso(NOW + 30 * DAY));
+  assert.equal(result.full_inventory_until, iso(NOW + 0.01 * DAY));
+  assert.equal(result.r2_copied, 4);
+  const later = NOW + DAY;
+  const checked = await inspectGeneration(
+    join(directory, 'encrypted'),
+    later,
+    result.receipt_sha256,
+  );
+  assert.equal(checked.database_available, true);
+  assert.equal(checked.full_inventory_available, false);
+  const restored = await decryptGeneration(join(directory, 'encrypted'), {
+    outputDir: join(d.root, 'restored-v2'),
+    identityFile: identity,
+    ageBinary,
+    expectedReceiptHash: result.receipt_sha256,
+    now: later,
+  });
+  assert.equal(restored.files.filter((v) => v.path.startsWith('d1/')).length, 2);
+  assert.equal(restored.files.filter((v) => v.path.includes('price_of_compute')).length, 0);
+  assert.deepEqual(await readdir(d.staging), []);
+  const audit = JSON.parse(await readFile(join(directory, 'capture-audit.json'), 'utf8'));
+  assert.equal(audit.snapshot_id, result.snapshot_id);
+  assert.deepEqual(audit.observation_summary.private, f.meta.observations);
 });
