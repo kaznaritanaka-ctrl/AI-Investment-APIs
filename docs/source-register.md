@@ -64,3 +64,15 @@ Models.devの現在の生成仕様・MIT・provider設定をcommit `747925c4fb01
 | Runpod / Highreso / CCIR | 既存候補・調査のみ | 未確定 | disabled、仕様/権利待ち | 未実行 / 未開始 |
 
 後続分野を重複台帳や大量のdisabledファイルとして増やしません。P1のrate limit/tierは公開条件とアカウント固有枠を分離、agent/tool価格はrequest・時間・storage単位の拡張が必要です。P2メモリーは規格/spot/contract/retailと利用契約、電力はEIA等の正式仕様・キー・改定履歴、benchmarkは版・測定条件・データ配布権を確認してから接続します。今回それらの最新権利調査・adapter追加は未実施です。P3金利/信用/DC案件も既存候補のままです。これらをP0の実装・レビューの前提にはしません。
+
+## Highreso / Runpod / CCIR再確認（2026-10-09）
+
+[接続準備・許諾照会案](gpu-sources-readiness-20261009.md)を追加しました。上記の歴史的記述と、新しい確認結果を区別してください。
+
+| source | 新しい確認結果 | 変更していない判断 |
+| --- | --- | --- |
+| gpusoroban | 固定の公開インスタンス料金表を確認。公式feed・空き容量は未確認。初期scopeはA100の限定プランを提案 | disabled / candidate、取得・保存・公開の権利はreview_required |
+| runpod | 新規接続は公式REST v2 catalogueを候補とする。Bearer、単GPU USD/hour価格、POD/cloud/count条件付きavailabilityを分離 | enabled化・grant・Secretは未変更。体系的取得とAPI用途の許諾は未解消 |
+| ccir | 現行Data Termsはsystematic取得・長期履歴等に書面許諾を要求。Hardware集計/推計とCRIを別系列として設計する | disabled / candidate。機械schema、許諾、保持範囲は未確定 |
+
+今回の成果は調査・設計資料です。adapter実装、synthetic/live検証、Cloudflare本番確認や配信の実績ではありません。
