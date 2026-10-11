@@ -5,7 +5,9 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
-import { packageBackup, verifyBackup } from './backup-package.mjs';
+import { packageBackup, verifyBackup, durableWrite } from './backup-package.mjs';
+import { packageGeneration, inspectGeneration } from './backup-generation.mjs';
+import { R2ReadOnlyClient, R2ReadError } from './backup-s3.mjs';
 
 const DAY = 86400000;
 const API = 'https://api.cloudflare.com/client/v4';
@@ -70,7 +72,8 @@ export const QUERIES = Object.freeze({
 export function validateCaptureConfig(config, now = Date.now()) {
   const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
   if (
-    config?.schema_version !== 'nas-capture-v1' ||
+    !['nas-capture-v1', 'nas-capture-v2'].includes(config?.schema_version) ||
+    (config.schema_version === 'nas-capture-v2' && config.r2_api !== 's3') ||
     !/^[a-f0-9]{32}$/.test(config.account_id ?? '') ||
     !uuid.test(config.private_database_id ?? '') ||
     !uuid.test(config.public_database_id ?? '') ||
@@ -121,7 +124,12 @@ export class CloudflareBackupClient {
   constructor(
     config,
     token,
-    { fetcher = fetch, now = Date.now, pause = (ms) => new Promise((r) => setTimeout(r, ms)) } = {},
+    {
+      fetcher = fetch,
+      now = Date.now,
+      pause = (ms) => new Promise((r) => setTimeout(r, ms)),
+      r2Client,
+    } = {},
   ) {
     validateCaptureConfig(config, now());
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,256}$/.test(token))
@@ -131,6 +139,7 @@ export class CloudflareBackupClient {
     this.fetcher = fetcher;
     this.now = now;
     this.pause = pause;
+    this.r2Client = r2Client;
     this.base = API + '/accounts/' + config.account_id;
   }
   async request(path, body) {
@@ -191,6 +200,10 @@ export class CloudflareBackupClient {
     return result[0].results;
   }
   async objects(cursor) {
+    if (this.config.schema_version === 'nas-capture-v2') {
+      if (!this.r2Client) fail('r2_scoped_client_required');
+      return this.r2Client.objects(cursor);
+    }
     const query = new URLSearchParams({ per_page: '1000', ...(cursor ? { cursor } : {}) });
     const result = await this.api('/r2/buckets/' + this.config.bucket + '/objects?' + query);
     if (!Array.isArray(result.result) || typeof result.result_info?.is_truncated !== 'boolean')
@@ -203,6 +216,10 @@ export class CloudflareBackupClient {
   }
   async object(key) {
     if (!safeKey(key)) fail('r2_key_not_allowed');
+    if (this.config.schema_version === 'nas-capture-v2') {
+      if (!this.r2Client) fail('r2_scoped_client_required');
+      return this.r2Client.object(key);
+    }
     return this.request(
       '/r2/buckets/' +
         this.config.bucket +
@@ -866,9 +883,21 @@ async function captureLocked(
     };
     const audit = {
       schema_version: 'backup-capture-audit-v1',
+      snapshot_id: id,
       captured_at: iso(started),
       finished_at: iso(finished),
-      delete_after: iso(deadline),
+      delete_after:
+        config.schema_version === 'nas-capture-v2'
+          ? iso(Math.max(...files.map((f) => Date.parse(f.delete_after))))
+          : iso(deadline),
+      ...(config.schema_version === 'nas-capture-v2'
+        ? {
+            format: 'backup-generation-v2',
+            database_delete_after: iso(dbDeadline),
+            full_inventory_until: iso(deadline),
+            observation_summary: { private: before.observations, public: before.public },
+          }
+        : {}),
       databases_exported: 2,
       r2_listed: objects.length,
       r2_copied: retained.length,
@@ -882,33 +911,34 @@ async function captureLocked(
       restore_verified: false,
       publication_allowed: false,
     };
-    await writeFile(join(directory, 'capture-audit.json'), JSON.stringify(audit), {
-      flag: 'wx',
-      mode: 0o600,
-    });
+    await durableWrite(join(directory, 'capture-audit.json'), JSON.stringify(audit));
     plan.capture_audit_sha256 = hash(JSON.stringify(audit));
-    const packaged = await packageBackup(plan, {
+    const grouped = config.schema_version === 'nas-capture-v2';
+    const packaged = await (grouped ? packageGeneration : packageBackup)(plan, {
       inputRoot: staging,
       outputDir: encrypted,
       recipient,
       ageBinary,
       now: finished,
     });
-    const receipt = await verifyBackup(encrypted, now());
+    const receipt = grouped
+      ? await inspectGeneration(encrypted, now(), packaged.receipt_sha256)
+      : await verifyBackup(encrypted, now());
+    validateCaptureConfig(config, now());
+    if (grouped && !receipt.full_inventory_available) fail('capture_expired_before_completion');
     await cleanStaging();
     const result = {
       ...packaged,
-      encrypted_bytes: receipt.files.reduce((n, f) => n + f.bytes, 0),
+      encrypted_bytes: grouped
+        ? packaged.encrypted_bytes
+        : receipt.files.reduce((n, f) => n + f.bytes, 0),
       restore_verified: false,
       plaintext_cleanup_required: false,
       r2_copied: retained.length,
       r2_expired_excluded: entries.length - retained.length,
       cross_database_atomic: false,
     };
-    await writeFile(join(directory, 'status.json'), JSON.stringify(result), {
-      flag: 'wx',
-      mode: 0o600,
-    });
+    await durableWrite(join(directory, 'status.json'), JSON.stringify(result));
     return { result, directory };
   } catch (error) {
     let cleanupRequired = true;
@@ -921,7 +951,10 @@ async function captureLocked(
       JSON.stringify({
         status: 'failed',
         complete: false,
-        code: error instanceof CaptureError ? error.message : 'capture_failed',
+        code:
+          error instanceof CaptureError || error instanceof R2ReadError
+            ? error.message
+            : 'capture_failed',
         plaintext_cleanup_required: cleanupRequired,
       }),
       { flag: 'wx', mode: 0o600 },
@@ -963,6 +996,20 @@ export function reviewHashes(sources, schemas) {
   };
 }
 
+export async function protectedCredentialFile(path, max = 1024) {
+  if (!isAbsolute(path ?? '')) fail('protected_credential_file_required');
+  const stat = await lstat(path);
+  if (
+    !stat.isFile() ||
+    stat.isSymbolicLink() ||
+    stat.nlink !== 1 ||
+    stat.size > max ||
+    (process.platform !== 'win32' && stat.mode & 0o077)
+  )
+    fail('protected_credential_file_required');
+  return (await readFile(path, 'utf8')).trim();
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const args = process.argv.slice(2);
@@ -982,6 +1029,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     )
       fail('protected_token_file_required');
     const token = (await readFile(tokenFile, 'utf8')).trim();
+    const r2Client =
+      config.schema_version === 'nas-capture-v2'
+        ? new R2ReadOnlyClient(
+            config,
+            JSON.parse(await protectedCredentialFile(process.env.BACKUP_R2_CREDENTIALS_FILE)),
+          )
+        : undefined;
     const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
     const reviewedSources = await Promise.all(
       Object.keys(config.source_config_sha256).map(async (id) =>
@@ -989,7 +1043,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       ),
     );
     const result = await captureBackup(config, {
-      client: new CloudflareBackupClient(config, token),
+      client: new CloudflareBackupClient(config, token, { r2Client }),
       reviewedSources,
       outputRoot: args[3],
       stagingRoot: process.env.BACKUP_STAGING_ROOT,
@@ -1002,7 +1056,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       JSON.stringify({
         status: 'failed',
         complete: false,
-        code: error instanceof CaptureError ? error.message : 'capture_failed',
+        code:
+          error instanceof CaptureError || error instanceof R2ReadError
+            ? error.message
+            : 'capture_failed',
       }),
     );
     process.exitCode = 1;

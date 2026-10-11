@@ -1,0 +1,37 @@
+# One-shot restore candidate. The owner supplies a separately held receipt hash.
+# The original backup mount is read-only; plaintext exists only in disposable tmpfs.
+services:
+  restore:
+    image: ${NAS_BACKUP_IMAGE_ID:?Set the verified local sha256 image ID}
+    pull_policy: never
+    command:
+      [
+        scripts/backup-restore.mjs,
+        --receipt-sha256,
+        '${NAS_BACKUP_RECEIPT_SHA256:?Supply the independently retained receipt digest}',
+        /input/generation,
+        /restore/result,
+      ]
+    network_mode: none
+    read_only: true
+    user: '10001:10001'
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 1g
+    memswap_limit: 1g
+    environment:
+      BACKUP_AGE_IDENTITY_FILE: /run/restore-identity
+    volumes:
+      - type: bind
+        source: ${NAS_BACKUP_GENERATION_DIR:?Select one approved unexpired generation}
+        target: /input/generation
+        read_only: true
+      - type: bind
+        source: ${NAS_BACKUP_RESTORE_IDENTITY_FILE:?Supply the separately approved temporary identity mount}
+        target: /run/restore-identity
+        read_only: true
+    tmpfs:
+      - /restore:rw,noexec,nosuid,nodev,size=536870912,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=16777216,uid=10001,gid=10001,mode=0700
+    restart: 'no'

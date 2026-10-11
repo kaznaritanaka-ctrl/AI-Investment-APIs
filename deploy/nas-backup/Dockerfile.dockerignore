@@ -6,6 +6,14 @@
 !scripts/backup-roundtrip.test.mjs
 !scripts/backup-capture.test.mjs
 !scripts/backup-maintenance.test.mjs
+!scripts/backup-generation.mjs
+!scripts/backup-restore.mjs
+!scripts/backup-status.mjs
+!scripts/backup-notify.mjs
+!scripts/backup-generation.test.mjs
+!scripts/backup-s3.test.mjs
+!scripts/backup-restore.test.mjs
+!scripts/backup-status.test.mjs
 !config/
 !config/sources/
 !config/sources/ecb.json
@@ -17,3 +25,4 @@
 !deploy/nas-backup/vendor/
 !deploy/nas-backup/vendor/age
 !deploy/nas-backup/vendor/age-keygen
+!deploy/nas-backup/vendor/backup-s3.mjs

@@ -32,7 +32,11 @@
     "backup:package": "node scripts/backup-package.mjs",
     "backup:capture": "node scripts/backup-capture.mjs",
     "backup:maintenance": "node scripts/backup-maintenance.mjs",
-    "test:backup": "node --test scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs scripts/backup-maintenance.test.mjs"
+    "backup:restore": "node scripts/backup-restore.mjs",
+    "backup:status": "node scripts/backup-status.mjs",
+    "backup:notify": "node scripts/backup-notify.mjs",
+    "backup:build": "node scripts/backup-build.mjs",
+    "test:backup": "node --test scripts/backup-roundtrip.test.mjs scripts/backup-capture.test.mjs scripts/backup-maintenance.test.mjs scripts/backup-generation.test.mjs scripts/backup-s3.test.mjs scripts/backup-restore.test.mjs scripts/backup-status.test.mjs"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

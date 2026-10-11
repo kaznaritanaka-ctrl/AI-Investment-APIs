@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { lstat, mkdir, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, realpath, open } from 'node:fs/promises';
 import { resolve, relative, dirname, isAbsolute } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
@@ -35,7 +35,7 @@ function inside(root, path) {
     !isAbsolute(rel)
   );
 }
-async function hashFile(file) {
+export async function hashFile(file) {
   const hash = createHash('sha256');
   let size = 0;
   for await (const chunk of createReadStream(file)) {
@@ -53,7 +53,7 @@ function boundedStream(limit) {
     },
   });
 }
-async function boundedRead(file) {
+export async function boundedRead(file) {
   const stat = await lstat(file);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_MANIFEST_BYTES)
     fail('manifest_too_large');
@@ -67,11 +67,30 @@ async function boundedRead(file) {
   return Buffer.concat(parts);
 }
 
+export async function durableWrite(path, text) {
+  const handle = await open(path, 'wx', 0o600);
+  try {
+    await handle.writeFile(text);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function syncFile(path) {
+  const handle = await open(path, 'r+');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 // Packaging is offline. A separately approved exporter must establish completeness,
 // source policy and absolute deletion deadlines before calling this boundary.
 export function validatePlan(plan, now = Date.now()) {
   if (
-    plan?.schema_version !== 'backup-input-v1' ||
+    !['backup-input-v1', 'backup-input-v2'].includes(plan?.schema_version) ||
     !snapshotId(plan.snapshot_id) ||
     !Number.isFinite(now) ||
     !instant(plan.captured_at) ||
@@ -82,11 +101,20 @@ export function validatePlan(plan, now = Date.now()) {
     Date.parse(plan.delete_after) > Date.parse(plan.captured_at) + 30 * DAY ||
     plan.inventory_complete !== true ||
     !Array.isArray(plan.files) ||
-    plan.files.length < 2 ||
+    plan.files.length <
+      (plan.schema_version === 'backup-input-v2' && plan.kind === 'artifacts' ? 1 : 2) ||
     plan.files.length > 100000 ||
     (plan.capture_audit_sha256 !== undefined && !digest(plan.capture_audit_sha256))
   )
     fail('backup_plan_invalid');
+  const grouped = plan.schema_version === 'backup-input-v2';
+  if (
+    grouped &&
+    (!['databases', 'artifacts'].includes(plan.kind) ||
+      !/^g-[a-f0-9]{64}$/.test(plan.group_id ?? '') ||
+      !digest(plan.capture_audit_sha256))
+  )
+    fail('backup_group_invalid');
   const seen = new Set();
   for (const entry of plan.files) {
     if (
@@ -96,12 +124,18 @@ export function validatePlan(plan, now = Date.now()) {
       !Number.isSafeInteger(entry.bytes) ||
       entry.bytes < 1 ||
       !instant(entry.delete_after) ||
-      Date.parse(entry.delete_after) < Date.parse(plan.delete_after)
+      Date.parse(entry.delete_after) < Date.parse(plan.delete_after) ||
+      (grouped && entry.delete_after !== plan.delete_after) ||
+      (grouped && entry.path.startsWith('d1/') !== (plan.kind === 'databases'))
     )
       fail('backup_entry_invalid');
     seen.add(entry.path);
   }
-  if (!seen.has('d1/private.sql') || !seen.has('d1/public.sql')) fail('both_databases_required');
+  if (
+    (!grouped || plan.kind === 'databases') &&
+    (!seen.has('d1/private.sql') || !seen.has('d1/public.sql'))
+  )
+    fail('both_databases_required');
   return plan;
 }
 
@@ -188,6 +222,7 @@ export async function packageBackup(
     );
     if (hash.digest('hex') !== file.sha256 || bytes !== file.bytes)
       fail('input_changed_during_backup');
+    await syncFile(dest);
     encrypted.push({ name: file.cipher, ...(await hashFile(dest)) });
   }
   const manifest = {
@@ -196,6 +231,9 @@ export async function packageBackup(
     captured_at: plan.captured_at,
     delete_after: plan.delete_after,
     inventory_complete: true,
+    ...(plan.schema_version === 'backup-input-v2'
+      ? { kind: plan.kind, group_id: plan.group_id }
+      : {}),
     ...(plan.capture_audit_sha256 ? { capture_audit_sha256: plan.capture_audit_sha256 } : {}),
     files: files.map(({ path, sha256, bytes, delete_after, cipher }) => ({
       path,
@@ -214,18 +252,20 @@ export async function packageBackup(
     createWriteStream(resolve(output, 'manifest.age'), { flags: 'wx', mode: 0o600 }),
   );
   encrypted.push({ name: 'manifest.age', ...(await hashFile(resolve(output, 'manifest.age'))) });
+  await syncFile(resolve(output, 'manifest.age'));
   const receipt = {
-    schema_version: 'encrypted-backup-v1',
+    schema_version:
+      plan.schema_version === 'backup-input-v2' ? 'encrypted-backup-v2' : 'encrypted-backup-v1',
+    ...(plan.schema_version === 'backup-input-v2'
+      ? { kind: plan.kind, group_id: plan.group_id }
+      : {}),
     snapshot_id: plan.snapshot_id,
     captured_at: plan.captured_at,
     delete_after: plan.delete_after,
     files: encrypted,
   };
   // No plaintext filenames, bodies, resource IDs or credentials in this marker.
-  await writeFile(resolve(output, 'complete.json'), JSON.stringify(receipt), {
-    flag: 'wx',
-    mode: 0o600,
-  });
+  await durableWrite(resolve(output, 'complete.json'), JSON.stringify(receipt));
   return {
     snapshot_id: plan.snapshot_id,
     encrypted_files: encrypted.length,
@@ -240,7 +280,7 @@ export async function verifyBackup(directory, now = Date.now()) {
   const raw = await boundedRead(resolve(root, 'complete.json'));
   const receipt = JSON.parse(raw);
   if (
-    receipt.schema_version !== 'encrypted-backup-v1' ||
+    !['encrypted-backup-v1', 'encrypted-backup-v2'].includes(receipt.schema_version) ||
     !snapshotId(receipt.snapshot_id) ||
     !instant(receipt.captured_at) ||
     Date.parse(receipt.captured_at) > now ||
@@ -251,6 +291,12 @@ export async function verifyBackup(directory, now = Date.now()) {
     receipt.files.length > 100001
   )
     fail('backup_expired_or_incomplete');
+  if (
+    receipt.schema_version === 'encrypted-backup-v2' &&
+    (!['databases', 'artifacts'].includes(receipt.kind) ||
+      !/^g-[a-f0-9]{64}$/.test(receipt.group_id ?? ''))
+  )
+    fail('receipt_invalid');
   const names = new Set();
   for (const entry of receipt.files) {
     if (
@@ -273,7 +319,8 @@ export async function verifyBackup(directory, now = Date.now()) {
     if (entry.sha256 !== actual.sha256 || entry.bytes !== actual.bytes)
       fail('cipher_integrity_failed');
   }
-  if (!names.has('manifest.age') || names.size < 3) fail('backup_incomplete');
+  if (!names.has('manifest.age') || names.size < (receipt.kind === 'artifacts' ? 2 : 3))
+    fail('backup_incomplete');
   return receipt;
 }
 
@@ -301,6 +348,8 @@ export async function decryptBackup(
     manifest.snapshot_id !== receipt.snapshot_id ||
     manifest.captured_at !== receipt.captured_at ||
     manifest.delete_after !== receipt.delete_after ||
+    manifest.kind !== receipt.kind ||
+    manifest.group_id !== receipt.group_id ||
     manifest.files.length + 1 !== receipt.files.length
   )
     fail('manifest_mismatch');

@@ -33,6 +33,13 @@ jobs:
           printf '%s  %s\n' cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10 "$RUNNER_TEMP/backup-age/release.tar.gz" | sha256sum --check -
           tar -xzf "$RUNNER_TEMP/backup-age/release.tar.gz" -C "$RUNNER_TEMP/backup-age" age/age age/age-keygen
           AGE_BINARY="$RUNNER_TEMP/backup-age/age/age" pnpm test:backup
+      - run: pnpm test:runtime
+      - run: pnpm build
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+      - run: node scripts/generate.mjs
+      - run: git diff --exit-code -- config/source.schema.json openapi.json
+      - run: git diff --check
       - name: Verify the isolated NAS container with synthetic data
         env:
           NAS_BACKUP_NODE_IMAGE: node:24.19.0-bookworm-slim@sha256:e5a8dee7bc1e6a215d224a7ef8206f7e77271bc3cabd5febf2beafac0674f174
@@ -41,14 +48,8 @@ jobs:
         run: |
           mkdir -p deploy/nas-backup/vendor
           cp "$RUNNER_TEMP/backup-age/age/age" "$RUNNER_TEMP/backup-age/age/age-keygen" deploy/nas-backup/vendor/
+          pnpm backup:build
           # Reproduce owner-only NAS/SMB inputs; the image must stay readable by UID 10001.
           chmod 0600 scripts/backup-*.mjs config/sources/ecb.json config/sources/models_dev.json config/sources/price_of_compute.json
           docker compose -f deploy/nas-backup/compose.yaml run --build --rm verify
-      - run: pnpm test:runtime
-      - run: pnpm build
-        env:
-          WRANGLER_SEND_METRICS: 'false'
-      - run: node scripts/generate.mjs
-      - run: git diff --exit-code -- config/source.schema.json openapi.json
-      - run: git diff --check
 # No live-source requests, deployment or private artifacts in CI.

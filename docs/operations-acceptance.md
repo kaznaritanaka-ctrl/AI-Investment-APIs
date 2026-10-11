@@ -286,3 +286,86 @@ Adminとの結合確認で、公開を求めない正常なPoCを未公開障害
 終了コードはplanの正常0、期限切れ/26時間超/欠落/要確認2、入力・lock・処理失敗1。暗号化ファイルの照合ができても、実復元・別拠点複製を検証済みとしない。Linux CIへ公式age v1.3.2の固定checksumとNode 24 image digestを使う合成検証を追加し、ネットワークなし・非root・読み取り専用のNAS候補コンテナも検証対象にする。実NAS、実D1 export、定期実行、削除運用の開始とは区別する。
 
 本番で必要な変更は取得表示を直すCollectorの候補配信だけ。NAS本稼働、Dotsのrunner接続、Secret/token、通知、schedule、結果保存の書込み入口は引き続き具体的な範囲で別承認とする。権利・保持・Cron・既存GPU作業・適用済みmigrationは変更しない。詳細な実環境の証跡・設定・承認事項は既存の非公開運用guideへ保存する。
+
+## 2026-10-11 NAS本番移行の準備候補
+
+PR #10/#11と、NAS合成21件が成功したPR #13のfd6c40aを親とする
+`codex/nas-production-readiness-20261011`。変更対象はNAS用の取得・暗号化・
+保守・復元・状態通知候補と既存CI。Collector/API/Adminの配信、D1/R2原本、
+source設定、権利、保持期限、migration、独立GPU作業、NAS実機設定は変更しない。
+以下はコード候補であり、本番取得・無人運用開始の記録ではない。
+
+### 今回の実装
+
+- `nas-capture-v2`はD1 tokenとR2 S3 credentialsを分離する。R2は固定account/
+  bucketへのListObjectsV2と、既存allowlistのGETだけ。redirect、任意URL、
+  書込みAPI、未知source、未索引のobject、権利/期限不一致は拒否する。
+  bucket限定Object Read OnlyはS3用で、旧REST credentialへの暗黙fallbackはない。
+  D1 SELECT/exportで実際に必要な最小権限は、別承認の初回疎通で確認する。
+  不足した場合は停止し、D1 Write等を自動追加しない。
+- `backup-generation-v2`は両D1を一組、Evidence/archiveを元の絶対期限ごとの
+  別組としてage暗号化する。親receiptが各組のcipher hash、元期限、audit hash
+  を結び付ける。短いPoC期限でDB全体を失効させず、各ファイルの期限も延ばさない。
+  `database_delete_after`、`full_inventory_until`、全組の最終期限を区別する。
+  v1の検証/復号と従来の厳格保守も残す。既存NAS上の形式変換はしない。
+- `backup:maintenance plan --isolate-incomplete <root> <plan.json>`は未完成/不正な
+  世代を要確認として残し、別の検証済み期限切れ組だけを提案できる。
+  applyには従来どおり30分以内のplan hashと明示削除flagが必要。
+  未知root entryは全体を停止する。不完全世代自体の自動削除はしない。
+  v2の期限切れ組で削除が途中終了した場合は、元receiptのhashで残存ファイルを
+  再検証して新planを作れる。期限内の欠落・未知ファイル・改変は復旧点扱いしない。
+- `backup:restore --receipt-sha256 <独立保管したhash> <generation> <new-output>`は
+  有効期限内の組だけを復号し、2DBを別々のメモリSQLiteへimportする。
+  schema hash、source別件数/観測期間、integrity、外部キー、immutable update
+  triggerと各tableの値digestを確認する。SQLのATTACH、extension、
+  filesystem PRAGMA、virtual table等を拒否し、workerの時間/メモリを制限する。
+  期限切れEvidenceは読み出さず、全inventory復元済みとも表示しない。
+  2DBの同時点整合性や本番再公開を保証する処理ではない。
+- `backup:status <root> [restore-result.json]`はロックを作らない読み取り検査。
+  取得・完全性・復元・別媒体・通知を分け、確認不能の件数はnullとする。
+  `nas-backup-status-v1`には値本文、SQL、ファイル名、resource ID、bookmark、
+  任意メッセージを含めない。Dots/外部LLMへ渡せるのはこの診断metadataだけ。
+- `backup:notify`は署名付きmetadataを送る一回限りの候補。
+  送信先を含む承認済みconfig hash、最大1時間の承認枠、`--send --allow-network`、
+  専用署名鍵を要求し、ACKのbody hashを照合する。設定例はenabled=false。
+  現時点ではAdminの受信/保存経路、独立監視のrunner、実通知先を接続していない。
+  診断生成成功を通知到達やバックアップ成功へ置き換えない。
+
+### 配置・運用の確定条件
+
+取得Composeは固定image ID、専用root、UID 10001、read-only root、cap drop、
+512MiBのplaintext tmpfs、1GiB memory、別々の読み取りcredential mountを使う候補。
+復元Composeはnetwork none、元generation/鍵のread-only mount、破棄可能tmpfsのみ。
+所有者の個人share、既存Docker設定、trash/snapshot、既存データは変更しない。
+NASの実効mount権限・Docker設定・空き容量・時刻・通信制御・停電時の挙動は、
+この新候補では未検証。ファイルfsyncを追加したが停電復旧試験成功とは扱わない。
+
+本番移行には次を別々に確認する。
+
+1. 新候補のNAS合成実行と、専用root/実効権限を確認する操作。
+2. age公開recipient/別保管identity、D1最小権限token、bucket限定S3読み取り
+   credential、通知署名鍵の作成・配置。秘密値はチャット/Gitへ出さない。
+3. 固定2DB・既存3sourceのallowlist・schema/source hash・byte上限・1時間枠を
+   指定した本番取得1回。D1 export中は対象DBのqueryが一時停止し得る。
+4. 取得後の独立receipt保全と、そのgenerationを対象とする隔離復元試験。
+5. Admin結果受信と独立監視の具体的な配備、実通知1回。旧Collector outboxや
+   Webhookを流用/再送しない。DotsがCloudflareを読めるだけではNAS監視完了でない。
+6. 既存03:17収集/03:47watchdog/03:17–09:17 capture windowを避ける日次枠
+   （09:30–10:30 JST案）、実行回数/上限/失敗時停止、受信欠落検知の有効化。
+7. 期限削除の個別plan承認。または別途承認された限定的な定期保守方式。
+   30日は上限であり30世代保持保証ではない。期限内に削除できる運用が確定する
+   までは無人取得を開始しない。NAS trash/snapshot/別媒体のコピーも元期限に従う。
+
+NASだけでは災害/機器故障への別拠点冗長性は未達。Driveの約3GBを全量backup
+保存先と決めず、実測後にmetadata receiptと別媒体の役割を判断する。
+取得用imageにはage秘密鍵を入れず、Secretsを含む設定もbackup対象に加えない。
+
+### 検証記録
+
+この節の初回コミット時点では個別の合成42件成功。固定候補の全体再検証、
+GitHub CI、新候補のNAS実機結果は、完了したものだけ後続記録へ追記する。
+前のNAS21件や別候補のCI成功と合算しない。
+
+参照: [R2 credentialの適用範囲](https://developers.cloudflare.com/r2/api/tokens/)、
+[D1 export](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/export/)、
+[AWS公式SigV4検証例](https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sig-v4-header-based-auth.html)。
