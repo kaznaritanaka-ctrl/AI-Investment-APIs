@@ -9,14 +9,21 @@
 | pnpm install --frozen-lockfile | 成功、lockfile変更なし |
 | pnpm check | format / TypeScript / 公開境界 / active設定の検査成功 |
 | 新規contract/domain/storage試験（21件全通過） | EIA/JEPX projection、9権限、null license、URL/auth/LLM/export拒否、国内GPU/DC、D1/R2復旧・保持をsyntheticで検証 |
-| pnpm test 全体 | Windowsのthreads poolで実行中。全体検証は未完了 |
+| pnpm test 全体 | Windowsのthreads poolで27 files / 269 tests全通過（331秒）。下記の実行オプションを使用 |
+| GitHub CI | 実装commit `9092ec0` の[validate run 38726853846](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/actions/runs/38726853846)が成功。標準のpnpm test、check、offline preflight、runtime、build dry-run、schema生成・差分検査を含む |
 | pnpm test:runtime | workerdで既存FX/AI、schema recovery、operations、GPU1,051件/22page、Models50/250/1,000件の処理・replay・公開境界が成功。外部HTTPなし |
 | pnpm build | Collector/APIともdeploy --dry-runで成功。Upload表示はbundleサイズであり実deployではない |
 | pnpm preflight | mode=offline / static_valid=true / ready=true / blockers=[] / network_performed=false。新research proposalは対象外で、実装した専用schema/gate試験で検査 |
 | node scripts/generate.mjs | 既存source schema/OpenAPIは同一。research.schema.jsonを追加 |
 | 既存本番設定・migration | config/sources / deployment / wrangler / 0001〜0006 / public API実装の変更0をdiff確認 |
 
-Windowsサンドボックス内ではesbuildが親ディレクトリの読み取り制限で失敗したため、同じローカルschema/runtime/dry-runを必要な実行権限で再実行した。標準の全体testはworker進行を確認できず中断し、threads pool / maxWorkers=4 / testTimeout=120000 / hookTimeout=120000で再実行した。テスト失敗を成功へ読み替えず、最終の集計を下記に記録する。
+Windowsサンドボックス内ではesbuildが親ディレクトリの読み取り制限で失敗したため、同じローカルschema/runtime/dry-runを必要な実行権限で再実行した。標準の全体testはworker進行を確認できず中断した。その後の実行では268件が通過し、admin-releaseの1件がcheckout所有者と実行ユーザーの違いによるGitのownership検査で失敗した。最終実行では当該checkoutだけをsafe.directoryに指定する一時的なGIT_CONFIG環境変数を子プロセスへ渡し、次のコマンドで27 files / 269 testsが全通過した。Gitのglobal設定とリポジトリのtest設定は変更していない。
+
+```text
+pnpm test --pool=threads --maxWorkers=4 --fileParallelism=true --testTimeout=120000 --hookTimeout=120000 --reporter=verbose
+```
+
+GitHub CIでは標準のpnpm testをそのまま実行し成功した。Windows用の実行オプションは本番やCIの設定変更ではない。
 
 ## 試験が保証する範囲
 
