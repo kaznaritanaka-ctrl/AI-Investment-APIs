@@ -1,5 +1,7 @@
 # Phase 0 — 構成と判断
 
+2026-10-15追加: [Private研究用の設計](private-research-runbook.md)は既存Collector未接続のローカル経路です。0007は既存private D1内の研究用追加テーブルで、public migration/API変更なし。EIA/JEPX候補、国内GPU受入、DC開示revisionの検証だけを追加し、既存の稼働sourceとCronは維持します。[mainと本番の差分](source-expansion-20261015.md)をdeploy前に再確認してください。
+
 調査日: 2026-09-27 JST (2026-09-26 UTC)。開始時のmainは `c64950ec0612f03a3556457583e17906ec9d2e78`、README一行のみ。既存実装・AGENTS.mdなし。開発ブランチ `codex/phase-0-1-foundation`。本番リソースは作成しない。
 
 Cloudflare Cron → collector Worker → 取得/保存の独立policy gate → 決定的HTTP → private R2証拠 → private D1の追記履歴 → 品質/公開gate → public D1。

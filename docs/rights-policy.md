@@ -1,5 +1,7 @@
 # 権限ルール
 
+2026-10-15 Private研究案: `license_url:null` は未確認情報であり、それだけで拒否/許可を決めません。既存9権限を独立検査し、適用根拠・field・期間・保持が揃ったsourceだけowner reviewへ提示します。今回の候補JSONは新規allowedなし。公開/外部LLM/raw exportなしの[ローカル経路と復元条件](private-research-runbook.md)を参照してください。
+
 9種類の権限は allowed / denied / review_required / expired。source設定に対象フィールド、条件、判断主体、根拠版、有効期間、保持日数を持つ。既知の明示ライセンスに対する実装ルールであり、新規の許諾をAIが作るものではない。
 
 収集にはautomated_collection、証拠/履歴保存にはprivate_storage、処理にはinternal_analysisが必要。公開にはpublic_display・normalized_redistribution・commercial_redistributionを要求する（将来の有料化でも原権利を失わないよう、初期公開はこの共通部分に限定）。派生は全入力のderived_redistributionも必要。外部LLM送信とraw配信は独立で、初期runtimeにはどちらも実装しない。

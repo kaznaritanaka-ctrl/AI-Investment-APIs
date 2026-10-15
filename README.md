@@ -2,6 +2,10 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
+2026-10-15: [Issue #15の調査台帳](docs/source-expansion-20261015.md)と[Private研究用の実装・承認手順](docs/private-research-runbook.md)を追加しました。EIA/JEPXの小規模adapterとPrivate保存、国内GPU受入、DC開示の合成検証です。新規sourceは未承認・disabled、本番未接続です。[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。Cloudflareの配信版はmainとは異なり、PoCはowner承認のPrivate本番設定が別branchにあります。この開発branchを古い設定のままdeployしないでください。
+
+以下の本番対応の記録は2026-10-04〜05時点です。10/15のread-only確認との差分は上記台帳へ分離しています。
+
 現在の本番はWorkers Paid・stage=enabledで、ECBとModels.devの5 provider/17 fieldを既存の日次Cronで収集・公開しています。2026-10-04にCollector a534ff0、Admin 97277deとprivate 0005/配信台帳を反映済みです。public APIは24768e9です。GPU実ソースはdisabledのままです。[本番対応・継続運用の受け入れ](docs/operations-acceptance.md)に配信version/tree/artifact、履歴保全、通知・復旧・保持の確認結果と現在の残件をまとめています。通知修正/0006とschema drift recoveryは未配信・未適用です。2026-10-05の所有者によるNetlify確認でGitHub push/PR保留を解除し、最新作業branchを公開して[Draft PR #7](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/7)を作成しました。main mergeと本番変更は引き続き別承認です。
 
 - [Phase 2納品報告](docs/phase2-delivery-report.md)

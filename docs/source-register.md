@@ -1,5 +1,7 @@
 # ソース台帳 — Phase 0
 
+2026-10-15追加: [全分野の実査台帳](source-expansion-20261015.md)へ、国内GPU/電力/メモリ/DC/水/ラボ/Physical AIと既存ソースの優先判断を分離しました。稼働用sourceは増やしていません。EIA/JEPXの承認待ちproposalはconfig/proposals/researchに置き、Private合成検証のみです。以下の過去台帳と10/15の配信版には差分があるため、最新のmetadata確認は追加台帳を参照してください。
+
 調査日時: 2026-09-26 18:23 UTC以降（2026-09-27 JST）。権限の判断と価格の取得日時は別。機械可読の全項目・9権限・対象範囲・有効期間・保持日数は config/sources/*.json、検証スキーマは src/schema.ts / config/source.schema.json。
 
 | source_id | 投資上の用途・取得方法 | 初期判定 |

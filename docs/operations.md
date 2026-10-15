@@ -1,5 +1,7 @@
 # 運用手順（現在地: 2026-10-04）
 
+2026-10-15のPrivate研究拡張は[別runbook](private-research-runbook.md)に分離しています。新source/0007はローカル候補のみ、既存3 Cron・source grants・Admin/Public/NASを変更していません。mainと本番PoC/Collectorの差分は[実査台帳](source-expansion-20261015.md)を確認し、下記の過去状態だけを根拠にdeployしないでください。
+
 [本番対応・受け入れ記録](operations-acceptance.md)を先に参照。0005/現Collector/Admin/台帳5件は反映済み、通知0006とそのcodeは候補です。
 
 
