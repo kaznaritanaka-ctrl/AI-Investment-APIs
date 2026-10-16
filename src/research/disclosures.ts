@@ -65,6 +65,41 @@ export const DCDisclosureSchema = z
     }
   });
 export type DCDisclosure = z.infer<typeof DCDisclosureSchema>;
+function publicationFacts(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(publicationFacts);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(
+          ([key]) =>
+            ![
+              'observed_at',
+              'recorded_at',
+              'source_policy_version',
+              'evidence_ref',
+              'location_evidence_ref',
+            ].includes(key),
+        )
+        .map(([key, item]) => [key, publicationFacts(item)]),
+    );
+  return value;
+}
+async function disclosureContentHash(v: DCDisclosure) {
+  // Observation/review timestamps are not a revision to the publisher's stated facts.
+  return hash(
+    stable({
+      series_id: v.series_id,
+      source_id: v.source_id,
+      source_url: v.source_url,
+      source_published_at: v.source_published_at,
+      source_date: v.source_date,
+      event_kind: v.event_kind,
+      disclosure_id: v.disclosure_id,
+      portfolio: publicationFacts(v.portfolio),
+      water: publicationFacts(v.water),
+    }),
+  );
+}
 export async function disclosureRevision(input: unknown, previous?: DCDisclosure) {
   const v = DCDisclosureSchema.parse(input);
   if (previous) {
@@ -78,8 +113,15 @@ export async function disclosureRevision(input: unknown, previous?: DCDisclosure
     )
       throw new Error('disclosure_lineage_mismatch');
   }
+  const contentHash = await disclosureContentHash(v);
   return {
     ...v,
+    content_hash: contentHash,
+    change_kind: !previous
+      ? 'first_seen'
+      : contentHash === (await disclosureContentHash(previous))
+        ? 'reobserved'
+        : 'revised',
     observation_id: await hash(stable(v)),
     previous_observation_id: previous ? await hash(stable(previous)) : null,
   };

@@ -25,6 +25,11 @@ describe('private research contracts (synthetic, no live HTTP)', () => {
         JSON.parse(readFileSync('config/proposals/research/' + id + '.json', 'utf8')),
       );
       expect(c.source.enabled).toBe(false);
+      expect(c.retention.normalized_days).toBeNull();
+      expect(c.retention.target_days).toBe(1095);
+      expect(c.retention.time_travel_days).toBeNull();
+      expect(c.retention.reviewed_ref).toBeNull();
+      expect(c.history_access).toEqual([]);
       expect(Object.keys(c.source.policy.rights).sort()).toEqual([...rightsKeys].sort());
       expect(Object.values(c.source.policy.rights)).not.toContain('allowed');
       expect(sources.some((s) => s.source_id === id)).toBe(false);

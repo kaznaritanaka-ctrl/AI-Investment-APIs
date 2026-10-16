@@ -4,11 +4,25 @@ import { errorCode, hash, isoTime, stable } from '../util';
 import { parseElectricity, researchRequest } from './electricity';
 import {
   assertResearchAllowed,
+  assertResearchHistoryAllowed,
   ResearchPageSchema,
   validateQuery,
   type ResearchConfig,
   type ResearchQuery,
 } from './schema';
+import {
+  assertNotRevoked,
+  allCopiesExpiry,
+  historyExpiry,
+  plusDays,
+  recordDeletion,
+  retentionSnapshot,
+  revokeResearchSource,
+  runDeletionKey,
+  saveResearchConfigVersion,
+  sourceRevocationKey,
+  type RetainedRun,
+} from './retention';
 
 export type ResearchEnv = {
   PRIVATE_DB: D1Database;
@@ -36,8 +50,6 @@ const envelopeSchema = z
     page: ResearchPageSchema,
   })
   .strict();
-const plusDays = (now: string, days: number) =>
-  new Date(Date.parse(now) + days * 86400000).toISOString();
 function localOnly(env: ResearchEnv) {
   // Deliberately not a deployed entrypoint. Production integration is a separate review.
   if (env.ENVIRONMENT === 'production') throw new Error('research_production_not_integrated');
@@ -47,8 +59,9 @@ async function checkCurrent(
   config: ResearchConfig,
   digest: string,
   opt: Options,
+  acquisition = true,
 ) {
-  assertResearchAllowed(
+  (acquisition ? assertResearchAllowed : assertResearchHistoryAllowed)(
     config,
     (opt.now ?? (() => new Date().toISOString()))(),
     opt.current_terms_version,
@@ -60,6 +73,7 @@ async function checkCurrent(
     .first<{ config_hash: string; suspended: number }>();
   if (!row || row.config_hash !== digest || row.suspended)
     throw new Error('research_policy_changed');
+  await assertNotRevoked(env, config.source.source_id);
 }
 export async function collectResearchPage(
   env: ResearchEnv,
@@ -90,6 +104,7 @@ export async function collectResearchPage(
   const runId = await hash(
     stable([source.source_id, source.policy.version, scheduled, queryHash, synthetic]),
   );
+  await assertNotRevoked(env, source.source_id, runId);
   // Local explicit registration; a changed config cannot silently replace the accepted version.
   await env.PRIVATE_DB.prepare(
     'INSERT OR IGNORE INTO research_sources(source_id,policy_version,config_hash) VALUES (?,?,?)',
@@ -97,8 +112,10 @@ export async function collectResearchPage(
     .bind(source.source_id, source.policy.version, configHash)
     .run();
   await checkCurrent(env, config, configHash, opt);
+  await saveResearchConfigVersion(env, config, configHash, at);
+  const retention = retentionSnapshot(config);
   await env.PRIVATE_DB.prepare(
-    "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?)",
+    "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at,retention_snapshot_json,all_copies_expires_at) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?,?,?)",
   )
     .bind(
       runId,
@@ -111,11 +128,13 @@ export async function collectResearchPage(
       at,
       Number(synthetic),
       plusDays(at, config.retention.evidence_days),
-      plusDays(at, config.retention.normalized_days),
+      plusDays(at, retention.normalized_days),
+      stable(retention),
+      plusDays(at, retention.normalized_days + retention.backup_days),
     )
     .run();
   const run = await env.PRIVATE_DB.prepare(
-    'SELECT state,next_page,retry_at,config_hash FROM research_runs WHERE run_id=?',
+    'SELECT state,next_page,retry_at,config_hash,retention_snapshot_json FROM research_runs WHERE run_id=?',
   )
     .bind(runId)
     .first<{
@@ -123,9 +142,11 @@ export async function collectResearchPage(
       next_page: number | null;
       retry_at: string | null;
       config_hash: string;
+      retention_snapshot_json: string | null;
     }>();
   if (!run) throw new Error('research_scope_changed_or_daily_limit');
   if (run.config_hash !== configHash) throw new Error('research_policy_changed');
+  if (!run.retention_snapshot_json) throw new Error('historical_retention_unreviewed');
   if (run.state === 'complete' || run.next_page === null)
     return { run_id: runId, state: run.state };
   if (run.retry_at && at < run.retry_at) return { run_id: runId, state: 'deferred' };
@@ -242,7 +263,7 @@ export async function collectResearchPage(
     const statements: D1PreparedStatement[] = [];
     const priorRecords = page.records.length
       ? await env.PRIVATE_DB.prepare(
-          "SELECT observation_id,record_hash,record_key FROM (SELECT o.observation_id,o.record_hash,o.record_key,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM research_observations o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND r.normalized_expires_at>? AND o.observed_at<? AND o.record_key IN (" +
+          "SELECT observation_id,record_hash,record_key,run_id FROM (SELECT o.observation_id,o.record_hash,o.record_key,o.run_id,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM research_observations o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND r.normalized_expires_at>? AND r.recorded_at>? AND r.retention_snapshot_json IS NOT NULL AND json_extract(r.retention_snapshot_json,'$.backup_days')>=? AND r.all_copies_expires_at>? AND r.config_hash IN (SELECT value FROM json_each(?)) AND o.observed_at<? AND o.record_key IN (" +
             page.records.map(() => '?').join(',') +
             ')) WHERE position=1',
         )
@@ -250,14 +271,39 @@ export async function collectResearchPage(
             source.source_id,
             Number(synthetic),
             now(),
+            plusDays(
+              now(),
+              -Math.min(
+                retention.normalized_days,
+                source.policy.retention_limit_days === null
+                  ? retention.normalized_days
+                  : source.policy.retention_limit_days - retention.backup_days,
+              ),
+            ),
+            retention.time_travel_days,
+            plusDays(now(), retention.time_travel_days),
+            JSON.stringify([configHash, ...config.history_access.map((h) => h.config_hash)]),
             e.observed_at,
             ...page.records.map((r) => r.record_key),
           )
-          .all<{ observation_id: string; record_hash: string; record_key: string }>()
+          .all<{
+            observation_id: string;
+            record_hash: string;
+            record_key: string;
+            run_id: string;
+          }>()
       : { results: [] };
+    // Restored D1 rows cannot be used as lineage if an external deletion marker survives.
+    const deletedPrior = new Set<string>();
+    for (const priorRun of new Set(priorRecords.results.map((r) => r.run_id))) {
+      if (await env.EVIDENCE.head(runDeletionKey(source.source_id, priorRun)))
+        deletedPrior.add(priorRun);
+    }
     for (const record of page.records) {
       const fingerprint = await hash(stable(record));
-      const prior = priorRecords.results.find((r) => r.record_key === record.record_key);
+      const prior = priorRecords.results.find(
+        (r) => r.record_key === record.record_key && !deletedPrior.has(r.run_id),
+      );
       statements.push(
         env.PRIVATE_DB.prepare(
           'INSERT OR IGNORE INTO research_observations(observation_id,run_id,page_number,record_key,source_url,method_version,observed_at,recorded_at,record_hash,previous_observation_id,change_kind,domain_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>?)',
@@ -339,13 +385,27 @@ export async function readResearchRun(
   opt: Options,
 ) {
   localOnly(env);
-  await checkCurrent(env, config, await hash(stable(config)), opt);
+  const configHash = await hash(stable(config));
+  await checkCurrent(env, config, configHash, opt, false);
   // Current rights and expiry are rechecked after restore, not inferred from historical grants.
   const now = (opt.now ?? (() => new Date().toISOString()))();
-  return env.PRIVATE_DB.prepare(
-    "SELECT o.* FROM research_observations o JOIN research_runs r USING(run_id) WHERE r.run_id=? AND r.source_id=? AND r.config_hash=? AND r.state='complete' AND r.normalized_expires_at>? ORDER BY o.record_key LIMIT 192",
+  const run = await env.PRIVATE_DB.prepare(
+    'SELECT * FROM research_runs WHERE run_id=? AND source_id=?',
   )
-    .bind(runId, config.source.source_id, await hash(stable(config)), now)
+    .bind(runId, config.source.source_id)
+    .first<RetainedRun>();
+  if (!run || run.state !== 'complete') return { results: [] };
+  await assertNotRevoked(env, config.source.source_id, runId);
+  if (
+    run.config_hash !== configHash &&
+    !config.history_access.some((h) => h.config_hash === run.config_hash)
+  )
+    throw new Error('research_history_scope_unreviewed');
+  if (historyExpiry(config, run) <= now) return { results: [] };
+  return env.PRIVATE_DB.prepare(
+    'SELECT * FROM research_observations WHERE run_id=? ORDER BY record_key LIMIT 192',
+  )
+    .bind(runId)
     .all();
 }
 
@@ -353,28 +413,26 @@ export async function purgeResearchRun(
   env: ResearchEnv,
   runId: string,
   now: string,
-  revoke = false,
+  cleanup: { time_travel_days: 7 | 30; revoke?: boolean; all_copies_deadline?: string | null },
 ) {
   localOnly(env);
   if (!isoTime(now)) throw new Error('invalid_retention_time');
-  const r = await env.PRIVATE_DB.prepare(
-    'SELECT source_id,normalized_expires_at,state,lease_until FROM research_runs WHERE run_id=?',
+  if (
+    ![7, 30].includes(cleanup.time_travel_days) ||
+    (cleanup.all_copies_deadline && !isoTime(cleanup.all_copies_deadline))
   )
+    throw new Error('historical_backup_review_required');
+  const r = await env.PRIVATE_DB.prepare('SELECT * FROM research_runs WHERE run_id=?')
     .bind(runId)
-    .first<{
-      source_id: string;
-      normalized_expires_at: string;
-      state: string;
-      lease_until: string | null;
-    }>();
+    .first<RetainedRun>();
   if (!r || r.state === 'purged') return;
+  if (cleanup.revoke) await revokeResearchSource(env, r.source_id, now);
   if (r.lease_until && r.lease_until > now) throw new Error('research_retention_leased');
-  if (!revoke && r.normalized_expires_at > now) throw new Error('research_retention_not_due');
-  // Revocation suspends all reads/new collection for this source before deleting this run.
-  if (revoke)
-    await env.PRIVATE_DB.prepare('UPDATE research_sources SET suspended=1 WHERE source_id=?')
-      .bind(r.source_id)
-      .run();
+  const revoked = await env.EVIDENCE.head(sourceRevocationKey(r.source_id));
+  const marked = await env.EVIDENCE.head(runDeletionKey(r.source_id, runId));
+  if (!revoked && !marked && r.normalized_expires_at > now)
+    throw new Error('research_retention_not_due');
+  await recordDeletion(env, r.source_id, runId, now, revoked ? 'revoked' : 'expired');
   const lock = await env.PRIVATE_DB.prepare(
     "UPDATE research_runs SET state='purging',next_page=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND (lease_until IS NULL OR lease_until<=?)",
   )
@@ -398,9 +456,106 @@ export async function purgeResearchRun(
     await env.PRIVATE_DB.batch([
       env.PRIVATE_DB.prepare('DELETE FROM research_pages WHERE run_id=?').bind(runId),
       env.PRIVATE_DB.prepare(
-        "UPDATE research_runs SET state='purged',last_error='retention_purged' WHERE run_id=?",
-      ).bind(runId),
+        "UPDATE research_runs SET state='purged',last_error='retention_purged',deleted_at=?,backup_residual_until=? WHERE run_id=?",
+      ).bind(now, plusDays(now, cleanup.time_travel_days), runId),
     ]);
+  const deadline =
+    r.all_copies_expires_at && cleanup.all_copies_deadline
+      ? [r.all_copies_expires_at, cleanup.all_copies_deadline].sort()[0]
+      : r.all_copies_expires_at;
+  return {
+    remaining: remaining?.n ?? 0,
+    backup_residual_until: remaining?.n ? null : plusDays(now, cleanup.time_travel_days),
+    backup_deadline_missed: !deadline || plusDays(now, cleanup.time_travel_days) > deadline,
+  };
+}
+
+// One run / at most 20 records. A restore or future continuation must iterate this before reopening.
+// No historical permissions or database restore are performed by this local function.
+export async function reconcileResearchRun(
+  env: ResearchEnv,
+  config: ResearchConfig,
+  runId: string,
+  now: string,
+  currentTerms: string,
+) {
+  localOnly(env);
+  if (!isoTime(now)) throw new Error('invalid_retention_time');
+  const registration = await env.PRIVATE_DB.prepare(
+    'SELECT config_hash,suspended FROM research_sources WHERE source_id=?',
+  )
+    .bind(config.source.source_id)
+    .first<{ config_hash: string; suspended: number }>();
+  const currentHash = await hash(stable(config));
+  if (registration?.config_hash !== currentHash) throw new Error('research_policy_changed');
+  const run = await env.PRIVATE_DB.prepare(
+    'SELECT * FROM research_runs WHERE source_id=? AND run_id=?',
+  )
+    .bind(config.source.source_id, runId)
+    .first<RetainedRun>();
+  if (!run || run.state === 'purged') return;
+  if (config.retention.time_travel_days === null)
+    throw new Error('historical_backup_review_required');
+  let permission = !registration.suspended;
+  try {
+    assertResearchHistoryAllowed(config, now, currentTerms);
+    if (
+      run.config_hash !== currentHash &&
+      !config.history_access.some((h) => h.config_hash === run.config_hash)
+    )
+      permission = false;
+  } catch {
+    permission = false;
+  }
+  let expired = false;
+  try {
+    expired = historyExpiry(config, run) <= now;
+  } catch {
+    permission = false;
+  }
+  if (!permission || expired)
+    await recordDeletion(
+      env,
+      run.source_id,
+      runId,
+      now,
+      permission ? 'expired' : 'permission_lapsed',
+    );
+  if (
+    !permission ||
+    expired ||
+    (await env.EVIDENCE.head(sourceRevocationKey(run.source_id))) ||
+    (await env.EVIDENCE.head(runDeletionKey(run.source_id, runId)))
+  )
+    return purgeResearchRun(env, runId, now, {
+      time_travel_days: config.retention.time_travel_days,
+      all_copies_deadline: allCopiesExpiry(config, run),
+    });
+  // A shorter evidence permission must apply independently of the longer normalized history.
+  if (
+    run.evidence_expires_at <= now ||
+    plusDays(run.recorded_at, config.retention.evidence_days) <= now
+  ) {
+    if (run.lease_until && run.lease_until > now) throw new Error('research_retention_leased');
+    await eraseRunEvidence(env, run.source_id, run.run_id, now);
+  }
+  return { remaining: null, backup_residual_until: null, backup_deadline_missed: false };
+}
+
+async function eraseRunEvidence(env: ResearchEnv, sourceId: string, runId: string, now: string) {
+  // Idempotent even when an R2 restore reintroduced a page after its D1 deletion checkpoint.
+  for (let page = 0; page < 4; page++)
+    await env.EVIDENCE.delete('research/' + sourceId + '/' + runId + '/' + page + '.json');
+  await env.PRIVATE_DB.batch([
+    env.PRIVATE_DB.prepare('UPDATE research_pages SET evidence_deleted_at=? WHERE run_id=?').bind(
+      now,
+      runId,
+    ),
+    env.PRIVATE_DB.prepare('UPDATE research_runs SET evidence_purged_at=? WHERE run_id=?').bind(
+      now,
+      runId,
+    ),
+  ]);
 }
 
 export async function purgeResearchEvidence(env: ResearchEnv, now: string) {
@@ -411,19 +566,5 @@ export async function purgeResearchEvidence(env: ResearchEnv, now: string) {
   )
     .bind(now, now)
     .all<{ source_id: string; run_id: string }>();
-  for (const r of runs.results) {
-    // Also covers an R2 capture whose SQL checkpoint failed.
-    for (let page = 0; page < 4; page++)
-      await env.EVIDENCE.delete('research/' + r.source_id + '/' + r.run_id + '/' + page + '.json');
-    await env.PRIVATE_DB.batch([
-      env.PRIVATE_DB.prepare('UPDATE research_pages SET evidence_deleted_at=? WHERE run_id=?').bind(
-        now,
-        r.run_id,
-      ),
-      env.PRIVATE_DB.prepare('UPDATE research_runs SET evidence_purged_at=? WHERE run_id=?').bind(
-        now,
-        r.run_id,
-      ),
-    ]);
-  }
+  for (const r of runs.results) await eraseRunEvidence(env, r.source_id, r.run_id, now);
 }

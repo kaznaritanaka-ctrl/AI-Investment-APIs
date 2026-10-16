@@ -2,7 +2,34 @@
 
 対象: main `1d42d981cb93c5185ecba8cf53b108c496d91cf7` を基にした `codex/source-expansion-private-research-20261015`。Windows / Node 24.19.0 / pnpm 11.19.0 / Wrangler 4.140.0。通常のtest/buildに実ソースHTTPは含めない。
 
-## 検証
+## 2026-10-16 PR #16追加指示の検証
+
+前回の実装commitは`9092ec0`、納品記録は`3369118`。今回の比較基準は後者。新sourceのlive観測追加0、本番変更0、新しい権利grant0。以下は全てローカルsyntheticで、長期運転やCloudflare本番Time Travelの実証ではない。
+
+- research保持schemaに研究目標と許諾済み期間を分離し、未承認proposalのnormalized / Time Travelをnullにした。public schema/OpenAPIとactive sourceを変更していない。
+- 追加0008で保持snapshotと全コピー期限、config版をimmutableにする。既存0007行へ長期grantを与えず、旧90日期限をそのまま維持してreview待ちにするmigrationを検証。
+- 1095/1825日の直前・一致時刻、証拠7日削除後・91日以降の読取、複数年の同価格再観測/価格改定と旧値の保持を検証。
+- policy更新には過去config hashの明示承認を要求。更新による過去runの期限延長を拒否し、保持期間短縮、証拠だけの期間短縮、取得停止と履歴利用継続、terms失効を分離。
+- source取消しとrun削除のR2 control記録をD1復元の外に残し、古い権利・suspended=0・元期限内のrunを復元しても読取拒否・再削除。lease中の取消し、R2 control書込み障害時の現行D1停止と再試行を確認。
+- backup window増加/削除遅延は残存期限・deadline missedで返す。Time Travelのbackupを即時消したとは扱わない。実R2 lifecycle、5年最大件数のCPU/rows read/writeは未検証。
+- DCのobserved_at・証拠参照・内部policy更新だけを内容改定に数えず、発表内容の変更を別hashで検出する合成試験を追加。
+
+| チェック | 10/16の結果 |
+|---|---|
+| pnpm install --frozen-lockfile | 成功、package/lockfile差分なし |
+| pnpm check | format / TypeScript / 公開境界すべて成功 |
+| pnpm test（下記Windowsオプション） | **28 files / 281 tests成功、353.19秒**。新しい長期保持12件を含むresearch計33件。Git safe.directoryは対象コマンド環境内のみ |
+| pnpm test:runtime | workerdの既存FX/AI・schema復旧・operations、GPU 1,051件/22page、Models 50/250/1,000件が成功。外部HTTPなし |
+| pnpm build | Collector/APIのdeploy --dry-run成功。実deployなし |
+| pnpm preflight | offline、static_valid / ready=true、blockers=[]、network_performed=false。これは現行branchの静的検査で、本番との差分が解消された意味ではない |
+| node scripts/generate.mjs | research.schema.jsonを更新、再生成hash一致。source.schema.json / OpenAPI差分なし |
+| node scripts/research-retention-cost.mjs | 3/5年シナリオをローカル計算、実usage・請求額ではない |
+| 変更範囲 | active source、deployment、Wrangler、Collector dispatch、Public/Admin、過去0001〜0007、public migration、依存package変更なし |
+| GitHub CI | この追加コミットのrun URL・結果は[PR #16の検証欄](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16)へ記録。旧commitの成功を新commitへ流用しない |
+
+長期費用/上位候補/次の2件/KPI/main統合計画は[長期設計](research-long-retention-20261016.md)と[比較台帳](source-expansion-20261015.md)を参照。Cloudflare Free plan適合、数十万行での検索性能、実R2 lifecycleやTime Travelを検証した意味ではない。
+
+## 2026-10-15 初回検証（履歴）
 
 | チェック | 結果 |
 |---|---|

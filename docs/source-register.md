@@ -2,6 +2,8 @@
 
 2026-10-15追加: [全分野の実査台帳](source-expansion-20261015.md)へ、国内GPU/電力/メモリ/DC/水/ラボ/Physical AIと既存ソースの優先判断を分離しました。稼働用sourceは増やしていません。EIA/JEPXの承認待ちproposalはconfig/proposals/researchに置き、Private合成検証のみです。以下の過去台帳と10/15の配信版には差分があるため、最新のmetadata確認は追加台帳を参照してください。
 
+10/16再評価: 当時版の入手可能性・許諾見込み・年保存費・即時価値・長期希少性をsource別に追記。上位はRebro、Highreso、METI DC採択、OCCTO、Micron。次の有効化候補は[Rebro/Highresoの2件だけ](research-long-retention-20261016.md)、双方feed/権利未確認です。EIA/JEPXはblocked・live未取得のまま。新しいallowed、source enable、商用許諾は0件です。
+
 調査日時: 2026-09-26 18:23 UTC以降（2026-09-27 JST）。権限の判断と価格の取得日時は別。機械可読の全項目・9権限・対象範囲・有効期間・保持日数は config/sources/*.json、検証スキーマは src/schema.ts / config/source.schema.json。
 
 | source_id | 投資上の用途・取得方法 | 初期判定 |

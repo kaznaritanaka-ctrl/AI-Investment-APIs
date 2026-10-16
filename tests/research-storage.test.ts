@@ -59,7 +59,7 @@ describe('private research D1/R2 local integration', () => {
       }),
     ).rejects.toThrow('policy_blocked');
     expect(fetcher).not.toHaveBeenCalled();
-    expect((await local.env.EVIDENCE.list()).objects).toHaveLength(0);
+    expect((await local.env.EVIDENCE.list({ prefix: 'research/' })).objects).toHaveLength(0);
     expect(
       await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM research_sources').first(),
     ).toEqual({ n: 0 });
@@ -302,7 +302,8 @@ describe('private research D1/R2 local integration', () => {
     expect((await readResearchRun(local.env, c, result.run_id, opt)).results).toHaveLength(48);
     const later = { ...opt, now: () => '2026-10-18T01:00:00.000Z' };
     expect((await readResearchRun(local.env, c, result.run_id, later)).results).toHaveLength(0);
-    for (let i = 0; i < 3; i++) await purgeResearchRun(local.env, result.run_id, later.now());
+    for (let i = 0; i < 3; i++)
+      await purgeResearchRun(local.env, result.run_id, later.now(), { time_travel_days: 7 });
     expect(
       await local.env.PRIVATE_DB.prepare('SELECT state FROM research_runs WHERE run_id=?')
         .bind(result.run_id)
@@ -313,15 +314,18 @@ describe('private research D1/R2 local integration', () => {
   it('enforces retention for checkpointed and orphan evidence, hides revoked/restored rows, deletes in bounded chunks', async () => {
     await purgeResearchEvidence(local.env, '2026-10-28T01:00:00.000Z');
     await purgeResearchEvidence(local.env, '2026-10-28T01:00:00.000Z');
-    expect((await local.env.EVIDENCE.list()).objects).toHaveLength(0);
+    expect((await local.env.EVIDENCE.list({ prefix: 'research/' })).objects).toHaveLength(0);
     const c = researchSource('jepx_spot');
     const run = await local.env.PRIVATE_DB.prepare(
       "SELECT run_id FROM research_runs WHERE source_id='jepx_tokyo' AND state='complete' ORDER BY scheduled_for DESC LIMIT 1",
     ).first<{ run_id: string }>();
-    await expect(purgeResearchRun(local.env, run!.run_id, researchTime)).rejects.toThrow(
-      'research_retention_not_due',
-    );
-    await purgeResearchRun(local.env, run!.run_id, '2026-10-28T01:00:00.000Z', true);
+    await expect(
+      purgeResearchRun(local.env, run!.run_id, researchTime, { time_travel_days: 7 }),
+    ).rejects.toThrow('research_retention_not_due');
+    await purgeResearchRun(local.env, run!.run_id, '2026-10-28T01:00:00.000Z', {
+      revoke: true,
+      time_travel_days: 7,
+    });
     await expect(
       readResearchRun(local.env, c, run!.run_id, opts('', '2026-10-28T01:00:00.000Z', 'jepx_spot')),
     ).rejects.toThrow('research_policy_changed');
@@ -331,8 +335,14 @@ describe('private research D1/R2 local integration', () => {
       .bind(run!.run_id)
       .first();
     expect(remaining).toEqual({ n: 28 });
-    await purgeResearchRun(local.env, run!.run_id, '2026-10-28T01:00:00.000Z', true);
-    await purgeResearchRun(local.env, run!.run_id, '2026-10-28T01:00:00.000Z', true);
+    await purgeResearchRun(local.env, run!.run_id, '2026-10-28T01:00:00.000Z', {
+      revoke: true,
+      time_travel_days: 7,
+    });
+    await purgeResearchRun(local.env, run!.run_id, '2026-10-28T01:00:00.000Z', {
+      revoke: true,
+      time_travel_days: 7,
+    });
     expect(
       await local.env.PRIVATE_DB.prepare('SELECT state FROM research_runs WHERE run_id=?')
         .bind(run!.run_id)

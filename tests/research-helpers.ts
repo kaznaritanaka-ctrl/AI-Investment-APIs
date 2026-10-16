@@ -17,6 +17,9 @@ export function researchSource(adapter: 'eia_retail' | 'jepx_spot' = 'eia_retail
   c.owner_approval_ref = 'synthetic-owner';
   c.wire_contract_review_ref = 'synthetic-wire-contract';
   c.retention.reviewed_ref = 'synthetic-retention';
+  c.retention.normalized_days = 90; // Short-window synthetic regression cases, not a live default.
+  c.retention.time_travel_days = 7;
+  c.retention.lifecycle_review_ref = 'synthetic-prefix-lifecycle';
   return c;
 }
 export const researchFixture = (name: string) =>

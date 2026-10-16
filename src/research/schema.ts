@@ -12,6 +12,17 @@ export const ResearchConfigSchema = z
     method_version: z.literal('electricity-research-v1'),
     owner_approval_ref: z.string().min(1).nullable(),
     wire_contract_review_ref: z.string().min(1).nullable(),
+    // Explicit review of an acquired config, never a retroactive grant or expiry extension.
+    history_access: z
+      .array(
+        z
+          .object({
+            config_hash: z.string().regex(/^[a-f0-9]{64}$/),
+            approval_ref: z.string().min(1),
+          })
+          .strict(),
+      )
+      .max(64),
     terms: z
       .object({
         version: z.string().min(1),
@@ -35,15 +46,22 @@ export const ResearchConfigSchema = z
       .strict(),
     retention: z
       .object({
+        strategy: z.literal('d1_history'),
+        target_days: z.number().int().min(1095).max(3650),
         evidence_days: z.number().int().min(1).max(30),
-        normalized_days: z.number().int().min(1).max(3650),
+        archive_days: z.literal(0),
+        normalized_days: z.number().int().min(1).max(3650).nullable(),
         backup_days: z.number().int().min(1).max(30),
+        time_travel_days: z.union([z.literal(7), z.literal(30)]).nullable(),
+        lifecycle_review_ref: z.string().min(1).nullable(),
         reviewed_ref: z.string().min(1).nullable(),
       })
       .strict(),
   })
   .strict()
   .superRefine((v, c) => {
+    if (new Set(v.history_access.map((h) => h.config_hash)).size !== v.history_access.length)
+      c.addIssue({ code: 'custom', message: 'duplicate_history_approval' });
     const u = new URL(v.source.source_url);
     if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash)
       c.addIssue({ code: 'custom', message: 'unsafe_source_url' });
@@ -77,12 +95,35 @@ export function validateQuery(config: ResearchConfig, input: unknown): ResearchQ
   return q;
 }
 export function assertResearchAllowed(config: ResearchConfig, now: string, currentTerms: string) {
+  assertResearchAuthority(config, now, currentTerms, true);
+}
+export function assertResearchHistoryAllowed(
+  config: ResearchConfig,
+  now: string,
+  currentTerms: string,
+) {
+  assertResearchAuthority(config, now, currentTerms, false);
+}
+function assertResearchAuthority(
+  config: ResearchConfig,
+  now: string,
+  currentTerms: string,
+  acquisition: boolean,
+) {
   ResearchConfigSchema.parse(config);
   if (!isoTime(now)) throw new Error('invalid_research_time');
   const s = config.source,
     r = config.retention;
   // A missing license URL is neither a grant nor a veto; reuse the nine-rights policy.
-  if (!canCollect(s, now)) throw new Error('policy_blocked');
+  if (
+    acquisition
+      ? !canCollect(s, now)
+      : now < s.policy.valid_from ||
+        (s.policy.valid_until !== null && now >= s.policy.valid_until) ||
+        s.policy.rights.private_storage !== 'allowed' ||
+        s.policy.rights.internal_analysis !== 'allowed'
+  )
+    throw new Error('policy_blocked');
   if (
     !config.owner_approval_ref ||
     !config.wire_contract_review_ref ||
@@ -90,6 +131,8 @@ export function assertResearchAllowed(config: ResearchConfig, now: string, curre
     !s.policy.fields.includes('electricity_projection_v1')
   )
     throw new Error('research_review_required');
+  if (r.normalized_days === null || r.time_travel_days === null || !r.lifecycle_review_ref)
+    throw new Error('retention_review_required');
   if (
     config.terms.version !== currentTerms ||
     s.policy.evidence_version !== currentTerms ||
@@ -99,7 +142,7 @@ export function assertResearchAllowed(config: ResearchConfig, now: string, curre
     throw new Error('terms_review_required');
   if (
     s.policy.retention_days !== r.evidence_days ||
-    r.evidence_days > r.normalized_days ||
+    r.time_travel_days > r.backup_days ||
     (s.policy.retention_limit_days !== null &&
       (r.evidence_days > s.policy.retention_limit_days ||
         r.normalized_days + r.backup_days > s.policy.retention_limit_days))

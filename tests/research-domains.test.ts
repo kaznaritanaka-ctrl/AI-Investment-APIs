@@ -170,6 +170,19 @@ describe('domestic GPU intake and DC disclosure history (all synthetic)', () => 
     const first = DCDisclosureSchema.parse(JSON.parse(researchFixture('dc.synthetic.json')));
     const saved = await disclosureRevision(first);
     expect(saved.previous_observation_id).toBeNull();
+    expect(saved.change_kind).toBe('first_seen');
+    const same = structuredClone(first);
+    same.observed_at = same.recorded_at = '2027-10-15T01:00:00.000Z';
+    same.policy_version = 'synthetic-renewed-policy';
+    same.evidence_ref = 'synthetic:new-capture';
+    same.portfolio.capacity_observations[0].evidence.observed_at = same.observed_at;
+    same.portfolio.capacity_observations[0].evidence.evidence_ref = same.evidence_ref;
+    const seenAgain = await disclosureRevision(same, first);
+    expect(seenAgain).toMatchObject({
+      change_kind: 'reobserved',
+      content_hash: saved.content_hash,
+    });
+    expect(seenAgain.observation_id).not.toBe(saved.observation_id);
     expect(first.water.map((x) => x.measure_kind)).toEqual([
       'withdrawal',
       'consumption',
@@ -185,6 +198,7 @@ describe('domestic GPU intake and DC disclosure history (all synthetic)', () => 
     const revised = await disclosureRevision(next, first);
     expect(revised.previous_observation_id).toBe(saved.observation_id);
     expect(revised.observation_id).not.toBe(saved.observation_id);
+    expect(revised.change_kind).toBe('revised');
     const bad = structuredClone(first);
     bad.portfolio.capacity_observations[0].measure_kind = 'it_operational_mw';
     expect(() => DCDisclosureSchema.parse(bad)).toThrow('grant_does_not_prove_capacity');

@@ -2,7 +2,7 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
-2026-10-15: [Issue #15の調査台帳](docs/source-expansion-20261015.md)と[Private研究用の実装・承認手順](docs/private-research-runbook.md)を追加しました。EIA/JEPXの小規模adapterとPrivate保存、国内GPU受入、DC開示の合成検証です。新規sourceは未承認・disabled、本番未接続です。[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。Cloudflareの配信版はmainとは異なり、PoCはowner承認のPrivate本番設定が別branchにあります。この開発branchを古い設定のままdeployしないでください。
+2026-10-16: [Issue #15の調査台帳](docs/source-expansion-20261015.md)と[Private研究用の実装・承認手順](docs/private-research-runbook.md)に、[source別3〜5年の履歴保持・費用比較・有効化候補2件](docs/research-long-retention-20261016.md)を追加しました。0007/0008はローカルのみ、未承認の保持期間はnullです。EIA/JEPXはblockedを維持し、国内GPU受入・DC開示・長期保持の検証はsyntheticです。新規live観測0、本番変更0。[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。Cloudflareの配信版はmainとは異なり、PoCはowner承認のPrivate本番設定が別branchにあります。この開発branchを古い設定のままdeployしないでください。
 
 以下の本番対応の記録は2026-10-04〜05時点です。10/15のread-only確認との差分は上記台帳へ分離しています。
 
