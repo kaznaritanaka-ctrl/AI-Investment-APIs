@@ -2,6 +2,8 @@
 
 対象はIssue #15のローカル候補。productionでは関数が `research_production_not_integrated` で停止し、既存Collectorからも呼ばれない。候補JSONはconfig/proposals/researchだけに置き、config/sourcesへコピーしない。本書は有効化計画であり実行承認ではない。
 
+Issue #17の[公開GPUページ経路](public-gpu-research-20261018.md)はこの基盤を再利用し、GPUの値だけ専用0010へ保存する。共有の `hasCollectionRights` は従来の有効期間/enabled/Private3権限判定、ResearchConfigはdomain固有のscope/保持/レビュー判定を担う。既存Phase2の `canCollect` のGPU/Models追加gateは維持。以下の電力input件数/HTTP条件や公式feed待ちは当時の範囲であり、公開GPUの固定3 GET・15秒・source停止はリンク先を適用する。
+
 ## 権利と公開境界
 
 既存Source/PolicyとcanCollectを使う。ライセンスURLがnullでも、automated_collection/private_storage/internal_analysisの各allowedと適用根拠、期間、field scope、owner/wire/retentionレビューが揃えばPrivate処理できる。1項目でもreview_required/denied/expiredならHTTPより前に停止する。本PRでallowedを記録した実ソースは0件。

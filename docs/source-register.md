@@ -38,6 +38,8 @@
 
 ## GPU候補の接続準備
 
+2026-10-18 Issue #17: [Highreso/Rebroの公開ページ調査・実装・未解決条件](public-gpu-research-20261018.md)を追加。`highreso_public` / `rebro_public` は既存候補と分けたdisabled研究proposalで、Private専用のHTML parserと0010履歴をsynthetic検証する。技術確認のHTTP200は収集許諾でもlive履歴でもない。実観測0件。以下のfeed/API候補の過去調査を自動承認しない。
+
 - さくら: [公式API](https://manual.sakura.ad.jp/koukaryoku-dok-api/spec.html)に石狩is1aとunit_pricesが記載。year/month/dayとpagination、is_overriddenによるアカウント価格を区別。秒単位。認証必須。[約款一覧](https://www.sakura.ad.jp/corporate/agreement/)と[改定告知](https://www.sakura.ad.jp/corporate/information/announcements/2025/02/13/1968218534/)を確認。API文書のCC BY-ND-4.0はレスポンス価格データの許諾として使わない。
 - Highreso: [公式サービス](https://soroban.highreso.jp/)に石川県のデータセンターからの提供説明。[規約2025-12-01](https://soroban.highreso.jp/terms)と[利用案内](https://soroban.highreso.jp/article/article-002)を調査。offer単位のregion、価格feed、継続保存・再配布条件が未確認。国は事業者本社から推測しない。
 - Lambda: [API](https://docs.lambda.ai/public-cloud/cloud-api/)にinstance typesの価格・容量・地域、[region一覧](https://docs.lambda.ai/public-cloud/on-demand/)にVirginia/California等。[規約](https://lambda.ai/legal/terms-of-service)はAPI keyにCloud Termsを適用すると説明。API利用ができることと価格履歴の外部配信許諾を分離し、認証・許諾確認まで停止。インスタンス作成は行わない。

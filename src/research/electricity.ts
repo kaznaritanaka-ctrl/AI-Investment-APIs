@@ -21,7 +21,11 @@ export function researchRequest(config: ResearchConfig, input: ResearchQuery, pa
     // Never invent a header-based authentication endpoint or read a Secret here.
     throw new Error('credential_url_disallowed');
   }
-  if (config.source.endpoint !== JEPX_ENDPOINT || config.source.authentication_required !== false)
+  if (
+    q.kind !== 'jepx_spot' ||
+    config.source.endpoint !== JEPX_ENDPOINT ||
+    config.source.authentication_required !== false
+  )
     throw new Error('endpoint_not_allowed');
   const year =
     Number(q.delivery_date.slice(0, 4)) - (Number(q.delivery_date.slice(5, 7)) < 4 ? 1 : 0);

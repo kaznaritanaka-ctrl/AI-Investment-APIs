@@ -1,0 +1,112 @@
+{
+  "source": {
+    "source_id": "rebro_public",
+    "dataset_type": "gpu_secondary",
+    "operator": "Rebro / GPU買取センター",
+    "source_url": "https://gpu-kaitori.com/reason/",
+    "documentation_url": "https://gpu-kaitori.com/reason/",
+    "terms_url": "https://gpu-kaitori.com/rules/",
+    "license_url": null,
+    "endpoint": "https://gpu-kaitori.com/reason/",
+    "acquisition_method": "Fixed public HTML; reviewed robots/terms fingerprints required before data GET",
+    "authentication_required": false,
+    "native_currency": "JPY",
+    "native_unit": "JPY per GPU (selected reported purchase case)",
+    "geography": [],
+    "native_frequency": "irregular",
+    "expected_update_calendar": "Proposed one complete page per UTC day",
+    "expected_lag": "unknown",
+    "rights_checked_at": "2026-10-17T16:51:35.001Z",
+    "rights_evidence_ref": "docs/public-gpu-research-20261018.md",
+    "attribution_text": "Source: Rebro / GPU買取センター; preserve original basis, period precision and unknown conditions",
+    "known_limitations": [
+      "Provider-selected public purchase reports, not a complete transaction feed",
+      "Month is publication-table period, not a transaction timestamp",
+      "Price per GPU is separate from reported quantity; counterparties are discarded"
+    ],
+    "enabled": false,
+    "adapter": "candidate",
+    "selection": [],
+    "max_bytes": 1000000,
+    "max_records": 48,
+    "policy": {
+      "version": "rebro_public-20261018-proposal-v1",
+      "rights": {
+        "automated_collection": "review_required",
+        "private_storage": "review_required",
+        "internal_analysis": "review_required",
+        "external_llm_processing": "denied",
+        "public_display": "review_required",
+        "raw_redistribution": "denied",
+        "normalized_redistribution": "review_required",
+        "derived_redistribution": "review_required",
+        "commercial_redistribution": "review_required"
+      },
+      "fields": [
+        "domestic_gpu_projection_v1"
+      ],
+      "conditions": [
+        "Private research proposal only; no active grant",
+        "No raw response archive, no public projection, no external LLM"
+      ],
+      "valid_from": "2026-10-17T16:51:35.001Z",
+      "valid_until": "2027-01-15T00:00:00.000Z",
+      "retention_days": 7,
+      "retention_limit_days": null,
+      "decision_actor": "pending_owner_review",
+      "evidence_version": "rebro_public-terms-review-20261018",
+      "evidence_refs": [
+        "https://gpu-kaitori.com/rules/",
+        "https://gpu-kaitori.com/reason/",
+        "docs/public-gpu-research-20261018.md"
+      ]
+    }
+  },
+  "adapter": "rebro_public",
+  "visibility": "private_only",
+  "method_version": "domestic-gpu-html-v1",
+  "owner_approval_ref": null,
+  "wire_contract_review_ref": null,
+  "history_access": [],
+  "terms": {
+    "version": "rebro_public-terms-review-20261018",
+    "checked_at": "2026-10-17T16:51:35.001Z",
+    "review_after": "2027-01-15T00:00:00.000Z",
+    "evidence_refs": [
+      "https://gpu-kaitori.com/rules/",
+      "docs/public-gpu-research-20261018.md"
+    ]
+  },
+  "scope": {
+    "kind": "rebro_public",
+    "models": [
+      "A100",
+      "H100"
+    ]
+  },
+  "limits": {
+    "page_size": 48,
+    "max_pages": 1,
+    "max_input_rows": 100
+  },
+  "retention": {
+    "strategy": "d1_history",
+    "target_days": 1095,
+    "evidence_days": 7,
+    "archive_days": 0,
+    "normalized_days": null,
+    "normalized_mode": "unapproved",
+    "ongoing_storage": null,
+    "storage_review_hold": null,
+    "backup_days": 30,
+    "time_travel_days": null,
+    "lifecycle_review_ref": null,
+    "reviewed_ref": null
+  },
+  "public_access": {
+    "robots_sha256": null,
+    "terms_sha256": null,
+    "robots_decision": "unreviewed",
+    "reviewed_ref": null
+  }
+}

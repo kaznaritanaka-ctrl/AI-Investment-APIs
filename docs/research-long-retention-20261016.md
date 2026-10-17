@@ -1,5 +1,7 @@
 # Private研究履歴の長期保持と次の有効化判断（10/18最終修正）
 
+Issue #17では[公開Highreso/RebroページのPrivate collector](public-gpu-research-20261018.md)を別PRで追加。以下の保持条件を継承し、公式feed回答を公開ページ研究の必須前提にはしない。権利レビューと本番接続は引き続き未完了。
+
 [PR #16の最終修正指示](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16#issuecomment-6236225676)を適用する。**新sourceの実観測数=0、本番変更=0、新しい権利grant=0**。内部レビュー期限は削除義務ではない。許諾済みの履歴を残し、次の成果はHighreso/GPUSOROBANとRebroの承認後の連続実観測とする。本書はローカル実装と承認待ちの手順であり、有効化の指示ではない。
 
 ## 状態と次の対応

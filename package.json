@@ -31,6 +31,7 @@
     "decimal.js": "^10.6.0",
     "fast-xml-parser": "^5.11.1",
     "lossless-json": "^4.3.1",
+    "parse5": "8.0.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {

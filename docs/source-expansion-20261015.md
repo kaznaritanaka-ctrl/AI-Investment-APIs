@@ -1,5 +1,7 @@
 # AI経済データのPrivate研究用拡張 — 2026-10-15
 
+追補: [Issue #17の公開Highreso/Rebroページ接続](public-gpu-research-20261018.md)は別のstacked Draft PR。以下の「公式feed待ち」はPR #16時点の経緯。公開ページの権利評価と合成collector実装はfeed返答待ちから切り離す。新grant/本番変更はない。
+
 [Issue #15](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/issues/15) の調査・ローカル実装。新規の実データ取得、権利grant、本番migration/deploy、Cron、Admin、Public API、NASの変更を含まない。価格・会社実績をfixtureへ転記していない。
 
 10/17指示を10/18反映: [review_dueと削除義務の分離、明示的until_revoked、次の2候補](research-long-retention-20261016.md)を優先する。下記の10/16容量/費用評価は参考値で、ソース獲得・安全な実装の停止条件にしない。新archive/DB分割/新DBや費用追加調査は行わない。Highreso/GPUSOROBANとRebroはownerによる公式feed/権利確認待ち、新source実観測0。EIA/JEPXはcritical path外のまま。

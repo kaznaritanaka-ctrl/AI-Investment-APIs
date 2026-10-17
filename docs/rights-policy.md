@@ -24,6 +24,8 @@ policy・endpoint・選定範囲は同じpolicy版のまま書き換えられな
 
 ## Phase 2の追加gate
 
+Issue #17の公開GPUページは[独立したPrivate研究契約](public-gpu-research-20261018.md)で接続する。Phase2の権利を流用せず、共有3権限にResearchConfigのscope/field/owner/terms/wire/保持/accessレビューを追加する。両sourceとも現時点ではreview_required・disabled。robots/200/個人研究/無返信からallowedを導かず、Public/商用/過去分の再利用は別審査。以下のPhase2既存gateは変更しない。
+
 GPUは既存9区分に加え、owner_approval_ref、gpu_projection_v1のfield承認、retention.reviewed_refとevidence/archive/normalized/backupの個別日数を要求する。認証があること、公開APIであること、内部保存であることは許諾の代わりにしない。今回の新規sourceにallowedを付与していない。
 
 private-onlyは取得/保存/内部分析だけの許可で個別運転でき、public表示/再配布・派生gateを別に適用する。アカウント固有価格はpublic観測・統計から除く。出品IDの保持も用途許諾の対象であり、hashなら自由とは考えない。

@@ -5,11 +5,21 @@ import assert from 'node:assert/strict';
 // Executes the actual pipeline and API inside workerd. No external HTTP.
 const xml = await readFile('tests/fixtures/ecb.synthetic.xml', 'utf8');
 const catalog = await readFile('tests/fixtures/models.synthetic.json', 'utf8');
+const publicGpuHtml = await readFile('tests/fixtures/research/highreso.synthetic.html', 'utf8');
+const rebroHtml = await readFile('tests/fixtures/research/rebro.synthetic.html', 'utf8');
 const source =
   "\nimport {sources} from './src/sources';\nimport legacyModels from './config/history/models_dev.v2.json';\nimport {gpuRuntime} from './tests/gpu-runtime-harness';\nimport {collectAll} from './src/pipeline';\nimport {handle} from './src/api';\nexport default {\n async fetch(request,env){\n  if(new URL(request.url).pathname!=='/')return gpuRuntime(request,env);\n  const now='2026-10-03T18:17:00.000Z';\n  const selected=structuredClone(sources.filter(s=>['ecb','models_dev','openrouter'].includes(s.source_id)).map(s=>s.source_id==='models_dev'?legacyModels:s));\n  const model=selected.find(s=>s.source_id==='models_dev');model.selection=['lab/model-a'];model.max_records=4;\n  let calls=0;\n  const fetcher=async url=>{calls++;return String(url).includes('ecb.europa')?new Response(XML_BODY,{headers:{'content-type':'application/xml'}}):new Response(CATALOG_BODY,{headers:{'content-type':'application/json'}});};\n  const results=await collectAll(env,selected,now,{synthetic:true,now:()=>now,network:{fetcher}});\n  const response=await handle(new Request('https://local.test/v1/latest'),{PUBLIC_DB:env.PUBLIC_DB},now);\n  return Response.json({results,calls,status:response.status,body:await response.json()});\n }\n}";
 const bundled = await build({
   stdin: {
     contents: source
+      .replace(
+        'export default {',
+        "import {publicGpuRuntime} from './tests/public-gpu-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        `async fetch(request,env){\nif(new URL(request.url).pathname==='/public-gpu-research')return publicGpuRuntime(env,${JSON.stringify(publicGpuHtml)},${JSON.stringify(rebroHtml)});`,
+      )
       .replace(
         'export default {',
         "import {modelsRuntime} from './tests/models-runtime-harness';\nexport default {",
@@ -80,6 +90,16 @@ try {
   assert.equal(result.status, 200);
   assert.equal(result.body.data.length, 4);
   assert(result.body.data.every((o) => o.data_origin === 'synthetic'));
+  const publicGpu = await (await mf.dispatchFetch('https://local.test/public-gpu-research')).json();
+  assert.deepEqual(
+    publicGpu.results.map((r) => r.state),
+    ['complete', 'complete'],
+  );
+  assert.deepEqual(publicGpu.counts, [4, 2]);
+  assert.equal(publicGpu.calls, 6);
+  console.log(
+    'Workerd private public-HTML GPU research passed: 2 synthetic sources, 6 fixed mocked GETs, 6 private observations; no live HTTP.',
+  );
   console.log(
     'Workerd runtime smoke passed: 2 synthetic sources, 1 blocked source, D1/R2 pipeline and public API. No external HTTP.',
   );
