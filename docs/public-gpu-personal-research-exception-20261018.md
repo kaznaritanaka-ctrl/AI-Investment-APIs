@@ -1,5 +1,7 @@
 # Highreso / Rebro 個人研究例外の設計案
 
+後続状況: 所有者の追加指示で[local実装とsynthetic検証](personal-gpu-implementation-20261018.md)まで進めた。以下は設計段階の記録。実収集・実行契約の承認・grant変更・本番deployは引き続き未実施。
+
 作成日: 2026-10-18 JST。実装の参照commit: `e60d6d204d05408b22be13421d028dc3f5e4f744`。対象は固定公開HTMLの2 sourceだけ。
 
 **所有者が今回選択した範囲は「例外の設計・準備まで」。例外の実行承認、権利grantの変更、価格の取得・保存、本番変更は含まない。** この文書と[判断票の下書き](public-gpu-personal-research-draft-20261018.json)は実行設定ではなく、現行collectorは受け付けない。既存proposalはdisabled、取得・保存・内部分析は `review_required` のまま。

@@ -60,6 +60,13 @@ function localOnly(env: ResearchEnv) {
   // Deliberately not a deployed entrypoint. Production integration is a separate review.
   if (env.ENVIRONMENT === 'production') throw new Error('research_production_not_integrated');
 }
+function standardAuthorityOnly(run: RetainedRun) {
+  if (
+    run.retention_snapshot_json &&
+    JSON.parse(run.retention_snapshot_json).version === 'personal-retention-v1'
+  )
+    throw new Error('personal_entrypoint_required');
+}
 async function checkCurrent(
   env: ResearchEnv,
   config: ResearchConfig,
@@ -503,6 +510,7 @@ export async function readResearchRun(
     .bind(runId, config.source.source_id)
     .first<RetainedRun>();
   if (!run || run.state !== 'complete') return { results: [] };
+  standardAuthorityOnly(run);
   await assertNotRevoked(env, config.source.source_id, runId);
   if (
     run.config_hash !== configHash &&
@@ -535,6 +543,7 @@ export async function purgeResearchRun(
     .bind(runId)
     .first<RetainedRun>();
   if (!r || r.state === 'purged') return;
+  standardAuthorityOnly(r);
   const version = await env.PRIVATE_DB.prepare(
     'SELECT config_json FROM research_config_versions WHERE config_hash=?',
   )
@@ -621,6 +630,7 @@ export async function reconcileResearchRun(
     .bind(config.source.source_id, runId)
     .first<RetainedRun>();
   if (!run || run.state === 'purged') return;
+  standardAuthorityOnly(run);
   if (config.retention.time_travel_days === null)
     throw new Error('historical_backup_review_required');
   const historyApproved =
@@ -709,7 +719,7 @@ export async function purgeResearchEvidence(env: ResearchEnv, now: string) {
   localOnly(env);
   if (!isoTime(now)) throw new Error('invalid_retention_time');
   const runs = await env.PRIVATE_DB.prepare(
-    'SELECT source_id,run_id FROM research_runs WHERE evidence_expires_at<=? AND evidence_purged_at IS NULL AND (lease_until IS NULL OR lease_until<=?) ORDER BY evidence_expires_at LIMIT 5',
+    "SELECT source_id,run_id FROM research_runs WHERE json_extract(retention_snapshot_json,'$.version') IS NOT 'personal-retention-v1' AND evidence_expires_at<=? AND evidence_purged_at IS NULL AND (lease_until IS NULL OR lease_until<=?) ORDER BY evidence_expires_at LIMIT 5",
   )
     .bind(now, now)
     .all<{ source_id: string; run_id: string }>();

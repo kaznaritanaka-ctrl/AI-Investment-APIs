@@ -11,6 +11,17 @@ export async function fetchPublicGpuPage(config: ResearchConfig, opt: NetworkOpt
   );
   if (!isPublicGpu(config.adapter) || !config.public_access)
     throw new Error('public_access_review_required');
+  return readReviewedPublicGpu(config, config.public_access, opt);
+}
+
+// Bounded transport only, like fetchBounded. Callers must check their own authority
+// before entry and before each fetch. It never accepts arbitrary URLs or rights overrides.
+export async function readReviewedPublicGpu(
+  config: ResearchConfig,
+  review: { robots_sha256: string | null; terms_sha256: string | null },
+  opt: NetworkOptions,
+) {
+  if (!isPublicGpu(config.adapter)) throw new Error('public_gpu_scope_invalid');
   const endpoints = publicGpuEndpoints[config.adapter];
   const read = (url: string, format: 'html' | 'csv', maxBytes: number) =>
     fetchBounded(
@@ -26,16 +37,10 @@ export async function fetchPublicGpuPage(config: ResearchConfig, opt: NetworkOpt
       format,
     );
   const robots = await read(endpoints.robots, 'csv', 16384);
-  if (
-    robots.status !== 200 ||
-    (await robotsFingerprint(robots.text)) !== config.public_access.robots_sha256
-  )
+  if (robots.status !== 200 || (await robotsFingerprint(robots.text)) !== review.robots_sha256)
     throw new FetchFailure('public_gpu_robots_review_required');
   const terms = await read(endpoints.terms, 'html', 1000000);
-  if (
-    terms.status !== 200 ||
-    (await termsFingerprint(terms.text)) !== config.public_access.terms_sha256
-  )
+  if (terms.status !== 200 || (await termsFingerprint(terms.text)) !== review.terms_sha256)
     throw new FetchFailure('public_gpu_terms_review_required');
   return read(endpoints.page, 'html', config.source.max_bytes);
 }
