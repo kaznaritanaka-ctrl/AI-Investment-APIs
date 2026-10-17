@@ -2,6 +2,8 @@
 
 [Issue #15](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/issues/15) の調査・ローカル実装。新規の実データ取得、権利grant、本番migration/deploy、Cron、Admin、Public API、NASの変更を含まない。価格・会社実績をfixtureへ転記していない。
 
+10/17指示を10/18反映: [review_dueと削除義務の分離、明示的until_revoked、次の2候補](research-long-retention-20261016.md)を優先する。下記の10/16容量/費用評価は参考値で、ソース獲得・安全な実装の停止条件にしない。新archive/DB分割/新DBや費用追加調査は行わない。Highreso/GPUSOROBANとRebroはownerによる公式feed/権利確認待ち、新source実観測0。EIA/JEPXはcritical path外のまま。
+
 ## 作業開始時点と本番との差
 
 - main: `1d42d981cb93c5185ecba8cf53b108c496d91cf7`。独立checkoutの `codex/source-expansion-private-research-20261015` を使用。他のNAS作業の未コミット変更には触れない。

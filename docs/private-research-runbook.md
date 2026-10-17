@@ -8,7 +8,7 @@
 
 9権限は独立。候補では取得/保存/内部分析/表示/正規化再配布/派生再配布/商用再配布がreview_required、外部LLM/raw再配布がdenied。Private 3権限だけの合成grantで保存が成功し、既存canPublishはfalseを返す。新経路自身にpublic/raw/LLM exportは実装しない。public DB bindingを受け取らず、API schema/OpenAPIを変更しない。
 
-sourceのfull config hashと各版をresearch_sources / research_config_versionsへ記録する。同一policy版の変更では再開を拒否する。ローカルの `adoptReviewedResearchConfig` は現行hashの一致、新policy版、現行権利、同一source/adapter/scope/fieldsを検査する。過去版の読取は `history_access` へのhashと承認根拠の明示が必要で、更新しても過去runの保持期限は伸ばさない。
+sourceのfull config hashと各版をresearch_sources / research_config_versionsへ記録する。同一policy版の変更では再開を拒否する。ローカルの `adoptReviewedResearchConfig` は現行hash、新policy版、同一source/adapter/scope/fieldsを検査する。enabled版は全取得権を要求する。disabled版はownerのunknown/denied評価も記録できるが、利用許可ではない。過去版のreadには `history_access` のhash/承認根拠と現行権利/termsが必要で、過去runの期限を伸ばさない。
 
 収集のdisabledと過去履歴の権利停止は別。disabledなら新規取得不可だが、現行のprivate_storage/internal_analysis・terms・期間・保持が有効なら履歴は読める。source suspended、権利失効、config/terms不一致、R2取消し/削除記録は読取を遮断する。公開経路には接続しない。
 
@@ -38,15 +38,21 @@ flowchart LR
 
 ## 保持と復元
 
-2026-10-16の[長期保持設計・費用比較・次の2候補](research-long-retention-20261016.md)を適用する。証拠と正規化履歴は独立。EIA/JEPXのproposalはevidence 7日・archiveなし・target 1095日・backup上限30日だが、許諾済み `normalized_days` と実Time Travel日数はnullで、取得できない。GPU成立系列は5年、レンタルは3年を研究目標として個別審査する。一律1825日grantは作らない。テスト用90日は短い回帰試験窓であり、本番保持案ではない。
+10/17指示に対応した[状態・保持モード・次の2候補](research-long-retention-20261016.md)を適用する。証拠と正規化履歴は独立。EIA/JEPXはevidence7日・archiveなし・target1095日・backup上限30日のproposalだが、`normalized_mode=unapproved`、日数/継続保存根拠/有限hold/Time Travelはnullで取得不能。3〜5年は研究目標であり廃棄期限ではない。明示許諾ならuntil_revoked、期限付きならfixed_daysを個別承認する。テスト用90日は回帰試験窓で本番案ではない。
+
+- review_due: terms.review_after超過はHTTP/readを止めるが、保存権が有効な履歴は保持。永久削除マーカーを作らない。根拠再確認→新policy版と過去hashの明示承認→ローカルadopt→reconcile/read確認で復旧する。
+- collection_stopped: 収集停止後も保存・分析権が有効なら保持/readできる。
+- rights_unknown: 取得/保存/分析のどこが未確認か台帳へ残し、人間レビュー。保存も不明なら、事前承認したstorage_review_holdの有限全コピー期限と元期限の早い方を守る。無根拠のholdや無期限保存を作らない。分析権だけ不明なら保存権を別評価する。
+- retention_expired/delete_required: 固定期限、明示保存権終了、revoke、適用される削除要求、承認済みhold終了だけを削除対象とする。requestResearchDeletionには根拠と全コピー期限を指定する。review_dueからの一律permission_lapsed削除は禁止。
+- 状態/根拠/次の対応をresearch_retention_assessmentsへ保存。証拠はdeleted/expired/within_retention_unverified、再検証はunavailable/requires_projection_check。未検査の実在やhash一致を保証しない。
 
 - purgeResearchEvidence: 1回最大5run×4pageをR2削除。SQL checkpoint前に落ちたcaptureも対象。削除済みcheckpointを記録し同じ先頭pageに停滞しない。
 - 0008でrunにimmutable retention snapshot / all_copies_expires_atを追加。既存0007 runを後から長期保持へ変換せず、未レビューの過去runは読取不可。現行条件が短くなったら早い期限を使い、長くなっても元期限を越えない。
 - purgeResearchRun: expiryまたは取消し後、先に外部R2削除記録とpurging状態で読取停止、最大20 observation/呼出しで削除。source取消しはR2 `research-control/revocations/` を先に記録し、D1 suspendedを設定する。進行中leaseと競合する本文削除を拒否してもread gateは閉じる。全行削除後にpage metadataを削除し、本文なしのpurged記録・削除時刻・backup残存期限を残す。Time Travel内のコピーを即時消したとは扱わない。
-- reconcileResearchRun: collection enabledに依存せず、現行権利/期限・元期限・復元で再出現した行を1run/最大20行ずつ確認してpurgeする。許可が失効した履歴を復活させない。current limitとbackup残存期限の不整合はdeadline missedとして報告する。
+- reconcileResearchRun: collection enabledに依存せず状態を1runずつ評価し、上記の削除義務があるときだけ最大20行ずつpurgeする。許可が失効した履歴を復活させない。current limitとbackup残存期限の不整合はdeadline missedとして報告する。re-review対象は保存許諾内で保持し、revoke/deletionマーカー対象は再削除する。
 - 現在はローカル関数であり、本番の自動retention scheduler/R2 lifecycleは未接続。将来既存continuation内でbounded cleanupを呼ぶこと、backlogを検知することが有効化の前提。新Cronを勝手に足さず、日次手動削除を要求する運転にしない。
 - D1復元前にgateを閉じ、復元対象の外にある最新承認config/termsとR2 control記録を再適用する。古いDBのrights/suspendedは信用せず、期限・取消し対象を再削除してから再開する。control prefixを証拠7日のlifecycleへ含めず、最長復元可能期間を越えて保持する。R2 lifecycleは削除遅延があり、期限厳守の唯一の仕組みにしない。
-- 0007/0008は前進migration。既存0001〜0007のSQLを書き換えない。rollbackは呼出し停止/無効化と必要なretention処理。read gateのない旧research版への巻戻しは禁止、既存historyを戻したりDROP TABLEしたりしない。
+- 0009は0007/0008の既存行・固定期限を変えず親子テーブルを再構築し、modeと状態台帳を追加するローカル前進migration。旧SQLを変更しない。rollbackは呼出し停止/無効化と必要なretention処理。read gateのない旧research版への巻戻し、既存historyの復活/削除は禁止。
 
 ## 初期コスト上限案
 
@@ -59,7 +65,7 @@ flowchart LR
 
 同runの再開時はcaptureを再利用する。source/UTC日ごとに1runの一意制約、pageごとに再実行をまたいで合計3 HTTP試行の永続予算を実装した。query変更による同日の予算リセットは拒否する。新policy/source IDへの変更は別owner reviewのため、回数制限回避に使わない。本番統合ではこの上限と停止/再開を運用監視へ接続する。CPU/memoryは年度CSV解析をCloudflare互換runtimeで計測し、通常dayの差分機械feedが許可されるなら低負荷経路を優先する。
 
-上記はEIA/JEPXの実装上限であり、次の有効化順を表さない。両候補はblockedでlive smokeを行わない。長期保持の3年/5年容量と費用、D1保存対R2段階保存の比較は[長期設計](research-long-retention-20261016.md#3年5年の容量と費用)とオフライン計算 `node scripts/research-retention-cost.mjs` を参照。GPU/DC/メモリは未接続なので今回の増分収集費0、将来feed価格や許可件数unknownを0円/無制限として予算化しない。
+上記はEIA/JEPXの実装上限で、次の有効化順ではない。両候補はblocked、live smokeなし。過去の費用計算/5年容量/80%閾値は参考値へ下げ、ソース獲得や安全な実装を止めない。既存metricsでD1/R2実使用量・日次増分・容量エラーを観測し、物理上限への接近という実測があれば警告・別対策にする。archive/DB分割/新DBは作らない。新source観測0、将来feed価格unknownを無料扱いしない。
 
 ## Source別owner承認チェックリスト
 
@@ -125,6 +131,6 @@ flowchart LR
 
 1. source単位の上記承認と不足仕様を解決。新sourceの具体的grantとscopeをレビュー可能な差分にする。
 2. 本番稼働commitとmainのdriftを再照合。PoC enabled/profileを古いmainで上書きしない。
-3. 0007/0008の本番適用計画、Collector呼出し/日次予算/自動retention統合を別PRで提示。既存3 Cron以外のscheduleを増やさない。prod拒否の解除はその承認単位で行う。
+3. 0007/0008/0009の本番適用計画、Collector呼出し/日次予算/自動retention統合を別PRで提示。既存3 Cron以外のscheduleを増やさない。prod拒否の解除はその承認単位で行う。
 4. ownerがremote migration/deploy/必要Secretを個別承認してから反映。先に無効状態で確認し、source単位で初回収集を承認する。
 5. observation freshness・partial・429・retention backlog・日次予算を自動監視。正常運転にCSV転記、毎日のWeb巡回、手動download/uploadを要求しない。

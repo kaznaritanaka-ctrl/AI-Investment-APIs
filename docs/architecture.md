@@ -1,6 +1,6 @@
 # Phase 0 — 構成と判断
 
-2026-10-16追加: [Private研究用の設計](private-research-runbook.md)は既存Collector未接続のローカル経路です。0007/0008はprivate研究テーブルとimmutable保持契約で、public migration/API変更なし。[長期設計](research-long-retention-20261016.md)ではD1正規化履歴と短期R2証拠を分離し、外部取消し記録と現行権利で復元後のreadを守ります。R2長期archiveは未実装。既存の稼働sourceとCronは維持し、[mainと本番の差分](source-expansion-20261015.md)をdeploy前に再確認してください。
+2026-10-18更新: [Private研究用経路](private-research-runbook.md)は既存Collector未接続。0009は0007/0008の期限を維持し、明示的なuntil_revokedモードと状態評価台帳を追加します。review_due/collection_stopped/rights_unknownを削除義務から分離し、D1正規化履歴と短期R2証拠を独立管理。[外部取消し/削除記録と現行権利](research-long-retention-20261016.md)で復元後のreadを守ります。Public API/migration、稼働source、Cronは変更せず、archive/新DB/分割も追加しません。[mainと本番の差分](source-expansion-20261015.md)をdeploy前に再確認してください。
 
 調査日: 2026-09-27 JST (2026-09-26 UTC)。開始時のmainは `c64950ec0612f03a3556457583e17906ec9d2e78`、README一行のみ。既存実装・AGENTS.mdなし。開発ブランチ `codex/phase-0-1-foundation`。本番リソースは作成しない。
 

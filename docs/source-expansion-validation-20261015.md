@@ -2,7 +2,32 @@
 
 対象: main `1d42d981cb93c5185ecba8cf53b108c496d91cf7` を基にした `codex/source-expansion-private-research-20261015`。Windows / Node 24.19.0 / pnpm 11.19.0 / Wrangler 4.140.0。通常のtest/buildに実ソースHTTPは含めない。
 
-## 2026-10-16 PR #16追加指示の検証
+## 2026-10-18：10/17追加指示の検証
+
+基準commitは `264d77353c36b611191a760774df1db0758dc094`。既存Draft PR #16への追加差分だけを作成。新sourceの実観測数=0、本番変更=0、新しいallowed=0。以下はsynthetic/localであり、本番稼働や実データ取得ではない。
+
+- review_dueはHTTP/readを停止し、保存許諾内の履歴を保持。永久R2マーカーを作らず、根拠再確認・新policy・過去hash承認後にreadを復旧する回帰試験を追加。
+- collection_stoppedと分析権不明を保存権から分離。保存も不明なら事前承認した有限storage-only holdとその全コピー期限でレビュー/削除を判断。内部レビュー期限だけで削除しない。
+- unapproved / fixed_days / until_revokedを明示し、null単独・継続保存根拠なし・owner承認なし・有限holdなしはHTTP/DB/R2前に拒否。明示許諾による5年/10年超の履歴、同価格lineage、短期証拠削除後の履歴保持を検証。
+- 明示保存権denied/expired、元の保存権終了、固定期限、適用される削除要求は削除。後から短い削除期限が届いても元マーカー日時は保ち、期限を延長しない。Time Travelより短い期限はdeadline missedと報告。
+- D1巻戻し後もR2マーカーでread拒否・再削除。旧0007とデータ入り0008→0009で期限/行/FK/immutable triggerを維持。無根拠のnull期限はDB CHECKでも拒否。
+- 判定根拠・現在権利・状態・期限・次の対応、証拠の期限/削除と再検証の可否をimmutable台帳へ記録。R2実在/hash未検証をverified扱いしない。
+
+| チェック | 結果 |
+|---|---|
+| pnpm install --frozen-lockfile | 成功、package/lockfile差分なし |
+| pnpm check | format / TypeScript / 公開境界成功 |
+| pnpm test（下記Windowsオプション） | **29 files / 291 tests成功、376.39秒**。新しい状態/期限なし保持の10件と既存回帰試験を含む |
+| pnpm test:runtime | workerdのFX/AI・復旧・operations、GPU1,051件/22page、Models50/250/1,000件すべて成功。外部HTTPなし |
+| pnpm build | Collector/APIのdeploy --dry-run成功、実deployなし |
+| pnpm preflight | offline、static_valid / ready=true、blockers=[]、network_performed=false。これは本branchの静的結果で、本番drift解消ではない |
+| schema再生成 | research.schema.jsonの再生成hash一致、source.schema.json / OpenAPI差分なし |
+| 差分検査 | git diff --check成功。active source/grant、deployment、Wrangler、Collector dispatch、公開API、旧0001〜0008、public migration、依存package変更なし |
+| GitHub CI | この追加commitの結果とrun URLは[PR #16の検証欄](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16)へ記録。過去commitの成功を流用しない |
+
+Highreso/GPUSOROBANとRebroは公式feed・権利・継続保管/有限hold・認証/費用のowner確認待ち。EIA/JEPXはcritical path外。5年容量/80%は参考値へ下げ、archive/DB分割/新DB/費用追加調査なし。本番統合・自動retention・live smoke・remote migration/deployは未実行。[最新の状態と有効化手順](research-long-retention-20261016.md)を適用し、以下は過去の検証履歴として残す。
+
+## 2026-10-16 PR #16追加指示の検証（履歴）
 
 前回の実装commitは`9092ec0`、納品記録は`3369118`。今回の比較基準は後者。新sourceのlive観測追加0、本番変更0、新しい権利grant0。以下は全てローカルsyntheticで、長期運転やCloudflare本番Time Travelの実証ではない。
 

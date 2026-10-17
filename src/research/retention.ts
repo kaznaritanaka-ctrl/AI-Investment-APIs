@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { hash, isoTime, stable } from '../util';
 import {
   assertResearchAllowed,
-  assertResearchHistoryAllowed,
+  assertResearchRetentionReviewed,
   ResearchConfigSchema,
+  StorageReviewHoldSchema,
   type ResearchConfig,
 } from './schema';
 import type { ResearchEnv } from './pipeline';
@@ -16,7 +17,7 @@ function localOnly(env: ResearchEnv) {
   if (env.ENVIRONMENT === 'production') throw new Error('research_production_not_integrated');
 }
 
-export const RetentionSnapshotSchema = z
+const LegacyRetentionSnapshotSchema = z
   .object({
     version: z.literal('research-retention-v1'),
     strategy: z.literal('d1_history'),
@@ -30,15 +31,44 @@ export const RetentionSnapshotSchema = z
     lifecycle_review_ref: z.string().min(1),
   })
   .strict();
+const CurrentRetentionSnapshotSchema = LegacyRetentionSnapshotSchema.extend({
+  version: z.literal('research-retention-v2'),
+  normalized_mode: z.enum(['fixed_days', 'until_revoked']),
+  normalized_days: z.number().int().positive().max(3650).nullable(),
+  ongoing_storage: z
+    .object({ basis_ref: z.string().min(1), owner_approval_ref: z.string().min(1) })
+    .strict()
+    .nullable(),
+  storage_review_hold: StorageReviewHoldSchema,
+  storage_valid_until: z.iso.datetime().nullable(),
+}).superRefine((r, c) => {
+  if (
+    r.normalized_mode === 'fixed_days'
+      ? r.normalized_days === null
+      : r.normalized_days !== null ||
+        !r.ongoing_storage ||
+        r.storage_valid_until !== null ||
+        r.retention_limit_days !== null
+  )
+    c.addIssue({ code: 'custom', message: 'invalid_retention_mode' });
+});
+export const RetentionSnapshotSchema = z.union([
+  CurrentRetentionSnapshotSchema,
+  LegacyRetentionSnapshotSchema,
+]);
 
 export function retentionSnapshot(config: ResearchConfig) {
   const r = config.retention;
-  return RetentionSnapshotSchema.parse({
-    version: 'research-retention-v1',
+  return CurrentRetentionSnapshotSchema.parse({
+    version: 'research-retention-v2',
     strategy: r.strategy,
     evidence_days: r.evidence_days,
     archive_days: r.archive_days,
     normalized_days: r.normalized_days,
+    normalized_mode: r.normalized_mode,
+    ongoing_storage: r.ongoing_storage,
+    storage_review_hold: r.storage_review_hold,
+    storage_valid_until: config.source.policy.valid_until,
     backup_days: r.backup_days,
     time_travel_days: r.time_travel_days,
     retention_limit_days: config.source.policy.retention_limit_days,
@@ -54,7 +84,9 @@ export type RetainedRun = {
   recorded_at: string;
   state: string;
   evidence_expires_at: string;
-  normalized_expires_at: string;
+  evidence_purged_at: string | null;
+  normalized_mode: 'fixed_days' | 'until_revoked';
+  normalized_expires_at: string | null;
   all_copies_expires_at: string | null;
   retention_snapshot_json: string | null;
   lease_until: string | null;
@@ -62,37 +94,235 @@ export type RetainedRun = {
 
 // Historical rows are not subject to a current-observation freshness threshold.
 // Current permission may shorten their use, but can never extend the captured deadline.
-export function historyExpiry(config: ResearchConfig, run: RetainedRun): string {
-  if (!run.retention_snapshot_json || !run.all_copies_expires_at)
-    throw new Error('historical_retention_unreviewed');
+export function capturedRetention(run: RetainedRun) {
+  if (!run.retention_snapshot_json) throw new Error('historical_retention_unreviewed');
   const captured = RetentionSnapshotSchema.parse(JSON.parse(run.retention_snapshot_json));
-  const current = config.retention;
+  const mode =
+    captured.version === 'research-retention-v1' ? 'fixed_days' : captured.normalized_mode;
   if (
-    current.normalized_days === null ||
-    current.time_travel_days === null ||
-    current.time_travel_days > captured.backup_days
+    mode !== run.normalized_mode ||
+    (mode === 'fixed_days' && (!run.normalized_expires_at || !run.all_copies_expires_at))
   )
+    throw new Error('historical_retention_unreviewed');
+  return captured;
+}
+const earliest = (dates: (string | null)[]): string | null =>
+  dates.filter((d): d is string => d !== null).sort()[0] ?? null;
+export function historyExpiry(config: ResearchConfig, run: RetainedRun): string | null {
+  const captured = capturedRetention(run);
+  const current = config.retention;
+  assertResearchRetentionReviewed(config);
+  if (current.time_travel_days === null || current.time_travel_days > captured.backup_days)
     throw new Error('historical_backup_review_required');
   const deadlines = [
     run.normalized_expires_at,
-    plusDays(run.recorded_at, captured.normalized_days),
-    plusDays(run.recorded_at, current.normalized_days),
-    plusDays(run.all_copies_expires_at, -current.time_travel_days),
+    captured.normalized_days === null ? null : plusDays(run.recorded_at, captured.normalized_days),
+    current.normalized_mode === 'fixed_days'
+      ? plusDays(run.recorded_at, current.normalized_days!)
+      : null,
+    run.all_copies_expires_at === null
+      ? null
+      : plusDays(run.all_copies_expires_at, -current.time_travel_days),
+    captured.version === 'research-retention-v2' ? captured.storage_valid_until : null,
+    config.source.policy.valid_until,
   ];
   const limit = config.source.policy.retention_limit_days;
   if (limit !== null) deadlines.push(plusDays(run.recorded_at, limit - current.backup_days));
-  return deadlines.sort()[0];
+  return earliest(deadlines);
 }
 
 export function allCopiesExpiry(config: ResearchConfig, run: RetainedRun): string | null {
-  if (!run.all_copies_expires_at || config.retention.normalized_days === null) return null;
+  const captured = run.retention_snapshot_json
+    ? RetentionSnapshotSchema.safeParse(JSON.parse(run.retention_snapshot_json))
+    : null;
   const deadlines = [
     run.all_copies_expires_at,
-    plusDays(run.recorded_at, config.retention.normalized_days + config.retention.backup_days),
+    captured?.success &&
+    captured.data.version === 'research-retention-v2' &&
+    captured.data.storage_valid_until
+      ? plusDays(captured.data.storage_valid_until, captured.data.backup_days)
+      : null,
+    config.retention.normalized_mode === 'fixed_days' && config.retention.normalized_days !== null
+      ? plusDays(run.recorded_at, config.retention.normalized_days + config.retention.backup_days)
+      : null,
+    config.source.policy.valid_until === null
+      ? null
+      : plusDays(config.source.policy.valid_until, config.retention.backup_days),
   ];
   if (config.source.policy.retention_limit_days !== null)
     deadlines.push(plusDays(run.recorded_at, config.source.policy.retention_limit_days));
-  return deadlines.sort()[0];
+  return earliest(deadlines);
+}
+
+export type RetentionDecision = {
+  state:
+    | 'active'
+    | 'review_due'
+    | 'collection_stopped'
+    | 'rights_unknown'
+    | 'retention_expired'
+    | 'delete_required';
+  reasons: string[];
+  storage: 'allowed' | 'review_hold' | 'unknown' | 'prohibited';
+  collection_allowed: boolean;
+  read_allowed: boolean;
+  normalized_deadline: string | null;
+  all_copies_deadline: string | null;
+  review_deadline: string | null;
+  basis_refs: string[];
+  next_action: 'retain' | 'review_terms' | 'review_rights' | 'delete';
+};
+export function assessResearchRetention(
+  config: ResearchConfig,
+  run: RetainedRun,
+  now: string,
+  currentTerms: string,
+  historyApproved: boolean,
+): RetentionDecision {
+  const p = config.source.policy,
+    r = config.retention;
+  const d: RetentionDecision = {
+    state: 'active',
+    reasons: [],
+    storage: 'allowed',
+    collection_allowed: false,
+    read_allowed: false,
+    normalized_deadline: run.normalized_expires_at,
+    all_copies_deadline: allCopiesExpiry(config, run),
+    review_deadline: null,
+    basis_refs: [...p.evidence_refs, ...(r.reviewed_ref ? [r.reviewed_ref] : [])],
+    next_action: 'retain',
+  };
+  let captured: ReturnType<typeof capturedRetention> | null = null;
+  let reviewed = true;
+  try {
+    captured = capturedRetention(run);
+    d.normalized_deadline = historyExpiry(config, run);
+  } catch {
+    reviewed = false;
+    d.reasons.push('retention_contract_review_required');
+  }
+  const remove = (state: 'delete_required' | 'retention_expired', reason: string) => {
+    d.state = state;
+    d.storage = 'prohibited';
+    d.next_action = 'delete';
+    d.reasons.push(reason);
+    return d;
+  };
+  // Explicit storage end and captured deadlines are not internal review reminders.
+  if (p.rights.private_storage === 'denied' || p.rights.private_storage === 'expired') {
+    d.all_copies_deadline = earliest([
+      d.all_copies_deadline,
+      plusDays(now, Math.min(r.backup_days, captured?.backup_days ?? r.backup_days)),
+    ]);
+    return remove('delete_required', 'storage_right_ended');
+  }
+  if (p.valid_until !== null && now >= p.valid_until)
+    return remove('delete_required', 'storage_grant_ended');
+  if (
+    captured?.version === 'research-retention-v2' &&
+    captured.storage_valid_until &&
+    now >= captured.storage_valid_until
+  )
+    return remove('delete_required', 'captured_storage_grant_ended');
+  if (d.normalized_deadline !== null && now >= d.normalized_deadline)
+    return remove('retention_expired', 'normalized_deadline_reached');
+  const termsChanged = config.terms.version !== currentTerms || p.evidence_version !== currentTerms;
+  const storageUnknown =
+    !reviewed || p.rights.private_storage !== 'allowed' || now < p.valid_from || termsChanged;
+  if (storageUnknown) {
+    d.state = 'rights_unknown';
+    d.next_action = 'review_rights';
+    d.reasons.push('storage_basis_requires_review');
+    const hold =
+      captured?.version === 'research-retention-v2' ? captured.storage_review_hold : null;
+    // Only a previously approved finite storage-only hold is usable. An unknown right is not a grant.
+    const deadline = earliest([
+      hold?.all_copies_delete_by ?? null,
+      r.storage_review_hold?.all_copies_delete_by ?? null,
+      d.all_copies_deadline,
+    ]);
+    d.storage = hold ? 'review_hold' : 'unknown';
+    d.all_copies_deadline = deadline;
+    d.review_deadline = deadline === null ? null : plusDays(deadline, -r.backup_days);
+    if (hold) d.basis_refs.push(hold.basis_ref, hold.owner_approval_ref);
+    if (hold && d.review_deadline !== null && now >= d.review_deadline)
+      return remove('delete_required', 'approved_storage_review_hold_ended');
+    return d;
+  }
+  if (
+    !historyApproved ||
+    !config.owner_approval_ref ||
+    !config.wire_contract_review_ref ||
+    p.rights.internal_analysis !== 'allowed'
+  ) {
+    d.state = 'rights_unknown';
+    d.next_action = 'review_rights';
+    d.reasons.push('analysis_or_historical_scope_unconfirmed');
+    return d;
+  }
+  if (now < config.terms.checked_at || now >= config.terms.review_after) {
+    d.state = 'review_due';
+    d.next_action = 'review_terms';
+    d.review_deadline = config.terms.review_after;
+    d.reasons.push('periodic_terms_review_due');
+    return d;
+  }
+  d.read_allowed = true;
+  if (!config.source.enabled || p.rights.automated_collection !== 'allowed') {
+    d.state = 'collection_stopped';
+    d.reasons.push('new_collection_stopped');
+  } else if (
+    !r.storage_review_hold ||
+    r.storage_review_hold.all_copies_delete_by <= plusDays(now, r.backup_days)
+  ) {
+    d.state = 'collection_stopped';
+    d.next_action = 'review_rights';
+    d.reasons.push('new_collection_storage_hold_review_required');
+  } else d.collection_allowed = true;
+  return d;
+}
+
+export async function auditRetentionDecision(
+  env: ResearchEnv,
+  config: ResearchConfig,
+  run: RetainedRun,
+  now: string,
+  currentTerms: string,
+  decision: RetentionDecision,
+) {
+  localOnly(env);
+  const decisionJson = stable({
+    ...decision,
+    current_rights: {
+      collection: config.source.policy.rights.automated_collection,
+      storage: config.source.policy.rights.private_storage,
+      analysis: config.source.policy.rights.internal_analysis,
+    },
+    current_terms_version: currentTerms,
+    evidence_status: run.evidence_purged_at
+      ? 'deleted'
+      : run.evidence_expires_at <= now
+        ? 'expired'
+        : 'within_retention_unverified',
+    revalidation:
+      run.evidence_purged_at || run.evidence_expires_at <= now
+        ? 'unavailable'
+        : 'requires_projection_check',
+  });
+  const digest = await hash(stable(config));
+  await env.PRIVATE_DB.prepare(
+    'INSERT OR IGNORE INTO research_retention_assessments(assessment_id,run_id,assessed_at,config_hash,state,decision_json) VALUES (?,?,?,?,?,?)',
+  )
+    .bind(
+      await hash(stable([run.run_id, now, digest, decisionJson])),
+      run.run_id,
+      now,
+      digest,
+      decision.state,
+      decisionJson,
+    )
+    .run();
 }
 
 // These metadata-only markers live outside the evidence lifecycle prefix and D1 Time Travel.
@@ -118,23 +348,102 @@ export async function assertNotRevoked(env: ResearchEnv, sourceId: string, runId
   if (runId && (await env.EVIDENCE.head(runDeletionKey(sourceId, runId))))
     throw new Error('research_run_deleted');
 }
+const DeletionMarkerSchema = z.object({
+  source_id: sourceIdSchema,
+  run_id: digestSchema,
+  deleted_from: z.iso.datetime(),
+  reason: z.string().min(1).max(80).optional(),
+  all_copies_delete_by: z.iso.datetime().nullable().optional(),
+  basis_refs: z.array(z.string().min(1)).optional(),
+});
 export async function recordDeletion(
   env: ResearchEnv,
   sourceId: string,
   runId: string,
   at: string,
-  reason: 'expired' | 'revoked' | 'permission_lapsed',
+  reason:
+    | 'expired'
+    | 'revoked'
+    | 'storage_right_ended'
+    | 'storage_review_hold_ended'
+    | 'explicit_delete_request',
+  obligation?: { basis_refs: string[]; all_copies_delete_by: string | null },
 ) {
   localOnly(env);
   if (!isoTime(at)) throw new Error('invalid_retention_time');
-  await env.EVIDENCE.put(
-    runDeletionKey(sourceId, runId),
-    stable({ version: 1, source_id: sourceId, run_id: runId, deleted_from: at, reason }),
+  const key = runDeletionKey(sourceId, runId);
+  const existing = await env.EVIDENCE.get(key);
+  if (existing && existing.size > 16384) throw new Error('invalid_deletion_marker');
+  const prior = existing ? DeletionMarkerSchema.parse(await existing.json()) : null;
+  if (prior && (prior.source_id !== sourceId || prior.run_id !== runId))
+    throw new Error('invalid_deletion_marker');
+  if (
+    prior &&
+    (!obligation?.all_copies_delete_by ||
+      (prior.all_copies_delete_by && prior.all_copies_delete_by <= obligation.all_copies_delete_by))
+  )
+    return;
+  // A later request can only tighten the deadline, never remove the deny record or
+  // reset its original timestamp. A CAS conflict must be retried, not reported as saved.
+  const saved = await env.EVIDENCE.put(
+    key,
+    stable({
+      version: 1,
+      source_id: sourceId,
+      run_id: runId,
+      deleted_from: prior?.deleted_from ?? at,
+      reason: prior?.reason ?? reason,
+      ...obligation,
+      basis_refs: [...new Set([...(prior?.basis_refs ?? []), ...(obligation?.basis_refs ?? [])])],
+    }),
     {
-      onlyIf: { etagDoesNotMatch: '*' },
+      onlyIf: existing ? { etagMatches: existing.etag } : { etagDoesNotMatch: '*' },
       httpMetadata: { contentType: 'application/json' },
     },
   );
+  if (!saved) throw new Error('research_deletion_marker_conflict');
+}
+export async function requestResearchDeletion(
+  env: ResearchEnv,
+  runId: string,
+  at: string,
+  request: { basis_ref: string; all_copies_delete_by: string },
+) {
+  localOnly(env);
+  const approved = z
+    .object({ basis_ref: z.string().trim().min(1), all_copies_delete_by: z.iso.datetime() })
+    .strict()
+    .parse(request);
+  const run = await env.PRIVATE_DB.prepare('SELECT source_id FROM research_runs WHERE run_id=?')
+    .bind(runId)
+    .first<{ source_id: string }>();
+  if (!run) throw new Error('research_run_missing');
+  await recordDeletion(env, run.source_id, runId, at, 'explicit_delete_request', {
+    basis_refs: [approved.basis_ref],
+    all_copies_delete_by: approved.all_copies_delete_by,
+  });
+}
+
+export async function deletionObligation(env: ResearchEnv, run: RetainedRun) {
+  localOnly(env);
+  const body = await env.EVIDENCE.get(runDeletionKey(run.source_id, run.run_id));
+  if (!body) return null;
+  if (body.size > 16384) throw new Error('invalid_deletion_marker');
+  const marker = DeletionMarkerSchema.parse(await body.json());
+  if (marker.source_id !== run.source_id || marker.run_id !== run.run_id)
+    throw new Error('invalid_deletion_marker');
+  return marker;
+}
+export async function sourceRevocation(env: ResearchEnv, sourceId: string) {
+  localOnly(env);
+  const body = await env.EVIDENCE.get(sourceRevocationKey(sourceId));
+  if (!body) return null;
+  if (body.size > 16384) throw new Error('invalid_revocation_marker');
+  const marker = z
+    .object({ source_id: sourceIdSchema, revoked_at: z.iso.datetime() })
+    .parse(await body.json());
+  if (marker.source_id !== sourceId) throw new Error('invalid_revocation_marker');
+  return marker;
 }
 export async function revokeResearchSource(env: ResearchEnv, sourceId: string, at: string) {
   localOnly(env);
@@ -187,7 +496,11 @@ export async function adoptReviewedResearchConfig(
 ) {
   localOnly(env);
   if (config.source.enabled) assertResearchAllowed(config, now, currentTerms);
-  else assertResearchHistoryAllowed(config, now, currentTerms);
+  else {
+    // Disabled policy assessments may record uncertainty/denial without granting data use.
+    ResearchConfigSchema.parse(config);
+    if (!isoTime(now) || !config.owner_approval_ref) throw new Error('research_review_required');
+  }
   await assertNotRevoked(env, config.source.source_id);
   const old = await env.PRIVATE_DB.prepare(
     'SELECT config_hash,policy_version,suspended FROM research_sources WHERE source_id=?',

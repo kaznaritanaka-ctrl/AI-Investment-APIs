@@ -884,12 +884,79 @@
           "type": "number",
           "const": 0
         },
+        "normalized_mode": {
+          "default": "fixed_days",
+          "type": "string",
+          "enum": [
+            "unapproved",
+            "fixed_days",
+            "until_revoked"
+          ]
+        },
         "normalized_days": {
           "anyOf": [
             {
               "type": "integer",
               "minimum": 1,
               "maximum": 3650
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ongoing_storage": {
+          "default": null,
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "basis_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "owner_approval_ref": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "basis_ref",
+                "owner_approval_ref"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_review_hold": {
+          "default": null,
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "basis_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "owner_approval_ref": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "all_copies_delete_by": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": [
+                "basis_ref",
+                "owner_approval_ref",
+                "all_copies_delete_by"
+              ],
+              "additionalProperties": false
             },
             {
               "type": "null"
@@ -948,7 +1015,10 @@
         "target_days",
         "evidence_days",
         "archive_days",
+        "normalized_mode",
         "normalized_days",
+        "ongoing_storage",
+        "storage_review_hold",
         "backup_days",
         "time_travel_days",
         "lifecycle_review_ref",

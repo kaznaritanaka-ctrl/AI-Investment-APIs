@@ -12,7 +12,10 @@ import {
 } from './schema';
 import {
   assertNotRevoked,
-  allCopiesExpiry,
+  assessResearchRetention,
+  auditRetentionDecision,
+  capturedRetention,
+  deletionObligation,
   historyExpiry,
   plusDays,
   recordDeletion,
@@ -20,7 +23,7 @@ import {
   revokeResearchSource,
   runDeletionKey,
   saveResearchConfigVersion,
-  sourceRevocationKey,
+  sourceRevocation,
   type RetainedRun,
 } from './retention';
 
@@ -115,7 +118,7 @@ export async function collectResearchPage(
   await saveResearchConfigVersion(env, config, configHash, at);
   const retention = retentionSnapshot(config);
   await env.PRIVATE_DB.prepare(
-    "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at,retention_snapshot_json,all_copies_expires_at) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?,?,?)",
+    "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at,retention_snapshot_json,all_copies_expires_at,normalized_mode) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?,?,?,?)",
   )
     .bind(
       runId,
@@ -128,9 +131,12 @@ export async function collectResearchPage(
       at,
       Number(synthetic),
       plusDays(at, config.retention.evidence_days),
-      plusDays(at, retention.normalized_days),
+      retention.normalized_days === null ? null : plusDays(at, retention.normalized_days),
       stable(retention),
-      plusDays(at, retention.normalized_days + retention.backup_days),
+      retention.normalized_days === null
+        ? null
+        : plusDays(at, retention.normalized_days + retention.backup_days),
+      retention.normalized_mode,
     )
     .run();
   const run = await env.PRIVATE_DB.prepare(
@@ -261,9 +267,21 @@ export async function collectResearchPage(
       seen.add(r.record_key);
     }
     const statements: D1PreparedStatement[] = [];
+    const priorCutoff =
+      retention.normalized_days === null
+        ? null
+        : plusDays(
+            now(),
+            -Math.min(
+              retention.normalized_days,
+              source.policy.retention_limit_days === null
+                ? retention.normalized_days
+                : source.policy.retention_limit_days - retention.backup_days,
+            ),
+          );
     const priorRecords = page.records.length
       ? await env.PRIVATE_DB.prepare(
-          "SELECT observation_id,record_hash,record_key,run_id FROM (SELECT o.observation_id,o.record_hash,o.record_key,o.run_id,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM research_observations o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND r.normalized_expires_at>? AND r.recorded_at>? AND r.retention_snapshot_json IS NOT NULL AND json_extract(r.retention_snapshot_json,'$.backup_days')>=? AND r.all_copies_expires_at>? AND r.config_hash IN (SELECT value FROM json_each(?)) AND o.observed_at<? AND o.record_key IN (" +
+          "SELECT * FROM (SELECT o.observation_id,o.record_hash,o.record_key,r.*,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM research_observations o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND (r.normalized_expires_at IS NULL OR r.normalized_expires_at>?) AND (? IS NULL OR r.recorded_at>?) AND r.retention_snapshot_json IS NOT NULL AND json_extract(r.retention_snapshot_json,'$.backup_days')>=? AND (r.all_copies_expires_at IS NULL OR r.all_copies_expires_at>?) AND r.config_hash IN (SELECT value FROM json_each(?)) AND o.observed_at<? AND o.record_key IN (" +
             page.records.map(() => '?').join(',') +
             ')) WHERE position=1',
         )
@@ -271,33 +289,36 @@ export async function collectResearchPage(
             source.source_id,
             Number(synthetic),
             now(),
-            plusDays(
-              now(),
-              -Math.min(
-                retention.normalized_days,
-                source.policy.retention_limit_days === null
-                  ? retention.normalized_days
-                  : source.policy.retention_limit_days - retention.backup_days,
-              ),
-            ),
+            priorCutoff,
+            priorCutoff,
             retention.time_travel_days,
             plusDays(now(), retention.time_travel_days),
             JSON.stringify([configHash, ...config.history_access.map((h) => h.config_hash)]),
             e.observed_at,
             ...page.records.map((r) => r.record_key),
           )
-          .all<{
-            observation_id: string;
-            record_hash: string;
-            record_key: string;
-            run_id: string;
-          }>()
+          .all<
+            RetainedRun & {
+              observation_id: string;
+              record_hash: string;
+              record_key: string;
+              run_id: string;
+            }
+          >()
       : { results: [] };
     // Restored D1 rows cannot be used as lineage if an external deletion marker survives.
     const deletedPrior = new Set<string>();
     for (const priorRun of new Set(priorRecords.results.map((r) => r.run_id))) {
       if (await env.EVIDENCE.head(runDeletionKey(source.source_id, priorRun)))
         deletedPrior.add(priorRun);
+    }
+    for (const prior of priorRecords.results) {
+      try {
+        const expiry = historyExpiry(config, prior);
+        if (expiry !== null && expiry <= now()) deletedPrior.add(prior.run_id);
+      } catch {
+        deletedPrior.add(prior.run_id);
+      }
     }
     for (const record of page.records) {
       const fingerprint = await hash(stable(record));
@@ -401,7 +422,8 @@ export async function readResearchRun(
     !config.history_access.some((h) => h.config_hash === run.config_hash)
   )
     throw new Error('research_history_scope_unreviewed');
-  if (historyExpiry(config, run) <= now) return { results: [] };
+  const expiry = historyExpiry(config, run);
+  if (expiry !== null && expiry <= now) return { results: [] };
   return env.PRIVATE_DB.prepare(
     'SELECT * FROM research_observations WHERE run_id=? ORDER BY record_key LIMIT 192',
   )
@@ -428,11 +450,28 @@ export async function purgeResearchRun(
   if (!r || r.state === 'purged') return;
   if (cleanup.revoke) await revokeResearchSource(env, r.source_id, now);
   if (r.lease_until && r.lease_until > now) throw new Error('research_retention_leased');
-  const revoked = await env.EVIDENCE.head(sourceRevocationKey(r.source_id));
-  const marked = await env.EVIDENCE.head(runDeletionKey(r.source_id, runId));
-  if (!revoked && !marked && r.normalized_expires_at > now)
+  const revoked = await sourceRevocation(env, r.source_id);
+  let marked = await deletionObligation(env, r);
+  if (!revoked && !marked && (r.normalized_expires_at === null || r.normalized_expires_at > now))
     throw new Error('research_retention_not_due');
-  await recordDeletion(env, r.source_id, runId, now, revoked ? 'revoked' : 'expired');
+  const capturedBackup = r.retention_snapshot_json ? capturedRetention(r).backup_days : null;
+  const deadlines = [r.all_copies_expires_at, cleanup.all_copies_deadline ?? null];
+  if (revoked && capturedBackup !== null)
+    deadlines.push(plusDays(revoked.revoked_at, capturedBackup));
+  if (marked)
+    deadlines.push(
+      marked.all_copies_delete_by ??
+        (capturedBackup === null ? null : plusDays(marked.deleted_from, capturedBackup)),
+    );
+  const deadline = deadlines.filter((d): d is string => d !== null).sort()[0] ?? null;
+  if (!marked) {
+    await recordDeletion(env, r.source_id, runId, now, revoked ? 'revoked' : 'expired', {
+      basis_refs: [revoked ? 'source_revocation' : 'captured_retention_deadline'],
+      all_copies_delete_by: deadline,
+    });
+    marked = await deletionObligation(env, r);
+    if (!marked) throw new Error('research_deletion_marker_missing');
+  }
   const lock = await env.PRIVATE_DB.prepare(
     "UPDATE research_runs SET state='purging',next_page=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND (lease_until IS NULL OR lease_until<=?)",
   )
@@ -459,14 +498,11 @@ export async function purgeResearchRun(
         "UPDATE research_runs SET state='purged',last_error='retention_purged',deleted_at=?,backup_residual_until=? WHERE run_id=?",
       ).bind(now, plusDays(now, cleanup.time_travel_days), runId),
     ]);
-  const deadline =
-    r.all_copies_expires_at && cleanup.all_copies_deadline
-      ? [r.all_copies_expires_at, cleanup.all_copies_deadline].sort()[0]
-      : r.all_copies_expires_at;
   return {
     remaining: remaining?.n ?? 0,
     backup_residual_until: remaining?.n ? null : plusDays(now, cleanup.time_travel_days),
-    backup_deadline_missed: !deadline || plusDays(now, cleanup.time_travel_days) > deadline,
+    backup_deadline_missed:
+      !r.retention_snapshot_json || !deadline || plusDays(now, cleanup.time_travel_days) > deadline,
   };
 }
 
@@ -496,41 +532,61 @@ export async function reconcileResearchRun(
   if (!run || run.state === 'purged') return;
   if (config.retention.time_travel_days === null)
     throw new Error('historical_backup_review_required');
-  let permission = !registration.suspended;
-  try {
-    assertResearchHistoryAllowed(config, now, currentTerms);
-    if (
-      run.config_hash !== currentHash &&
-      !config.history_access.some((h) => h.config_hash === run.config_hash)
-    )
-      permission = false;
-  } catch {
-    permission = false;
-  }
-  let expired = false;
-  try {
-    expired = historyExpiry(config, run) <= now;
-  } catch {
-    permission = false;
-  }
-  if (!permission || expired)
-    await recordDeletion(
-      env,
-      run.source_id,
-      runId,
-      now,
-      permission ? 'expired' : 'permission_lapsed',
+  const historyApproved =
+    run.config_hash === currentHash ||
+    config.history_access.some((h) => h.config_hash === run.config_hash);
+  const decision = assessResearchRetention(config, run, now, currentTerms, historyApproved);
+  const revoked = await sourceRevocation(env, run.source_id);
+  const marked = await deletionObligation(env, run);
+  if (revoked || marked) {
+    decision.state = 'delete_required';
+    decision.storage = 'prohibited';
+    decision.next_action = 'delete';
+    decision.collection_allowed = false;
+    decision.read_allowed = false;
+    decision.reasons.push(revoked ? 'source_revoked' : 'explicit_deletion_marker');
+    const backup = run.retention_snapshot_json ? capturedRetention(run).backup_days : null;
+    const markerDeadline =
+      marked?.all_copies_delete_by ??
+      (marked && backup !== null ? plusDays(marked.deleted_from, backup) : null);
+    const revocationDeadline =
+      revoked && backup !== null ? plusDays(revoked.revoked_at, backup) : null;
+    decision.all_copies_deadline =
+      [decision.all_copies_deadline, markerDeadline, revocationDeadline]
+        .filter((d): d is string => d !== null)
+        .sort()[0] ?? null;
+    decision.basis_refs.push(
+      ...(marked?.basis_refs ?? []),
+      ...(revoked ? ['source_revocation'] : []),
     );
-  if (
-    !permission ||
-    expired ||
-    (await env.EVIDENCE.head(sourceRevocationKey(run.source_id))) ||
-    (await env.EVIDENCE.head(runDeletionKey(run.source_id, runId)))
-  )
-    return purgeResearchRun(env, runId, now, {
+  } else if (registration.suspended && decision.next_action !== 'delete') {
+    decision.state = 'rights_unknown';
+    decision.next_action = 'review_rights';
+    decision.collection_allowed = false;
+    decision.read_allowed = false;
+    decision.reasons.push('source_suspended_pending_review');
+  }
+  await auditRetentionDecision(env, config, run, now, currentTerms, decision);
+  if (decision.next_action === 'delete') {
+    if (!revoked && !marked)
+      await recordDeletion(
+        env,
+        run.source_id,
+        runId,
+        now,
+        decision.state === 'retention_expired'
+          ? 'expired'
+          : decision.reasons.includes('approved_storage_review_hold_ended')
+            ? 'storage_review_hold_ended'
+            : 'storage_right_ended',
+        { basis_refs: decision.basis_refs, all_copies_delete_by: decision.all_copies_deadline },
+      );
+    const result = await purgeResearchRun(env, runId, now, {
       time_travel_days: config.retention.time_travel_days,
-      all_copies_deadline: allCopiesExpiry(config, run),
+      all_copies_deadline: decision.all_copies_deadline,
     });
+    return { ...result, decision };
+  }
   // A shorter evidence permission must apply independently of the longer normalized history.
   if (
     run.evidence_expires_at <= now ||
@@ -539,7 +595,7 @@ export async function reconcileResearchRun(
     if (run.lease_until && run.lease_until > now) throw new Error('research_retention_leased');
     await eraseRunEvidence(env, run.source_id, run.run_id, now);
   }
-  return { remaining: null, backup_residual_until: null, backup_deadline_missed: false };
+  return { remaining: null, backup_residual_until: null, backup_deadline_missed: false, decision };
 }
 
 async function eraseRunEvidence(env: ResearchEnv, sourceId: string, runId: string, now: string) {

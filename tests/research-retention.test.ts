@@ -28,6 +28,7 @@ function longSource(id: string, days = 1095) {
   c.source.policy.valid_until = '2037-01-01T00:00:00.000Z';
   c.terms.review_after = '2037-01-01T00:00:00.000Z';
   c.retention.normalized_days = days;
+  c.retention.storage_review_hold!.all_copies_delete_by = '2037-01-01T00:00:00.000Z';
   c.retention.target_days = days;
   c.source.policy.retention_limit_days = days + 30;
   return c;
@@ -145,7 +146,7 @@ describe('long research retention and restore (synthetic only)', () => {
         atDay(days),
         c.terms.version,
       );
-      expect(deleted).toEqual({
+      expect(deleted).toMatchObject({
         remaining: 0,
         backup_residual_until: atDay(days + 7),
         backup_deadline_missed: false,
@@ -198,7 +199,6 @@ describe('long research retention and restore (synthetic only)', () => {
 
   it('requires explicit historical reauthorization on renewal and never extends the original 1095-day expiry', async () => {
     const c = longSource('renewal');
-    c.source.policy.valid_until = atDay(90);
     c.terms.review_after = atDay(90);
     const originalHash = await hash(stable(c));
     const run = await collectResearchPage(
@@ -209,7 +209,7 @@ describe('long research retention and restore (synthetic only)', () => {
       options(c, researchTime, body),
     );
     await expect(readResearchRun(local.env, c, run.run_id, options(c, atDay(90)))).rejects.toThrow(
-      'policy_blocked',
+      'terms_review_required',
     );
     const next = renewal(c, 'renewal-v2', atDay(90));
     next.retention.normalized_days = 1825;
@@ -284,8 +284,13 @@ describe('long research retention and restore (synthetic only)', () => {
     ).rejects.toThrow('policy_blocked');
     expect(
       (await reconcileResearchRun(local.env, paused, run.run_id, atDay(365), paused.terms.version))
-        ?.remaining,
-    ).toBeNull();
+        ?.decision,
+    ).toMatchObject({
+      state: 'collection_stopped',
+      storage: 'allowed',
+      read_allowed: true,
+      collection_allowed: false,
+    });
   });
 
   it('shortens retained use under new terms and replays deletion markers without retroactive grants', async () => {
@@ -320,7 +325,7 @@ describe('long research retention and restore (synthetic only)', () => {
     ).toBe(0);
   });
 
-  it('blocks lapsed storage/terms permission and purges independently of collection and evidence schedules', async () => {
+  it('retains history when periodic review is due, blocks HTTP/read, and restores read after explicit re-review', async () => {
     const c = longSource('lapsed');
     c.terms.review_after = atDay(20);
     const run = await collectResearchPage(
@@ -333,11 +338,55 @@ describe('long research retention and restore (synthetic only)', () => {
     await expect(readResearchRun(local.env, c, run.run_id, options(c, atDay(20)))).rejects.toThrow(
       'terms_review_required',
     );
+    const fetcher = vi.fn();
+    await expect(
+      collectResearchPage(local.env, c, eiaQuery, atDay(20), {
+        ...options(c, atDay(20)),
+        fetcher,
+        allow_network: true,
+      }),
+    ).rejects.toThrow('terms_review_required');
+    expect(fetcher).not.toHaveBeenCalled();
     expect(
-      (await reconcileResearchRun(local.env, c, run.run_id, atDay(20), c.terms.version))?.remaining,
-    ).toBe(0);
-    const marker = await local.env.EVIDENCE.get(runDeletionKey(c.source.source_id, run.run_id));
-    expect(JSON.parse(await marker!.text()).reason).toBe('permission_lapsed');
+      await reconcileResearchRun(local.env, c, run.run_id, atDay(20), c.terms.version),
+    ).toMatchObject({
+      remaining: null,
+      decision: {
+        state: 'review_due',
+        storage: 'allowed',
+        next_action: 'review_terms',
+        read_allowed: false,
+        collection_allowed: false,
+      },
+    });
+    expect(await local.env.EVIDENCE.get(runDeletionKey(c.source.source_id, run.run_id))).toBeNull();
+    expect(
+      await local.env.PRIVATE_DB.prepare(
+        'SELECT COUNT(*) n FROM research_observations WHERE run_id=?',
+      )
+        .bind(run.run_id)
+        .first(),
+    ).toEqual({ n: 2 });
+    const audit = await local.env.PRIVATE_DB.prepare(
+      'SELECT decision_json FROM research_retention_assessments WHERE run_id=?',
+    )
+      .bind(run.run_id)
+      .first<{ decision_json: string }>();
+    expect(JSON.parse(audit!.decision_json)).toMatchObject({
+      state: 'review_due',
+      evidence_status: 'expired',
+      revalidation: 'unavailable',
+    });
+    const oldHash = await hash(stable(c));
+    const next = renewal(c, 'lapsed-v2', atDay(21), oldHash);
+    await adoptReviewedResearchConfig(local.env, next, oldHash, atDay(21), next.terms.version);
+    expect(
+      (await readResearchRun(local.env, next, run.run_id, options(next, atDay(21)))).results,
+    ).toHaveLength(2);
+    expect(
+      (await reconcileResearchRun(local.env, next, run.run_id, atDay(21), next.terms.version))
+        ?.decision.state,
+    ).toBe('active');
   });
 
   it('detects backup-window growth and late deletion instead of claiming backup erasure', async () => {
@@ -373,7 +422,7 @@ describe('long research retention and restore (synthetic only)', () => {
       atDay(1096),
       next.terms.version,
     );
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       remaining: 0,
       backup_residual_until: atDay(1126),
       backup_deadline_missed: true,
@@ -403,6 +452,7 @@ describe('long research retention and restore (synthetic only)', () => {
       'research_runs',
       'research_pages',
       'research_observations',
+      'research_retention_assessments',
     ];
     const backup = [];
     for (const table of tables)

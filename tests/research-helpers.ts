@@ -18,6 +18,12 @@ export function researchSource(adapter: 'eia_retail' | 'jepx_spot' = 'eia_retail
   c.wire_contract_review_ref = 'synthetic-wire-contract';
   c.retention.reviewed_ref = 'synthetic-retention';
   c.retention.normalized_days = 90; // Short-window synthetic regression cases, not a live default.
+  c.retention.normalized_mode = 'fixed_days';
+  c.retention.storage_review_hold = {
+    basis_ref: 'synthetic-finite-storage-only-permission',
+    owner_approval_ref: 'synthetic-hold-approval',
+    all_copies_delete_by: '2027-01-13T00:00:00.000Z',
+  };
   c.retention.time_travel_days = 7;
   c.retention.lifecycle_review_ref = 'synthetic-prefix-lifecycle';
   return c;

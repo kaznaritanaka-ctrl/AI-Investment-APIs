@@ -3,6 +3,15 @@ import { SourceSchema } from '../schema';
 import { canCollect } from '../policy';
 import { D, isoDate, isoTime } from '../util';
 
+export const StorageReviewHoldSchema = z
+  .object({
+    basis_ref: z.string().trim().min(1),
+    owner_approval_ref: z.string().trim().min(1),
+    // An explicitly permitted, finite storage-only window if storage rights become uncertain.
+    all_copies_delete_by: z.iso.datetime(),
+  })
+  .strict();
+
 // Proposals are deliberately outside config/sources and the Collector dispatch.
 export const ResearchConfigSchema = z
   .object({
@@ -50,7 +59,19 @@ export const ResearchConfigSchema = z
         target_days: z.number().int().min(1095).max(3650),
         evidence_days: z.number().int().min(1).max(30),
         archive_days: z.literal(0),
+        normalized_mode: z
+          .enum(['unapproved', 'fixed_days', 'until_revoked'])
+          .default('fixed_days'),
         normalized_days: z.number().int().min(1).max(3650).nullable(),
+        ongoing_storage: z
+          .object({
+            basis_ref: z.string().trim().min(1),
+            owner_approval_ref: z.string().trim().min(1),
+          })
+          .strict()
+          .nullable()
+          .default(null),
+        storage_review_hold: StorageReviewHoldSchema.nullable().default(null),
         backup_days: z.number().int().min(1).max(30),
         time_travel_days: z.union([z.literal(7), z.literal(30)]).nullable(),
         lifecycle_review_ref: z.string().min(1).nullable(),
@@ -131,7 +152,13 @@ function assertResearchAuthority(
     !s.policy.fields.includes('electricity_projection_v1')
   )
     throw new Error('research_review_required');
-  if (r.normalized_days === null || r.time_travel_days === null || !r.lifecycle_review_ref)
+  assertResearchRetentionReviewed(config);
+  if (
+    acquisition &&
+    (!r.storage_review_hold ||
+      Date.parse(r.storage_review_hold.all_copies_delete_by) <=
+        Date.parse(now) + r.backup_days * 86400000)
+  )
     throw new Error('retention_review_required');
   if (
     config.terms.version !== currentTerms ||
@@ -140,11 +167,27 @@ function assertResearchAuthority(
     now >= config.terms.review_after
   )
     throw new Error('terms_review_required');
+}
+export function assertResearchRetentionReviewed(config: ResearchConfig) {
+  const s = config.source,
+    r = config.retention;
   if (
+    r.normalized_mode === 'unapproved' ||
+    (r.normalized_mode === 'fixed_days' && r.normalized_days === null) ||
+    (r.normalized_mode === 'until_revoked' &&
+      (r.normalized_days !== null ||
+        !r.ongoing_storage ||
+        !r.storage_review_hold ||
+        s.policy.retention_limit_days !== null ||
+        s.policy.valid_until !== null)) ||
+    r.time_travel_days === null ||
+    !r.lifecycle_review_ref ||
+    !r.reviewed_ref ||
     s.policy.retention_days !== r.evidence_days ||
     r.time_travel_days > r.backup_days ||
     (s.policy.retention_limit_days !== null &&
       (r.evidence_days > s.policy.retention_limit_days ||
+        r.normalized_days === null ||
         r.normalized_days + r.backup_days > s.policy.retention_limit_days))
   )
     throw new Error('retention_review_required');

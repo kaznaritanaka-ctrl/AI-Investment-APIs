@@ -1,104 +1,94 @@
-# Private研究履歴の長期保持と次の有効化判断（2026-10-16 JST）
+# Private研究履歴の長期保持と次の有効化判断（10/17指示を10/18更新）
 
-[PR #16追加指示](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16#issuecomment-6216092355)への回答。**新sourceのlive観測=0、本番変更=0、新しい権利grant=0**。以下はローカル実装と承認待ちの設計であり、有効化の指示ではない。
+[PR #16の追加指示](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16#issuecomment-6235362871)を適用する。**新sourceの実観測数=0、本番変更=0、新しい権利grant=0**。内部レビュー期限は削除義務ではない。許諾済みの履歴を残し、次の成果はHighreso/GPUSOROBANとRebroの承認後の連続実観測とする。本書はローカル実装と承認待ちの手順であり、有効化の指示ではない。
 
-## 選択：初回はD1で長期履歴、R2は短期証拠と削除記録
+## 状態と次の対応
 
-少数source・上限付きの段階では、正規化履歴をprivate D1に残す。1 source 1日50行を2つという容量比較の仮定では、5年182,500 observation、metadata込み約381 MBを見込む。これは実測でもFree適合の保証でもない。既存DBの空き容量・既存Modelsの増分を含む5年見積りが満たせなければ有効化を停止する。保存済み系列を90日で消して容量を確保しない。
-
-`target_days` は1095〜3650日の研究設計目標、`normalized_days` はsource別に承認された実際の期間。候補EIA/JEPXはtarget=1095、normalized=nullのまま。Rebroは1825、Highresoは1095を交渉案とするが、両者とも設定・grantは未作成。期間が未承認なら取得前に停止し、目標から許諾を推定しない。
-
-| 比較 | D1に長期履歴（今回実装） | D1直近90日＋private R2 immutable履歴（比較案、未実装） |
+| 状態 | 新規取得 / read | 正規化履歴 / 次の対応 |
 |---|---|---|
-| 保持 | 取得時に承認期間と期限を固定。証拠7日と独立 | 90日は検索用D1の配置期限だけ。R2に同じ承認期限まで保持するので、90日削除仕様ではない |
-| クエリ | run/key/dateをSQL検索、訂正前後を直接比較。再観測も別行 | manifestからobjectを取得・hash検証・展開。長期SQL集計には別処理が必要 |
-| 原本性 | observation/config/期限のUPDATEをtriggerで拒否 | source/config/run/expiryごとに固定object、条件付きPUT、順序・件数・hashを固定 |
-| 復元 | D1復元後、現行設定と外部削除記録を再適用 | D1 manifest喪失時もobjectから復元できる形式が必要。許可・期限の検査なしに再投入しない |
-| 削除 | 1run最大20行ずつ。D1 Time Travel残存期間も記録 | 同一objectへ異なるsource/期限を混在させない。manifest撤回後object削除。R2自体を不変ロックせず削除義務を優先 |
-| 複雑性 | 小さな追加migrationで検証可能 | checkpoint、読戻し確認、D1からの移行中断、R2喪失、旧版検索、削除後復元を別途試験する必要 |
+| active | 現行の取得・保存・分析権とtermsが有効な場合のみ可 | 承認された保持契約に従う |
+| review_due | 両方停止 | 保存権の根拠が有効なら保持。terms再確認、新policy版、過去config hashの利用承認後にreadを復旧。永久削除マーカーを作らない |
+| collection_stopped | 取得停止、履歴readは別判定 | 保存・分析権が有効なら保持/read可。収集停止だけで削除しない |
+| rights_unknown | 未確認の取得/readを停止 | 不足している根拠と次の対応を人間レビューへ。分析だけ未確認なら保存権は別評価。保存も不明なら下記の事前承認済み有限holdだけ適用 |
+| retention_expired | read停止 | 明示された元の固定期限、または短くなった許諾期限で段階削除 |
+| delete_required | read停止 | 保存権の明示終了、適用される削除要求、revoke、承認済みholdの終了。R2マーカーを先に保存しD1/R2とbackup期限を処理 |
 
-R2案の将来の移行は、1run最大192行・128KiB以下のchunk、1 invocation 1 chunkで始める。**現在の短期証拠をそのまま長期archiveへ昇格させない**。新たに許諾された正規化フィールドだけを書き、hash/件数/期限を読戻し確認し、manifest complete後にD1正文を段階削除する。コピー失敗ではD1を残す。Public binding/APIには接続しない。archive権限・実装・復元検証が未承認の今はschemaも`strategy=d1_history, archive_days=0`のみを許す。
+`research_retention_assessments` はrun/current config hash、評価時刻、状態、取得/保存/分析権、根拠参照、期限、次の対応をimmutableに記録する。短期証拠は `within_retention_unverified / expired / deleted`、再検証は `requires_projection_check / unavailable` と記録する。期限内というだけでR2 objectの実在・全page・hash一致を検証済みと表示しない。証拠が消えても許諾内のnormalized履歴は消さない。
 
-## 3年・5年の容量と費用
+## 保持モードと必要な根拠
 
-再現コマンド: `node scripts/research-retention-cost.mjs`。日数は依頼の1095/1825を採用し、365日=12か月で積算。実データ・為替は使用しない。100 observation/日、D1本文/provenance/indexを2KiB/行、2 run/日、D1 metadataを2KiB/run、R2履歴を1KiB/行と仮定する。行幅が2倍なら本文相当も2倍になり、全体容量を再審査する。
+| normalized_mode | normalized_days | 意味 |
+|---|---|---|
+| unapproved | null | 未承認。取得前に停止 |
+| fixed_days | 正の整数 | 承認された期間・契約期限を適用 |
+| until_revoked | null | 明確な継続保管許諾とowner承認がある場合だけ暦日数で強制削除しない |
 
-| 期間 | observation / run | D1長期保持 | R2案のD1 / R2 | D1案の期間累計・保管料係数 | R2案の期間累計・保管料係数 |
-|---|---:|---:|---:|---:|---:|
-| 3年 | 109,500 / 2,190 | 228.74 MB | 22.92 / 102.91 MB | $3.09 | $0.56 |
-| 5年 | 182,500 / 3,650 | 381.24 MB | 25.91 / 177.66 MB | $8.58 | $1.05 |
+`target_days` は3〜5年以上という研究目標であり許諾でも廃棄期限でもない。EIA/JEPXはunapproved、target=1095、normalized=null。Rebro1825/Highreso1095は初期交渉の目安で、両GPU候補とも設定/grantは未作成。nullだけでは取得できない。
 
-係数は無料枠控除前・端数処理前の保存費だけで、請求見積り総額ではない。5年末の在庫量を1年間保管する係数はD1約$3.43、R2案約$0.27。1年分の新規行は36,500、D1約76.25 MB。今回の新sourceの収集費増分実績は0。
+`until_revoked` はprivate_storage=allowed、対象fieldの根拠、`ongoing_storage.basis_ref`、`ongoing_storage.owner_approval_ref`、通常のowner/wire/retentionレビュー、実Time Travel・lifecycle確認を要求する。期限付きの `policy.valid_until` / `retention_limit_days` があるsourceをこのモードへ読み替えない。研究経路の内部再確認はterms.review_afterに置き、policy.valid_untilを内部リマインダーの代用にしない。後の許諾延長やモード変更でも旧runの期限は延長しない。
 
-参照した2026-10-16の料金は[D1](https://developers.cloudflare.com/d1/platform/pricing/)の超過保存$0.75/GB-month、[R2 Standard](https://developers.cloudflare.com/r2/pricing/)の$0.015/GB-month。D1の5GB、R2の10GB-month等の含有枠はアカウント全体で共有する。枠が残ればこの小規模保存の追加請求は0になり得るが、現在の残枠を本資料では測定していない。R2はGB-monthとリクエストの課金単位を切り上げるため、上の連続値は実請求額ではない。保存枠消費済みなら小量のR2保存でも1GB単位/月、操作枠消費済みならClass A/Bの追加単位で費用が発生する。
+新規取得には `storage_review_hold` も要求する。権利不明時にも一時保管できることを提供者条件等が明示した**有限の保存専用根拠**で、basis_ref、owner_approval_ref、全コピー削除期限all_copies_delete_byを記録する。無根拠の猶予をAIが付けるものではない。取得時snapshotへ固定し、保存根拠が不明になった場合は現行条件と元holdの早い期限までに再確認し、未解決ならbackup_daysを差し引いた日から削除する。review_dueだけではholdを発動しない。holdがない旧v1行は保存権確認へ上げ、元の有限期限を維持し、無期限化しない。実候補ではこれらの根拠は未記入で取得不能。
 
-R2案のarchive追加量は定常時最大62 object/月、検証GETも同数。Class Aは$4.50/百万、Class Bは$0.36/百万という段階的な料金なので、両方の含有枠を使い切ったアカウントで追加単位が各1つ発生すれば$4.86/月（3年$174.96、5年$291.60）が保管料とは別にあり得る。既存利用量による単位境界を確認してから請求差分を求める。短期証拠のPUT/GET、権限/削除記録のHEAD、retention、障害retryも予算に含める。
+`requestResearchDeletion` は適用される削除要求のbasis_refと全コピー期限を必須とするローカル関数。期限がTime Travelより短ければ消去を約束せずdeadline missedを返す。操作APIや本番操作口は追加しない。
 
-共通の証拠上限は2 source×1 page×128KiB×7日=1.75MiB。削除記録は本文なし約1KiB/runと仮定すると5年約3.65MB。これら、既存データ、provider/feedの契約費（unknown）、Workers基本料/CPU、D1 read/write/index更新は表の外。市場データの提供費を無料と仮定しない。D1 lineage検索は保持行数に伴って増えるため、5年最大件数でrows_readとCPUを測り、Source単位の予算を定める。現在のテストは時間境界の検証で、5年分の負荷試験ではない。
+## 保存方式とmigration
 
-[D1制限](https://developers.cloudflare.com/d1/platform/limits/)ではFree 500MB/DB、Paid 10GB/DB。既存DBと合算で余裕を確保し、追加データの将来容量が残容量の80%を超える見込みなら、scope/頻度を承認し直すかR2案を実装してから有効化する。既存履歴の自動短縮、有料化、DB新設をこのPRでは行わない。
+現在のprivate D1に正規化履歴を残す。R2は短期projectionと本文なしの取消し/削除記録だけ。新しい長期archive、DB分割、新DB、追加の費用分析基盤は作らない。strategy=d1_history、archive_days=0を維持する。
 
-## 保持契約とコード
-
-- `0008_research_retention.sql` は0007へ追記する前進migration。config版のimmutable台帳、runの保持snapshot、全コピー期限、削除日時/backup残存期限を追加。0001〜0007、public migrationは変更しない。
-- 新規runに取得時のevidence/archive/normalized/backup、Time Travel日数、権利上限、review refを固定。normalized期限はrun開始時から計算し、後のpageや再実行で延長しない。source_dateが過去でも過去の観測と誤認せず、保持起算は実取得runの時刻とする。
-- `normalized_days + backup_days <= retention_limit_days`、証拠期限、実Time Travel日数<=backup上限を取得前に検査する。limit=nullは無制限許諾を意味せず、具体的な期間のowner reviewが別途必要。
-- `adoptReviewedResearchConfig` は別policy版・期待current hash・既存field/scopeを検査してローカル登録する。取得済みconfig hashを`history_access`で明示承認した場合だけ過去版を読める。未許諾期間を後から許諾済みにしたり、旧runの期限を延長したりしない。
-- historical readは現在のprivate_storage/internal_analysisとtermsを要求する。取得停止（enabled=false、取得権失効）と履歴の利用権失効を分離する。取得だけ停止しても、有効な履歴利用権があれば保持/read可。suspend/revoke、保存権失効、review期限超過はreadを閉じる。収集には従来どおりprivate 3権限が必要。
-- `historyExpiry` は取得時期限と現行の短い保持上限の早い方を使う。古い履歴を現在値のfreshnessだけでstale/purgeにしない。既存runを90日で削除するfallbackはない。0007時代のsnapshotがない行はunreviewedとして読取停止し、migration時の長期grantを付けない。
-- `reconcileResearchRun` は失効/不承認/期限切れ/削除済みの1runを判定し、最大20行ずつ削除する。証拠だけの期間短縮も現行条件と元期限の早い方で適用し、長い正規化履歴を巻き込まない。新規収集停止時も実行する必要がある。未承認の旧履歴を保留したまま無期限に保存する運用にしない。
-- `disclosureRevision` は発表日・対象日・構造化された掲載内容のhashと観測IDを区別する。観測/証拠/内部policy版だけの更新はreobserved。発表や採択を稼働実績へ変換しない。raw記事本文のhash/全文保存やニュースcrawlerは追加しない。
+- 0008のimmutable config版・保持snapshot・全コピー期限を維持。0009はresearch親子テーブルをコピーしてmode/null期限を追加し、旧0007/0008の行と期限をそのままfixed_daysへ移す。過去SQLやPublic migrationは変更しない。状態評価台帳も追加する。populated DB/FK/triggerをローカル検証し、本番へ適用しない。
+- 新規runにevidence/archive/normalized/backup、Time Travel、権利上限、レビュー根拠、保存権終了日、有限holdを固定。期限は取得run時刻から計算し、page追加や再実行で延長しない。source_dateは保持起算や実観測時刻の代用にしない。
+- fixed_daysではnormalized_days + backup_days <= retention_limit_daysを検査。Time Travel実日数<=承認backup上限、証拠期限も独立検査。until_revokedでも明示的なrevoke/削除要求/より短い現行条件は有効。
+- `adoptReviewedResearchConfig` は新policy版・期待current hash・履歴の同一scopeを検査する。enabled版は取得権等の全gateを要求。disabled版はownerのレビュー記録としてunknown/deniedも登録できるが、利用許可を付与するものではない。過去config hashの `history_access` 承認と現在の権利/termsが揃って初めて読める。
+- `historyExpiry` は元期限と現行の短い期限の早い方。古い観測をfreshnessだけでstale/purgeにしない。snapshotのない旧0007行は読取停止し、migrationで長期grantを付けない。
+- `reconcileResearchRun` は上表を1runずつ評価。review_due・分析権の未確認だけでは削除しない。明示された削除義務だけ最大20行ずつ処理し、短期証拠は独立に削除する。収集停止時も評価が必要だが本番schedulerは未接続。
 
 ## R2 lifecycle・復元・取消し
 
-prefix `research/<source_id>/` は短期projectionだけ。source別に取得時承認のevidence期間でcleanupする。R2 lifecycleは補助であり、[通常削除に遅延がある](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)ため厳密期限の唯一の削除手段にしない。実装のexpiry read gateとbounded DELETE、backlog/失敗監視を併用する。生のHTTP bodyやbackup exportは追加しない。
+`research/<source_id>/` は短期projectionだけ。1回最大5run×4pageの削除で未checkpointのcaptureも対象にする。R2 lifecycleには[削除遅延](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)があるため、厳密期限の唯一の削除手段にせず、expiry gate、bounded DELETE、backlog監視を併用する。raw全体やbackup exportは追加しない。
 
-prefix `research-control/revocations/` と `research-control/deletions/` はsource/run ID、日時、理由のみの取消し・削除記録。短期lifecycle/backup restore/本文削除から除外し、復活防止のため存続させる。R2全bucketに7日/90日のruleがある環境では有効化不可。許可前にprefix/ruleの実状態をread-onlyで確認し、専用rule変更を別承認する。現在lifecycleは変更していない。
+`research-control/revocations/` と `research-control/deletions/` はID、日時、理由、根拠参照、全コピー期限の本文なし記録。review_dueには作成しない。短期lifecycle/backup restore/本文削除から除外し、復活防止のため存続させる。旧版で既に作られた削除マーカーは理由を問わず維持し、自動解除しない。bucket全体の短期lifecycleがcontrol記録を消すなら有効化不可。実ruleの確認と変更承認は次段階。
 
-取消しはR2 deny記録を先に作り、D1のsourceをsuspendして各runを削除する。in-flight leaseがあっても新たな読取/収集はdeny記録で停止し、本文削除はlease後に再開する。R2書込み失敗時も現行D1をsuspendするが、復元保護は未完了としてエラーを返す。R2への再試行が完了するまで復元後の利用を再開しない。両storeの障害を跨ぐatomic性はなく、外部gateと未完了監視が本番統合条件。sourceのrevoke記録をこの実装から消す操作はない。
+取消しはR2 deny記録を先に作りD1をsuspendする。lease中も新しいread/収集はdenyし、本文削除はlease後。R2失敗時も現行D1をsuspendするが、復元保護は未完了としてエラーを返す。両storeを跨ぐatomic性はなく、マーカー保存まで復元後利用を再開しない。source revokeを取り消す操作は未実装。
 
-[Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)はD1全体の復元で、既存bookmarkを消さない。Free 7日/Paid 30日という実環境の値を別途確認する。row削除だけでbackup即時消去を主張しない。`backup_residual_until` は削除完了時刻+確認したTime Travel日数の見込み。`backup_deadline_missed`がtrueなら、許可期限内の全コピー削除を証明できない状態として停止・owner対応事項にする。これはCloudflareの実消去証明ではない。backup残存猶予を認めないsourceは、このD1案では有効化しない。
+[Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)はDB全体の復元で、row削除だけで既存bookmarkを消さない。実日数は別確認し、`backup_residual_until` は削除完了時刻+確認済み日数の見込みとする。`backup_deadline_missed=true` は全コピー期限の充足を証明できない状態。Cloudflareの実消去証明ではない。backup残存を認めない契約はこのD1方式で有効化しない。
 
-復元順序は、(1)研究利用/収集を停止、(2)最新のレビュー済み設定を復元DBより先に用意、(3)D1復元、(4)外部deny記録を保持したままcurrent configを再登録、(5)全対象runの`reconcileResearchRun`をcheckpoint付きで反復、(6)残行0/期限/backup backlogを確認、(7)許可のある利用だけ再開。古い設定も復元して許可を取り戻す操作は禁止。R2本文も復元した場合は同じprefixの証拠expiryを再適用する。復元実行・本番掃除は今回行わない。
+復元手順は (1)研究利用/収集を閉じる、(2)最新承認config/termsとR2 control記録を確保、(3)D1復元、(4)current configを再登録、(5)全runをcheckpoint付きでreconcile、(6)削除対象の残行/backup期限とreview対象を確認、(7)許可された利用だけ再開。review_dueは保持して再レビューへ、delete_requiredは再削除へ分ける。R2本文も復元したなら証拠期限を再適用。旧設定を復元して許可を取り戻すことは禁止。本番復元・掃除は未実行。
+
+## 容量は観測のみ
+
+10/16の5年試算（2 source合計100行/日、本文等2KiB/行ならmetadata込み約381MB）と80%閾値は**参考値**。実測でもFree適合の保証でもなく、ソース獲得・ローカル実装の停止条件にはしない。元の比較計算は `scripts/research-retention-cost.mjs` とGitの264d773版に残す。今回、料金再調査・archive比較・追加分析は行わない。
+
+最小限の運用確認として、既存read-only metricsのD1 storage/rows read/write/容量エラー、R2 storage/operationsと日次増分を確認し、記録日時・実上限との差・観測期間を残す。実増分で次のレビューまでの余裕不足が判明したら警告し、その実測を元に対策を別提案する。Cloudflare物理上限、既存データ保護、提供者の保持上限は必須。既存履歴の自動短縮、有料化、新DB作成は行わない。日次の人間によるCSV作業は要件にしない。
 
 ## 次の有効化候補は2つだけ
 
-いずれもownerが交渉する候補で、接続可能との断定ではない。未返信/未送信を許可済みにしない。feedと保存条件が揃わなければ実装済みの受入契約までで停止する。EIA/JEPXを前提作業にしない。
+所有者が提供者に対応する。未返信/未送信を許可済みにせず、公式feed・許諾前のliveや権限昇格を行わない。EIA/JEPXはcritical pathから外したまま。
 
-| 承認事項 | Rebro / GPU買取センター | Highreso / GPUSOROBAN |
+| 確定事項 | Highreso / GPUSOROBAN | Rebro / GPU買取センター |
 |---|---|---|
-| 公式経路 | [公開事例](https://gpu-kaitori.com/reason/)・[Q&A](https://gpu-kaitori.com/q-a/)は存在。非公開成立系列のAPI/CSV/feed URLはunknown。提供者から正規仕様を受領して固定endpointにする | [公式instances](https://soroban.highreso.jp/compute/instances)・[利用規約](https://soroban.highreso.jp/terms)。条件付き価格feedのAPI/CSVはunknown。HTML自動巡回で代替しない |
-| 利用根拠 | 自動取得、private保存、内部分析、匿名化、契約終了後の保持、訂正版提供を個別書面で確認。公開事例と全取引のcoverageを明記 | 同じ3権限と長期保持、標準/個別契約価格の使用範囲を確認。サービス利用規約を価格DB化の一括許諾にしない |
-| 対象と比較条件 | 初期A100/H100の明示SKUのみ。買取提示/買取成立/販売提示/販売成立、取引時刻の精度、状態、VRAM/PCIe/SXM、台数/lot、税/送料、通貨を保持。個人・取引相手情報は受け取らない | 提供確認済みSKUだけ。GPU数/フォーム/地域証拠、専有/共有、割込み、最低利用、ポイント/通貨、時/分/月、税を分離。availabilityから稼働率を計算しない |
-| 頻度・費用・認証 | 1日1run、最大50新規/訂正記録・1page案。feed料金/rate/認証方法はunknown。個別承認し、Secretを今回取得/追加しない | 1日1run、最大50offer・1page案。消える価格条件の同価格再観測も保存。feed費/rate/認証はunknown、契約/Secretは別承認 |
-| 4種保持の交渉案 | evidence 7 / archive 0 / normalized **1825** / backup最大30日。契約上限と実Time Travelに照合。全部review_required | evidence 7 / archive 0 / normalized **1095** / backup最大30日。必要なら別審査で延長案、取得済み期限は自動延長しない。全部review_required |
-| 監視と受入 | 正常空差分と取得失敗、全page完了、重複/訂正、日次完了率、欠測、初回/最新時刻、保持backlog、更新元根拠を検証。初回live smokeは別承認 | 上記に条件変更・掲載消失・通貨/課金単位の変更を追加。schema変更は停止、価格急変だけで隔離しない |
-| lifecycle・rollback | source別短期prefix、control記録除外、backup残存を許諾。collector呼出し停止→権限停止→対象runをbounded削除。既存ECB/Models/PoCを止めない | 同左。契約終了で履歴利用が継続できるかを事前に確定する。復元後も現行許可を再適用 |
-| 外部へ出せる範囲 | 現在は**0**。Public/商用/派生/LLM/rawの許諾は別。匿名化すれば自由とはしない | 現在は**0**。個別価格と一般公開価格を混ぜず、将来もscope別審査 |
+| 公式経路 | 価格feedのAPI/CSVはunknown。HTML自動巡回で代替しない | 公開事例と非公開成立seriesを分離。正規API/CSV/feedはunknown |
+| 権利 | 自動取得・private保存・内部分析を個別確認。契約終了後の保持と分析、until_revokedまたは固定期限、有限holdを確認 | 同左。匿名化だけで自由な利用権を推定しない |
+| 比較条件 | 提供確認済みSKU、GPU数/フォーム/地域証拠、専有/共有、割込み、最低利用、point/通貨、時/分/月、税 | 初期A100/H100の明示SKU。買取提示/買取成立/販売提示/販売成立、日時精度、状態/VRAM/PCIe/SXM、台数/lot、税/送料。個人・相手情報を受け取らない |
+| 頻度・費用・認証 | 1日1run、最大50offer/1page案。feed費/rate/認証はunknown、契約/Secretは別承認 | 1日1run、最大50新規/訂正記録/1page案。coverage・feed費/rate/認証はunknown |
+| 保持 | evidence7/archive0、研究目標1095、backup最大30日案。継続保管許諾ならuntil_revoked、期限付きならfixed_days | 同左、研究目標1825。3〜5年を強制廃棄期限にしない |
+| 受入 | 同価格再観測、掲載条件変更/消失、通貨/単位、partial/失敗、全page/件数/訂正を検証。availability≠稼働率 | 正常空差分≠取得失敗、重複/訂正、出品消失≠成立、一業者≠全市場を検証 |
+| 監視・rollback | 日次完了率/欠測/初回・最新観測、retention backlog。取得停止後は保存/分析を別評価、削除義務があるrunだけ削除 | 同左。既存ECB/Models/PoCを止めず、復元時も現行権利を適用 |
+| 公開 | 現在0。Public/商用/派生/LLM/rawは別許諾 | 現在0。非公開成立例も未取得 |
 
-owner reviewには、上表の未確定事項、具体的なpolicy差分、storage予算、live smoke許可、0007/0008と実Collectorへの接続・自動retentionの実装、無効状態での受入、初回本番収集の順で提出する。これらは次の独立した有効化PRの完了条件で、今回新PRは作らない。Highreso/Rebroの交渉が不成立なら無断で3つ目を有効化しない。
+次の手順は公式仕様/許諾の受領→具体的policy差分→個別live smoke承認→本番版を基準にした接続・自動retention実装→0007/0008/0009のmigration/deploy承認→無効状態の受入→source別初回収集承認。今回新PRやgrantは作らない。2社の交渉が不成立でも無断で3社目を有効化しない。
 
 ## KPIと次の完了条件
 
-| 指標 | 定義 | 今回の新source |
-|---|---|---|
-| 有効な実観測source数 | 承認済み・非synthetic・complete・有効な観測を少なくとも1件持つsource | 0 |
-| 初回/最新実観測日時 | 非syntheticのobserved_at。Collector処理完了日時は代用しない | null / null |
-| 連続観測日数 | 承認した運転開始以降、予定slotのcompleteを連続して満たした日数。同価格も1正常日 | 0（未開始） |
-| 欠測日数 / 取得完了率 | 予定slotを分母。partial/失敗/期限切れを成功へ数えない。休業日はsource calendarに従う | null / null（運転予定なし） |
-| 保存された改定前版 | 現在も許諾・期限内で読める改定前の非synthetic版。観測時刻だけの変更は改定ではない | 0 |
-| 年間増分保存費用 | 実usage差分と上の仮定モデルを別表示。provider料金とCloudflareを分離 | 実績追加0、将来費用は仮定 |
-| 商用利用許諾 | source/field/条件/版/有効期限ごとの権限状態 | review_required |
+新sourceの有効な実観測source数=0、実観測数=0、初回/最新observed_at=null、連続観測日数=0、保存された実改定前版=0。欠測日数/完了率は運転予定がまだないためnull。商用権限はreview_required。synthetic件数、idle continuation、Collector処理完了日時を実観測に数えない。
 
-次の有効化PRは初回live日時・出典・completeな観測IDを証拠付きで記録し、承認済みの日次運転が続くことを確認して完了とする。合成fixtureの件数、コード行数、idle continuation、価格が変わらなかったという事実だけをデータ取得実績に数えない。日々のCSV転記/ダウンロード/アップロードは運転要件にしない。
+次の有効化では初回liveの日時・出典・complete観測IDを記録し、承認された日次運転の連続性を確認する。同価格の正常再観測も正常日。手動価格転記/CSV download/uploadを運転要件にしない。
 
-## mainと本番の統合計画（実行していない）
+## mainと本番の統合計画（未実行）
 
-2026-10-16にGitを再確認: main=`1d42d98...`、PR開始HEAD=`3369118...`。10/15にread-only確認したCollectorの配信annotationは`0abf2b6...`。今回Cloudflare実状態を再監査したとは報告しない。mainと当該commitには57ファイルの差があり、PoCだけでなくcontinuation/operations/Admin/NAS/lockfile等も含む。private migrationは両参照とも0001/0002/0003/0005/0006で、今回の0007/0008とは別。remote適用状況は有効化前に読み取り確認する。
+10/16時点のmain=1d42d98、10/15のread-only配信annotation=0abf2b6。今回の基準はPR HEAD=264d773。本番状態を再監査したとは報告しない。mainと本番はPoC/continuation/operations/Admin/NAS等で異なり、**mainベースの本PRをそのままdeployしない**。
 
-1. 配信Worker version/annotationと現行main/開発HEADをread-onlyで再取得し、比較を固定する。最新配信源が不明ならdeployを止める。
-2. 所有者レビュー用の統合ブランチを本番配信の再現可能なcommitから用意し、PoC enabled/profile、ECB、Models scope、3 Cron、2 D1/private R2、AGENT=false、collector非公開を固定した差分表を作る。今PRのmainベースをそのままdeployしない。
-3. 本PRのresearchファイル、前進migration、生成schema/test/docsだけを取り込み、networkの小差分は3-wayで確認。main/本番双方にある機能を旧版で置き換えない。Admin/Public/NASの既存差分は所有者が別に統合判断する対象で、今回まとめて変更しない。
-4. 本番基準のschemaからのローカルmigration、ECB/Models/PoC/continuation/watchdog、rights/retention、public境界と既存NASバックアップ対象外の確認を行う。新しい研究正文が既存exportに入るなら、無許可でbackup期間を増やさずrelease blockerとする。
-5. source別の承認・現在の容量/plan/Time Travel/lifecycle確認後、dry-runと具体的diff/rollback版を提示する。remote migration・deploy・Secret・source enableの実行承認は別々に得る。
-6. rollbackは新sourceの呼出し停止と必要な対象削除を優先。既存本番配信版を保持し、D1全体の巻戻しや旧mainの再deployで他の履歴/設定を失わせない。
+1. 現在の配信version/annotationとmain/開発HEAD、remote migration適用状況をread-onlyで固定する。
+2. 本番を再現するcommitから統合案を作り、PoC/ECB/Models scope、3 Cron、2 D1/private R2、AGENT=false、collector非公開を維持する。
+3. research前進migration/実装/テストだけを取り込み、本番schemaからの移行、既存処理と公開境界、NAS等への無許可exportがないことを検証する。Admin/Public/NASの別差分は今回扱わない。
+4. source別権利、Time Travel/lifecycle、実測容量を確認しdry-runとrollback版を提示。remote migration/deploy/Secret/source enableは個別承認を得る。
+5. rollbackはsource単独停止と必要な削除を優先。DB全体巻戻しや旧main再deployで既存履歴・本番設定を失わせない。

@@ -1,6 +1,6 @@
 # 運用手順（現在地: 2026-10-04）
 
-2026-10-16のPrivate研究拡張は[別runbook](private-research-runbook.md)と[長期保持・KPI・統合計画](research-long-retention-20261016.md)に分離しています。新source/0007/0008はローカル候補のみ、既存3 Cron・source grants・Admin/Public/NASを変更していません。保持処理は収集停止時も必要ですが、production schedulerには未接続です。mainと本番PoC/Collectorの差分は[実査台帳](source-expansion-20261015.md)を確認し、下記の過去状態だけを根拠にdeployしないでください。
+2026-10-18のPrivate研究拡張は[別runbook](private-research-runbook.md)と[状態・保持・統合計画](research-long-retention-20261016.md)に分離しています。review_dueは許諾内で保持し再レビュー、削除義務があるrunだけ段階削除します。0007/0008/0009はローカルのみ、既存Cron・grants・Admin/Public/NASは不変。production schedulerには未接続です。mainと本番PoC/Collectorの差分は[実査台帳](source-expansion-20261015.md)を確認し、過去状態だけを根拠にdeployしないでください。
 
 [本番対応・受け入れ記録](operations-acceptance.md)を先に参照。0005/現Collector/Admin/台帳5件は反映済み、通知0006とそのcodeは候補です。
 

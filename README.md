@@ -2,7 +2,7 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
-2026-10-16: [Issue #15の調査台帳](docs/source-expansion-20261015.md)と[Private研究用の実装・承認手順](docs/private-research-runbook.md)に、[source別3〜5年の履歴保持・費用比較・有効化候補2件](docs/research-long-retention-20261016.md)を追加しました。0007/0008はローカルのみ、未承認の保持期間はnullです。EIA/JEPXはblockedを維持し、国内GPU受入・DC開示・長期保持の検証はsyntheticです。新規live観測0、本番変更0。[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。Cloudflareの配信版はmainとは異なり、PoCはowner承認のPrivate本番設定が別branchにあります。この開発branchを古い設定のままdeployしないでください。
+2026-10-18: PR #16の追加指示に従い、[研究履歴のレビュー待ち・収集停止・削除義務と保持モード](docs/research-long-retention-20261016.md)を分離しました。review_dueでは許諾内の履歴を保持し、明示された継続保管根拠とowner承認があるsourceだけuntil_revokedを選べます。0007/0008/0009はローカルのみ、旧期限は不変です。[運用手順](docs/private-research-runbook.md)と[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。新sourceの実観測数0、本番変更0。次の候補はHighreso/GPUSOROBANとRebroの公式feed・権利確認待ちで、EIA/JEPXはcritical path外です。容量試算は参考に留め、新archive/DB分割は実装しません。Cloudflare配信版はmainと異なり、このbranchを古い設定のままdeployしないでください。[調査台帳](docs/source-expansion-20261015.md)に差分を記録しています。
 
 以下の本番対応の記録は2026-10-04〜05時点です。10/15のread-only確認との差分は上記台帳へ分離しています。
 

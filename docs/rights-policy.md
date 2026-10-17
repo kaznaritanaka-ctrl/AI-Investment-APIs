@@ -2,7 +2,7 @@
 
 2026-10-15 Private研究案: `license_url:null` は未確認情報であり、それだけで拒否/許可を決めません。既存9権限を独立検査し、適用根拠・field・期間・保持が揃ったsourceだけowner reviewへ提示します。今回の候補JSONは新規allowedなし。公開/外部LLM/raw exportなしの[ローカル経路と復元条件](private-research-runbook.md)を参照してください。
 
-2026-10-16: 研究目標3〜5年を許諾済み期間に読み替えません。proposalのnormalized期間はnull。取得時の証拠/正規化/backup/全コピー期限はimmutableで、現行許諾が短くなれば短い方を適用します。取得停止と履歴利用停止を分け、過去版への明示承認があっても現在の保存/分析権とterms reviewを要求します。権利失効・期限後は自動reconciliation対象。D1復元の外に取消し/削除記録を残し、Time Travel残存期間を含む[保持・復旧手順](research-long-retention-20261016.md)を満たすまで本番有効化しません。
+2026-10-18: 研究のreview_dueはHTTP/read停止と再確認の状態であり、保存権が有効なら履歴を削除しません。取得停止・分析権不明も保存権と別評価します。unapproved/fixed_days/until_revokedを明示し、nullだけでは許可しません。until_revokedには継続保管の根拠とowner承認、保存権が不明になった際の事前承認済み有限holdを要求します。3〜5年は目標であり強制廃棄期限ではありません。旧runの固定期限は延長せず、明示保存権終了・削除要求・revoke・保持期限だけを削除対象にします。D1復元の外に取消し/削除記録を残し、Time Travel残存も含む[保持・復旧手順](research-long-retention-20261016.md)を適用します。実sourceの新grant/本番有効化は行っていません。
 
 9種類の権限は allowed / denied / review_required / expired。source設定に対象フィールド、条件、判断主体、根拠版、有効期間、保持日数を持つ。既知の明示ライセンスに対する実装ルールであり、新規の許諾をAIが作るものではない。
 

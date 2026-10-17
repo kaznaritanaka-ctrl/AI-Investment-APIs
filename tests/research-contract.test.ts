@@ -26,6 +26,9 @@ describe('private research contracts (synthetic, no live HTTP)', () => {
       );
       expect(c.source.enabled).toBe(false);
       expect(c.retention.normalized_days).toBeNull();
+      expect(c.retention.normalized_mode).toBe('unapproved');
+      expect(c.retention.ongoing_storage).toBeNull();
+      expect(c.retention.storage_review_hold).toBeNull();
       expect(c.retention.target_days).toBe(1095);
       expect(c.retention.time_travel_days).toBeNull();
       expect(c.retention.reviewed_ref).toBeNull();
