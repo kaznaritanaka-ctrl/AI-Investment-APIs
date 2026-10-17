@@ -2,6 +2,8 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
+2026-10-18 個人研究例外の準備: 所有者の選択は「設計・準備まで」です。[Highreso/Rebro限定の例外設計と未承認判断票](docs/public-gpu-personal-research-exception-20261018.md)を追加しました。提供者の許諾未確認と所有者の実行判断を分離する案であり、現行gate・grant・disabled設定は変更していません。例外実装・実収集・本番反映は未実施です。
+
 2026-10-18 公開GPUの条件確認追補: [Highresoの11/1改定（国外例外あり）・Rebroの未特定規約と初回準備](docs/public-gpu-rights-review-20261018.md)を整理しました。`node scripts/public-gpu-check.mjs` は両社の設定を通信/保存なしで診断します。現状は両方blocked（exit 2）。権利grant・本番設定は変更せず、実収集も開始していません。
 
 2026-10-18 Issue #17: [Highreso/Rebroの公開HTMLを使うPrivate研究経路](docs/public-gpu-research-20261018.md)を、PR #16から独立したstacked Draft PRとして追加しました。固定URL、専用GPU履歴0010、最小R2証拠、再観測/改定/not_seen、source別停止と保持をsynthetic検証します。公開ページの接続・構造を確認しましたが、自動取得/保存/内部分析はreview_requiredのまま、collector live観測0件・日次稼働0日です。公式未公開feedの返答を必須条件にせず、この公開範囲の条件を別途レビューします。本番dispatch/保持scheduler・grant・deployは未反映です。以下のPR #16のfeed待ち記述は、その時点の履歴です。
