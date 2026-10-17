@@ -154,13 +154,6 @@ function assertResearchAuthority(
     throw new Error('research_review_required');
   assertResearchRetentionReviewed(config);
   if (
-    acquisition &&
-    (!r.storage_review_hold ||
-      Date.parse(r.storage_review_hold.all_copies_delete_by) <=
-        Date.parse(now) + r.backup_days * 86400000)
-  )
-    throw new Error('retention_review_required');
-  if (
     config.terms.version !== currentTerms ||
     s.policy.evidence_version !== currentTerms ||
     now < config.terms.checked_at ||
@@ -177,7 +170,6 @@ export function assertResearchRetentionReviewed(config: ResearchConfig) {
     (r.normalized_mode === 'until_revoked' &&
       (r.normalized_days !== null ||
         !r.ongoing_storage ||
-        !r.storage_review_hold ||
         s.policy.retention_limit_days !== null ||
         s.policy.valid_until !== null)) ||
     r.time_travel_days === null ||

@@ -2,7 +2,7 @@
 
 2026-10-15 Private研究案: `license_url:null` は未確認情報であり、それだけで拒否/許可を決めません。既存9権限を独立検査し、適用根拠・field・期間・保持が揃ったsourceだけowner reviewへ提示します。今回の候補JSONは新規allowedなし。公開/外部LLM/raw exportなしの[ローカル経路と復元条件](private-research-runbook.md)を参照してください。
 
-2026-10-18: 研究のreview_dueはHTTP/read停止と再確認の状態であり、保存権が有効なら履歴を削除しません。取得停止・分析権不明も保存権と別評価します。unapproved/fixed_days/until_revokedを明示し、nullだけでは許可しません。until_revokedには継続保管の根拠とowner承認、保存権が不明になった際の事前承認済み有限holdを要求します。3〜5年は目標であり強制廃棄期限ではありません。旧runの固定期限は延長せず、明示保存権終了・削除要求・revoke・保持期限だけを削除対象にします。D1復元の外に取消し/削除記録を残し、Time Travel残存も含む[保持・復旧手順](research-long-retention-20261016.md)を適用します。実sourceの新grant/本番有効化は行っていません。
+2026-10-18最終修正: 研究のreview_dueはHTTP/read停止と再確認の状態であり、保存権が有効なら履歴を削除しません。取得停止・分析権不明も保存権と別評価します。unapproved/fixed_days/until_revokedを明示し、nullだけでは許可しません。until_revokedには継続保管の根拠とowner承認を要求します。holdは通常取得の必須条件ではなく、保存権が実際に不明になった際の事前承認済み有限例外だけに使います。holdなしの保存権不明は取得/read停止と即時人間レビューへ上げ、無期限保管を許可しません。3〜5年は目標であり強制廃棄期限ではありません。旧runの固定期限は延長せず、明示保存権終了・削除要求・revoke・保持期限だけを削除対象にします。D1復元の外に取消し/削除記録を残し、Time Travel残存も含む[保持・復旧手順](research-long-retention-20261016.md)を適用します。実sourceの新grant/本番有効化は行っていません。
 
 9種類の権限は allowed / denied / review_required / expired。source設定に対象フィールド、条件、判断主体、根拠版、有効期間、保持日数を持つ。既知の明示ライセンスに対する実装ルールであり、新規の許諾をAIが作るものではない。
 

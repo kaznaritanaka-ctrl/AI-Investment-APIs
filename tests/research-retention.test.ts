@@ -102,6 +102,7 @@ describe('long research retention and restore (synthetic only)', () => {
     'keeps %i-day history after evidence deletion and expires exactly at its captured boundary',
     async (days) => {
       const c = longSource('boundary_' + days, days);
+      c.retention.storage_review_hold = null;
       const run = await collectResearchPage(
         local.env,
         c,
@@ -327,6 +328,7 @@ describe('long research retention and restore (synthetic only)', () => {
 
   it('retains history when periodic review is due, blocks HTTP/read, and restores read after explicit re-review', async () => {
     const c = longSource('lapsed');
+    c.retention.storage_review_hold = null;
     c.terms.review_after = atDay(20);
     const run = await collectResearchPage(
       local.env,

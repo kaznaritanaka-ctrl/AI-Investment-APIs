@@ -38,11 +38,11 @@ flowchart LR
 
 ## 保持と復元
 
-10/17指示に対応した[状態・保持モード・次の2候補](research-long-retention-20261016.md)を適用する。証拠と正規化履歴は独立。EIA/JEPXはevidence7日・archiveなし・target1095日・backup上限30日のproposalだが、`normalized_mode=unapproved`、日数/継続保存根拠/有限hold/Time Travelはnullで取得不能。3〜5年は研究目標であり廃棄期限ではない。明示許諾ならuntil_revoked、期限付きならfixed_daysを個別承認する。テスト用90日は回帰試験窓で本番案ではない。
+10/18最終指示に対応した[状態・保持モード・次の2候補](research-long-retention-20261016.md)を適用する。証拠と正規化履歴は独立。EIA/JEPXはevidence7日・archiveなし・target1095日・backup上限30日のproposalだが、実権利未確認、`normalized_mode=unapproved`、日数/継続保存根拠/Time Travelはnullで取得不能。holdは任意であり、null自体は通常取得の停止理由ではない。3〜5年は研究目標であり廃棄期限ではない。明示許諾ならuntil_revoked、期限付きならfixed_daysを個別承認する。通常の取得/保存/分析・scope・terms・owner/wire/retention・backup/Time Travel条件が揃えば両モードともholdなしで取得できる。テスト用90日は回帰試験窓で本番案ではない。
 
 - review_due: terms.review_after超過はHTTP/readを止めるが、保存権が有効な履歴は保持。永久削除マーカーを作らない。根拠再確認→新policy版と過去hashの明示承認→ローカルadopt→reconcile/read確認で復旧する。
 - collection_stopped: 収集停止後も保存・分析権が有効なら保持/readできる。
-- rights_unknown: 取得/保存/分析のどこが未確認か台帳へ残し、人間レビュー。保存も不明なら、事前承認したstorage_review_holdの有限全コピー期限と元期限の早い方を守る。無根拠のholdや無期限保存を作らない。分析権だけ不明なら保存権を別評価する。
+- rights_unknown: 取得/保存/分析のどこが未確認か台帳へ残し、人間レビュー。保存も不明なら、事前承認したstorage_review_holdの有限全コピー期限と元期限の早い方を守る。取得時holdがなければHTTP/readを停止し、storage=unknown / review_deadline=評価時刻として保存可否と削除期限の判断を即時人間レビューへ上げる。既知の期限は維持し、null期限を無期限保存許可にしない。後からholdを遡及付与せず、無根拠の猶予/削除期限を作らない。分析権だけ不明なら保存権を別評価する。
 - retention_expired/delete_required: 固定期限、明示保存権終了、revoke、適用される削除要求、承認済みhold終了だけを削除対象とする。requestResearchDeletionには根拠と全コピー期限を指定する。review_dueからの一律permission_lapsed削除は禁止。
 - 状態/根拠/次の対応をresearch_retention_assessmentsへ保存。証拠はdeleted/expired/within_retention_unverified、再検証はunavailable/requires_projection_check。未検査の実在やhash一致を保証しない。
 

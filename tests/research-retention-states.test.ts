@@ -76,20 +76,16 @@ describe('research retention states and explicit continuing storage (synthetic o
     await local?.mf.dispose();
   });
 
-  it('rejects ambiguous null, missing continuing-storage approval and unbounded uncertainty before HTTP/storage', async () => {
+  it('rejects ambiguous null and missing continuing-storage evidence or approval before HTTP/storage', async () => {
     const valid = ongoing('gates');
     const cases = [
       { ...valid.retention, normalized_mode: 'unapproved' as const },
       { ...valid.retention, normalized_mode: 'fixed_days' as const },
       { ...valid.retention, ongoing_storage: null },
       { ...valid.retention, ongoing_storage: { basis_ref: ' ', owner_approval_ref: 'synthetic' } },
-      { ...valid.retention, storage_review_hold: null },
       {
         ...valid.retention,
-        storage_review_hold: {
-          ...valid.retention.storage_review_hold!,
-          all_copies_delete_by: at(30),
-        },
+        ongoing_storage: { basis_ref: 'synthetic-grant', owner_approval_ref: ' ' },
       },
     ];
     const fetcher = vi.fn();
@@ -113,8 +109,144 @@ describe('research retention states and explicit continuing storage (synthetic o
     );
   });
 
+  it.each(['absent', 'expired'] as const)(
+    'collects approved fixed-day private history with an %s optional hold',
+    async (hold) => {
+      const c = researchSource();
+      c.source.source_id = 'synthetic_fixed_hold_' + hold;
+      c.retention.storage_review_hold =
+        hold === 'absent'
+          ? null
+          : { ...c.retention.storage_review_hold!, all_copies_delete_by: at(-1) };
+      const run = await collectResearchPage(local.env, c, eiaQuery, at(0), options(c, 0));
+      expect((await readResearchRun(local.env, c, run.run_id, options(c, 0))).results).toHaveLength(
+        2,
+      );
+      const saved = await local.env.PRIVATE_DB.prepare(
+        'SELECT normalized_expires_at,all_copies_expires_at,retention_snapshot_json FROM research_runs WHERE run_id=?',
+      )
+        .bind(run.run_id)
+        .first<{
+          normalized_expires_at: string;
+          all_copies_expires_at: string;
+          retention_snapshot_json: string;
+        }>();
+      expect(saved).toMatchObject({
+        normalized_expires_at: at(90),
+        all_copies_expires_at: at(120),
+      });
+      expect(JSON.parse(saved!.retention_snapshot_json).storage_review_hold).toEqual(
+        c.retention.storage_review_hold,
+      );
+      expect(
+        (await reconcileResearchRun(local.env, c, run.run_id, at(0), c.terms.version))?.decision,
+      ).toMatchObject({ state: 'active', collection_allowed: true, read_allowed: true });
+    },
+  );
+
+  it.each(['automated_collection', 'private_storage'] as const)(
+    'blocks unknown %s before HTTP/storage without a hold',
+    async (right) => {
+      const c = researchSource();
+      c.source.source_id = 'synthetic_unknown_' + right;
+      c.retention.storage_review_hold = null;
+      c.source.policy.rights[right] = 'review_required';
+      const fetcher = vi.fn();
+      await expect(
+        collectResearchPage(local.env, c, eiaQuery, at(0), {
+          now: () => at(0),
+          current_terms_version: c.terms.version,
+          allow_network: true,
+          fetcher,
+        }),
+      ).rejects.toThrow('policy_blocked');
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(
+        await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM research_runs WHERE source_id=?')
+          .bind(c.source.source_id)
+          .first(),
+      ).toEqual({ n: 0 });
+      expect(
+        (await local.env.EVIDENCE.list({ prefix: 'research/' + c.source.source_id + '/' })).objects,
+      ).toHaveLength(0);
+    },
+  );
+
+  it.each(['fixed_days', 'until_revoked'] as const)(
+    'escalates unknown storage without a captured hold immediately for %s history',
+    async (mode) => {
+      const c = ongoing('no_hold_' + mode);
+      c.retention.normalized_mode = mode;
+      c.retention.normalized_days = mode === 'fixed_days' ? 90 : null;
+      c.retention.storage_review_hold = null;
+      const run = await collectResearchPage(local.env, c, eiaQuery, at(0), options(c, 0));
+      const next = await nextPolicy(c);
+      next.source.enabled = false;
+      next.source.policy.rights.private_storage = 'review_required';
+      // A later config cannot retrospectively grant a storage exception to this run.
+      next.retention.storage_review_hold = researchSource().retention.storage_review_hold;
+      await adoptReviewedResearchConfig(
+        local.env,
+        next,
+        await hash(stable(c)),
+        at(1),
+        next.terms.version,
+      );
+      const fetcher = vi.fn();
+      await expect(
+        collectResearchPage(local.env, next, eiaQuery, at(1), {
+          ...options(next, 1),
+          fetcher,
+          allow_network: true,
+        }),
+      ).rejects.toThrow('policy_blocked');
+      expect(fetcher).not.toHaveBeenCalled();
+      await expect(readResearchRun(local.env, next, run.run_id, options(next, 1))).rejects.toThrow(
+        'policy_blocked',
+      );
+      const result = await reconcileResearchRun(
+        local.env,
+        next,
+        run.run_id,
+        at(1),
+        next.terms.version,
+      );
+      expect(result).toMatchObject({
+        remaining: null,
+        decision: {
+          state: 'rights_unknown',
+          storage: 'unknown',
+          collection_allowed: false,
+          read_allowed: false,
+          next_action: 'review_rights',
+          review_deadline: at(1),
+          all_copies_deadline: mode === 'fixed_days' ? at(120) : null,
+          reasons: expect.arrayContaining(['storage_review_hold_unavailable']),
+        },
+      });
+      expect(
+        await local.env.EVIDENCE.get(runDeletionKey(c.source.source_id, run.run_id)),
+      ).toBeNull();
+      expect(
+        await local.env.PRIVATE_DB.prepare(
+          'SELECT COUNT(*) n FROM research_observations WHERE run_id=?',
+        )
+          .bind(run.run_id)
+          .first(),
+      ).toEqual({ n: 2 });
+      if (mode === 'fixed_days')
+        expect(
+          await reconcileResearchRun(local.env, next, run.run_id, at(90), next.terms.version),
+        ).toMatchObject({
+          remaining: 0,
+          decision: { state: 'retention_expired', next_action: 'delete' },
+        });
+    },
+  );
+
   it('retains explicitly approved history beyond five/ten years, independently deletes evidence and preserves lineage', async () => {
     const c = ongoing('long');
+    c.retention.storage_review_hold = null;
     const run = await collectResearchPage(local.env, c, eiaQuery, at(0), options(c, 0));
     const saved = await local.env.PRIVATE_DB.prepare(
       'SELECT normalized_mode,normalized_expires_at,all_copies_expires_at FROM research_runs WHERE run_id=?',
@@ -132,7 +264,12 @@ describe('research retention states and explicit continuing storage (synthetic o
       ).toHaveLength(2);
       expect(
         (await reconcileResearchRun(local.env, c, run.run_id, at(day), c.terms.version))?.decision,
-      ).toMatchObject({ state: 'active', normalized_deadline: null, storage: 'allowed' });
+      ).toMatchObject({
+        state: 'active',
+        normalized_deadline: null,
+        storage: 'allowed',
+        collection_allowed: true,
+      });
     }
     expect(
       await local.env.EVIDENCE.get('research/' + c.source.source_id + '/' + run.run_id + '/0.json'),
@@ -160,6 +297,7 @@ describe('research retention states and explicit continuing storage (synthetic o
     'deletes when storage right is explicitly %s, with a durable deadline',
     async (right) => {
       const c = ongoing('storage_' + right);
+      c.retention.storage_review_hold = null;
       const run = await collectResearchPage(local.env, c, eiaQuery, at(0), options(c, 0));
       const next = await nextPolicy(c);
       next.source.enabled = false;
@@ -332,6 +470,7 @@ describe('research retention states and explicit continuing storage (synthetic o
 
   it('enforces an explicit delete request after D1 restore and reports an impossible backup deadline', async () => {
     const c = ongoing('delete_request');
+    c.retention.storage_review_hold = null;
     const run = await collectResearchPage(local.env, c, eiaQuery, at(0), options(c, 0));
     const restored = await localEnv();
     try {

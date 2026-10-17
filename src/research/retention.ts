@@ -39,7 +39,7 @@ const CurrentRetentionSnapshotSchema = LegacyRetentionSnapshotSchema.extend({
     .object({ basis_ref: z.string().min(1), owner_approval_ref: z.string().min(1) })
     .strict()
     .nullable(),
-  storage_review_hold: StorageReviewHoldSchema,
+  storage_review_hold: StorageReviewHoldSchema.nullable(),
   storage_valid_until: z.iso.datetime().nullable(),
 }).superRefine((r, c) => {
   if (
@@ -236,17 +236,25 @@ export function assessResearchRetention(
     d.reasons.push('storage_basis_requires_review');
     const hold =
       captured?.version === 'research-retention-v2' ? captured.storage_review_hold : null;
+    if (!hold) {
+      // No storage exception was granted. Escalate immediately; keep known deletion
+      // deadlines, but never invent a grace period or an unlimited storage permission.
+      d.storage = 'unknown';
+      d.review_deadline = now;
+      d.reasons.push('storage_review_hold_unavailable');
+      return d;
+    }
     // Only a previously approved finite storage-only hold is usable. An unknown right is not a grant.
     const deadline = earliest([
-      hold?.all_copies_delete_by ?? null,
+      hold.all_copies_delete_by,
       r.storage_review_hold?.all_copies_delete_by ?? null,
       d.all_copies_deadline,
     ]);
-    d.storage = hold ? 'review_hold' : 'unknown';
+    d.storage = 'review_hold';
     d.all_copies_deadline = deadline;
     d.review_deadline = deadline === null ? null : plusDays(deadline, -r.backup_days);
-    if (hold) d.basis_refs.push(hold.basis_ref, hold.owner_approval_ref);
-    if (hold && d.review_deadline !== null && now >= d.review_deadline)
+    d.basis_refs.push(hold.basis_ref, hold.owner_approval_ref);
+    if (d.review_deadline !== null && now >= d.review_deadline)
       return remove('delete_required', 'approved_storage_review_hold_ended');
     return d;
   }
@@ -272,13 +280,6 @@ export function assessResearchRetention(
   if (!config.source.enabled || p.rights.automated_collection !== 'allowed') {
     d.state = 'collection_stopped';
     d.reasons.push('new_collection_stopped');
-  } else if (
-    !r.storage_review_hold ||
-    r.storage_review_hold.all_copies_delete_by <= plusDays(now, r.backup_days)
-  ) {
-    d.state = 'collection_stopped';
-    d.next_action = 'review_rights';
-    d.reasons.push('new_collection_storage_hold_review_required');
   } else d.collection_allowed = true;
   return d;
 }

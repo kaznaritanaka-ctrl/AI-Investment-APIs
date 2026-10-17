@@ -2,7 +2,30 @@
 
 対象: main `1d42d981cb93c5185ecba8cf53b108c496d91cf7` を基にした `codex/source-expansion-private-research-20261015`。Windows / Node 24.19.0 / pnpm 11.19.0 / Wrangler 4.140.0。通常のtest/buildに実ソースHTTPは含めない。
 
-## 2026-10-18：10/17追加指示の検証
+## 2026-10-18：holdの一律開始条件を除く最終修正
+
+基準commitは `78018914679af64f3a712e23133b1b69b85c5fe7`。[owner最終指示](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16#issuecomment-6236225676)による小規模な追加差分。下記の前回実装で要求した有限holdは、通常の取得条件から外した。
+
+- fixed_daysは通常の権利・scope・terms・レビュー・有限期間・backup/Time Travel条件が有効ならhold=nullでPrivate収集/read可。期限切れの任意holdも、実保存権が有効なら通常収集を妨げない。
+- until_revokedも実際の継続保存根拠・owner承認があればhold=nullで可。根拠/承認の欠落・空白と曖昧なnull期間は引き続きHTTP/保存前に拒否。
+- 保存権不明で取得時holdがなければ取得/readを停止。storage=unknown / review_rights / review_deadline=評価時刻とし、保存可否・削除期限を即時人間レビューへ上げる。現在configのholdを旧runへ遡及付与しない。既知の有限期限は維持し、null期限は無期限保存許可ではない。
+- holdなしのreview_due→再審査→read復旧、明示権利終了、固定期限、削除要求とD1復元/R2マーカーを回帰検証。既存有限holdを使った権利不明時の猶予・期限削除も維持。
+- v2 snapshotはhold=nullを保存可能にした。pipelineは既存の共通gate/判定を使い、0009のJSON制約はnull holdを既に許容するため変更不要。0007/0008/0009、過去期限、公開schema/OpenAPI、active source/grant、deployment、Wrangler、Collector dispatch、Admin/NAS、依存packageに差分なし。
+
+| チェック | 最終修正の結果 |
+|---|---|
+| 保持処理の重点テスト | 2 files / 28 tests成功 |
+| pnpm check | format / TypeScript / 公開境界成功 |
+| pnpm test（下記Windowsオプション） | **29 files / 297 tests成功、370.48秒**。6件追加、既存holdなしの復旧/削除等の期待値も更新 |
+| pnpm test:runtime | workerdのFX/AI・復旧・operations、GPU1,051件/22page、Models50/250/1,000件すべて成功。外部HTTPなし |
+| pnpm build | Collector/APIともdeploy --dry-run成功、実deployなし |
+| pnpm preflight | offline / static_valid=true / ready=true / blockers=[] / network_performed=false。本番driftの解消を意味しない |
+| schema生成 / 差分検査 | source.schema.json / research.schema.json / OpenAPIは再生成して差分なし。git diff --check成功。全migration・本番設定・package差分なし |
+| GitHub CI | この最終修正commitの結果とrun URLは[PR #16の検証欄](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16)へ記録。過去commitの成功を流用しない |
+
+新sourceのlive観測0件、本番変更0件。権利grant、live/backfill、remote migration/deployは未実施。Highreso/GPUSOROBAN・Rebroの公式feedと自動取得/長期保存条件はowner確認待ち。有限holdは通常開始の追加条件にせず、提供者が認める場合だけ任意で記録する。
+
+## 2026-10-18：10/17追加指示の検証（履歴、hold条件は上記で修正）
 
 基準commitは `264d77353c36b611191a760774df1db0758dc094`。既存Draft PR #16への追加差分だけを作成。新sourceの実観測数=0、本番変更=0、新しいallowed=0。以下はsynthetic/localであり、本番稼働や実データ取得ではない。
 
