@@ -38,6 +38,8 @@
 
 ## GPU候補の接続準備
 
+2026-10-18条件確認追補: [Highreso改定告知の解消・Rebro追加条件と初回準備](public-gpu-rights-review-20261018.md)。Highreso新版は一般適用11/1、国外ユーザーは8/27。現行 `/terms` のhashだけでは別URLの告知を検知できない。Rebroはサイトマップ確認後も別サイト利用規約の全文/適用未確定。両社ともprivate3権限はreview_required、enabled=falseのまま。実収集可能なsourceが確定したとの報告ではない。
+
 2026-10-18 Issue #17: [Highreso/Rebroの公開ページ調査・実装・未解決条件](public-gpu-research-20261018.md)を追加。`highreso_public` / `rebro_public` は既存候補と分けたdisabled研究proposalで、Private専用のHTML parserと0010履歴をsynthetic検証する。技術確認のHTTP200は収集許諾でもlive履歴でもない。実観測0件。以下のfeed/API候補の過去調査を自動承認しない。
 
 - さくら: [公式API](https://manual.sakura.ad.jp/koukaryoku-dok-api/spec.html)に石狩is1aとunit_pricesが記載。year/month/dayとpagination、is_overriddenによるアカウント価格を区別。秒単位。認証必須。[約款一覧](https://www.sakura.ad.jp/corporate/agreement/)と[改定告知](https://www.sakura.ad.jp/corporate/information/announcements/2025/02/13/1968218534/)を確認。API文書のCC BY-ND-4.0はレスポンス価格データの許諾として使わない。

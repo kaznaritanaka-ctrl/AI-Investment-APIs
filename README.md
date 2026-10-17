@@ -2,6 +2,8 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
+2026-10-18 公開GPUの条件確認追補: [Highresoの11/1改定（国外例外あり）・Rebroの未特定規約と初回準備](docs/public-gpu-rights-review-20261018.md)を整理しました。`node scripts/public-gpu-check.mjs` は両社の設定を通信/保存なしで診断します。現状は両方blocked（exit 2）。権利grant・本番設定は変更せず、実収集も開始していません。
+
 2026-10-18 Issue #17: [Highreso/Rebroの公開HTMLを使うPrivate研究経路](docs/public-gpu-research-20261018.md)を、PR #16から独立したstacked Draft PRとして追加しました。固定URL、専用GPU履歴0010、最小R2証拠、再観測/改定/not_seen、source別停止と保持をsynthetic検証します。公開ページの接続・構造を確認しましたが、自動取得/保存/内部分析はreview_requiredのまま、collector live観測0件・日次稼働0日です。公式未公開feedの返答を必須条件にせず、この公開範囲の条件を別途レビューします。本番dispatch/保持scheduler・grant・deployは未反映です。以下のPR #16のfeed待ち記述は、その時点の履歴です。
 
 2026-10-18: PR #16の追加指示に従い、[研究履歴のレビュー待ち・収集停止・削除義務と保持モード](docs/research-long-retention-20261016.md)を分離しました。review_dueでは許諾内の履歴を保持し、明示された継続保管根拠とowner承認があるsourceだけuntil_revokedを選べます。0007/0008/0009はローカルのみ、旧期限は不変です。[運用手順](docs/private-research-runbook.md)と[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。新sourceの実観測数0、本番変更0。次の候補はHighreso/GPUSOROBANとRebroの公式feed・権利確認待ちで、EIA/JEPXはcritical path外です。容量試算は参考に留め、新archive/DB分割は実装しません。Cloudflare配信版はmainと異なり、このbranchを古い設定のままdeployしないでください。[調査台帳](docs/source-expansion-20261015.md)に差分を記録しています。

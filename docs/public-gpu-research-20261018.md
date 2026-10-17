@@ -4,6 +4,8 @@
 
 **実観測履歴0件、継続収集0日、新規grant0件、本番変更0件。** 以下のHTTP確認は低負荷の接続・構造調査であり、許諾済みcollectorによるlive smokeや観測履歴ではない。ページ本文・価格をGit/fixture/DBへ転記していない。HTMLはメモリ上だけで調べ、metadataだけ記録した。
 
+同日追補: [公開条件の追加調査・source別初回準備](public-gpu-rights-review-20261018.md)で、Highresoの改定告知/新旧対照表/新版を特定した。一般適用は2026-11-01、国外ユーザー例外は2026-08-27。Rebroのサイトマップを確認した範囲でも別サイト利用規約は未特定。両社のgrantは変更せず、`node scripts/public-gpu-check.mjs` で通信/保存なしに不足gateを確認できる。
+
 ## ソース別評価（2026-10-18 JST）
 
 | 項目 | Highreso / GPUSOROBAN | Rebro / GPU買取センター |
@@ -15,7 +17,7 @@
 | 認証・公開性 | ログインなし、HTTP 200 / text/html | ログインなし、HTTP 200 / text/html |
 | robots | [robots.txt](https://soroban.highreso.jp/robots.txt): `User-agent: *`、sitemap、禁止指示なし | [robots.txt](https://gpu-kaitori.com/robots.txt): `User-agent: *`、`Allow: /`、sitemap |
 | 条件確認先 | [terms](https://soroban.highreso.jp/terms)、[改定告知がある公式トップ](https://soroban.highreso.jp/) | [通信買取規約](https://gpu-kaitori.com/rules/)、[プライバシー](https://gpu-kaitori.com/privacy/) |
-| 未解決 | terms表示版は20251201。一方トップに2026-09-25規約改定告知があり、収集開始時の適用文面と対応関係が未確定。自動抽出・Private履歴保存・内部分析への適用根拠が必要 | rulesは通信買取サービス向けで、別途「サイト利用規約」への言及がある。公開価格収集に適用される全文・追加条件を特定できていない。宅配買取条件を自動適用/自動除外しない |
+| 未解決 | 9/25告知は11/1一般適用の予告と判明（国外は8/27適用）。収集主体への適用版、自動抽出・Private履歴保存・内部分析の根拠が必要。現行terms監視だけで別URLの改定を検知できるとはしない | rulesは通信買取サービス向けで、別途「サイト利用規約」への言及がある。サイトマップ確認後も公開価格収集に適用される全文・追加条件は未特定。宅配買取条件を自動適用/自動除外しない |
 | 自動取得 / 保存 / 内部分析 | 各 `review_required`、disabled | 各 `review_required`、disabled |
 | public / normalized / derived / commercial | 各 `review_required` | 各 `review_required` |
 | raw / 外部LLM | `denied` | `denied` |
@@ -60,7 +62,7 @@ robots hashとtermsの可視本文hashは別途ownerレビューした値と一�
 
 両候補は `config/proposals/research/{highreso_public,rebro_public}.json` のdisabled案。技術調査hashを承認済みfingerprintに自動昇格させていない。順序はsourceごとに独立する。
 
-1. **Highreso**: 現行terms/9月改定の対応、自動取得・短期投影保存・Private履歴/内部分析の具体的根拠を確定。**Rebro**: 公開ページへのサイト利用条件の全文/適用、選別事例の同じ3用途の根拠を確定。両方ともpublic/商用/遡及再利用は別審査のまま。
+1. **Highreso**: [特定済みの現行/改定版](public-gpu-rights-review-20261018.md)の所在地による適用、自動取得・短期投影保存・Private履歴/内部分析の具体的根拠を確定。11/1改定前の再審査と監視URLを確認する。**Rebro**: 公開ページへのサイト利用条件の全文/適用、選別事例の同じ3用途の根拠を確定。両方ともpublic/商用/遡及再利用は別審査のまま。
 2. ownerが1sourceのscope（A100/H100、1ページ、必要項目だけ）、取得頻度/UA/3要求、根拠URLと確認日、wire contract、policy版/有効期限/terms review期限を承認。`public_access` のrobots/terms fingerprint、robots_decision/reviewed_refを記録。独立した3権限だけを新policyで判断する。現在のproposalの日時はレビュー案でありサイト権利の有効期限ではない。
 3. evidence 7日/原文archive 0日/normalized目標1095日/backup上限30日は案。normalizedは **unapproved / 日数null**。明示根拠に従いfixed_daysまたはuntil_revokedを選び、実Time Travel、cleanup、restore、lifecycle、owner承認を確定する。holdは任意、レビュー期限だけで正当な保存を削除しない。過去データのPublic/商用化を自動承認しない。
 4. 別途承認した最小live smokeだけ実施する。ローカル用コマンドは以下。通常test/buildには接続しない。現在のproposalを渡すとHTTP/DB作成より前に `policy_blocked` になる。source別の承認済みconfigを指定し、キーは不要。実値はignored `work/private-public-gpu/<source>/` のローカルD1/R2だけに置き、stdoutは状態metadataだけ。これは初期受入用で日次手作業ではない。
