@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+2026-10-18 最新の承認・実装: 所有者はHighreso/Rebroの非公開・個人研究限定の例外と長期保存を承認済みです。NAS専用exportの分離と停止状態の初回Cloud準備は [専用資料](docs/nas-export-isolation-20261018.md) を参照してください。提供者許諾はunconfirmed、実収集・権利grant変更・本番deploy・実鍵・NAS実機変更は未実施です。以下の旧段階の「例外承認待ち」「分離は設計のみ」は履歴で、現在の実行承認待ちとは区別します。
+
 2026-10-18 非公開の個人研究: [現行DOM・規約適用・具体的な開始承認票](docs/public-gpu-private-start-review-20261018.md)。一回限りの構造調査は完了、価格履歴の実収集は未開始です。
 
 2026-10-18 レビュー修正: [source別受入表・parser/cohort・11/1規約版・NAS権限分離のrelease blocker](docs/public-gpu-review-acceptance-20261018.md)。PR #16の再削除/台帳保護を取り込み、Highresoの見出しスコープと明示cohort、Rebroの重複事例を修正しました。実市場観測0件、未有効化。既存private evidence全体を読めるcredentialをNASへ渡す構成ではreleaseしません。

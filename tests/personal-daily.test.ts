@@ -1,3 +1,4 @@
+import { exportFixture } from './nas-export-fixture';
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { personalLocalEnv } from '../scripts/personal-local-env';
 import { dailyFixture, heartbeat, receiptSecret } from './daily-helpers';
@@ -114,11 +115,15 @@ describe('daily private history and NAS health, synthetic only', { timeout: 1200
   });
   it('scheduled daily capture isolates bad source config and maintenance never requests source HTTP', async () => {
     const { c, pin } = await dailyFixture();
+    env.NAS_HEALTH = (await local.mf.getR2Bucket('NAS_HEALTH')) as unknown as R2Bucket;
     await env.EVIDENCE.put('personal-daily/contracts/rebro_public.json', stable(c));
     await heartbeat(env, 'rebro_public', gpuTime);
     const fetcher = vi.fn(gpuFetcher('rebro_public'));
     const base = {
       ...env,
+      NAS_HEALTH: await local.mf.getR2Bucket('NAS_HEALTH'),
+      NAS_EXPORT: await local.mf.getR2Bucket('NAS_EXPORT'),
+      PERSONAL_EXPORT_PINS: JSON.stringify(exportFixture('synthetic-health-only')),
       PERSONAL_DAILY_MAINTENANCE_ENABLED: 'true',
       PERSONAL_DAILY_COLLECTION_ENABLED: 'true',
       PERSONAL_DAILY_PINS: stable({

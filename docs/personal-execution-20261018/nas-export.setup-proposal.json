@@ -1,0 +1,88 @@
+{
+  "document_kind": "nas-export-isolation-preparation-v1",
+  "executable": false,
+  "owner_exception_approval_ref": "Owner message 2026-10-18: Highreso/Rebro private personal research exception and continuing retention approved; no execution/deploy/keys/NAS changes",
+  "long_term_retention_approved": true,
+  "provider_permission": "unconfirmed",
+  "normal_rights_grants_changed": false,
+  "live_acquisition_approved": false,
+  "deploy_approved": false,
+  "resource_creation_approved": false,
+  "real_key_setup_approved": false,
+  "nas_changes_approved": false,
+  "transport_draft": {
+    "version": "personal-nas-export-v1",
+    "account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+    "private_database_id": "f9239883-9929-4137-8079-5a03d9a8beb2",
+    "origin_bucket": "ai-investment-evidence-private",
+    "export_bucket": null,
+    "health_bucket": null,
+    "isolation_review_ref": null
+  },
+  "reference_scope": "Existing IDs copied from Git only; production not reverified in this task; no new bucket names invented",
+  "proposed_collector_binding": {
+    "binding": "NAS_EXPORT",
+    "bucket_name": null
+  },
+  "active_wrangler_changed": false,
+  "required_separation": [
+    "origin EVIDENCE",
+    "dedicated private NAS_EXPORT",
+    "separate NAS_HEALTH if daily monitoring enabled"
+  ],
+  "nas_credentials": {
+    "data": "R2 Object Read only; specific export bucket only",
+    "health": "separate Object Read/Write; health bucket only",
+    "actual_iam_test_ref": null
+  },
+  "capture": {
+    "environment": "cloudflare",
+    "sources": [
+      "highreso_public",
+      "rebro_public"
+    ],
+    "method": "domestic-gpu-html-v2",
+    "attempts_per_source": 1,
+    "window_hours": 24,
+    "start_at": null,
+    "end_at": null,
+    "contract_hashes": null,
+    "owner_execution_approval_ref": null
+  },
+  "retention": {
+    "mode": "owner_continuing",
+    "normalized_age_ttl_days": null,
+    "evidence_projection_days": 7,
+    "backup_generation_days": 90,
+    "raw_archive_days": 0,
+    "current_control_age_ttl_days": null
+  },
+  "automation": {
+    "cloud_slots": "existing Wrangler slots; unchanged",
+    "nas_initial_poll_minutes": 60,
+    "nas_daily_history_poll_minutes": 5,
+    "restore_check_hours": 24,
+    "inventory_max_days": 2,
+    "normal_daily_human_steps": 0,
+    "timers_installed": false,
+    "external_monitor": null
+  },
+  "readiness": {
+    "local_synthetic": "verified_2026-10-18_414_tests_plus_final_targeted_7",
+    "live_iam": "not_run",
+    "live_restore": "not_run",
+    "cloud_cpu": "not_measured",
+    "live_observations": 0
+  },
+  "prerequisite_review_refs": {
+    "highreso_terms_applicability": null,
+    "highreso_pre_change_stop_at": "2026-10-31T15:00:00.000Z",
+    "rebro_site_terms_scope": null,
+    "source_fingerprints": null,
+    "lifecycle_and_copy_inventory": null,
+    "production_version_reconciliation": null,
+    "nas_custody": null,
+    "recovery_key_custody": null,
+    "remote_migration_approval": null
+  }
+}

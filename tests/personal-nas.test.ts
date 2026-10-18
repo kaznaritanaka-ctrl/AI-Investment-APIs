@@ -1,3 +1,6 @@
+import { syncNasExport } from '../src/research/nas-export';
+import { guardedNasReader } from '../scripts/personal-nas-transport';
+import { exportFixture } from './nas-export-fixture';
 import { it, expect, vi, describe, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
@@ -134,7 +137,9 @@ it('rejects stale, malformed and partial control/manifest before crypto or data 
 it('only signs fixed source R2 GETs, bounds responses and honors Retry-After without retrying a denied request', async () => {
   const config = {
     account_id: 'a'.repeat(32),
-    bucket: 'synthetic-only',
+    bucket: 'synthetic-export-only',
+    transport: exportFixture(),
+    kind: 'initial' as const,
     source_id: 'highreso_public',
     allow_network: false,
   };
@@ -210,7 +215,10 @@ describe(
     afterEach(async () => {
       await local?.mf.dispose();
     });
-    const setup = async (source: 'highreso_public' | 'rebro_public' = 'highreso_public') => {
+    const setup = async (
+      source: 'highreso_public' | 'rebro_public' = 'highreso_public',
+      isolated = false,
+    ) => {
       const { contract, binding } = await cloudFixture(source),
         env = cloudPersonalEnv(local.env, contract, binding);
       await collectPersonalGpu(env, contract, {
@@ -219,12 +227,40 @@ describe(
         fetcher: gpuFetcher(source),
       });
       await exportCloudPersonal(env, local.env.EVIDENCE, contract, { now: () => gpuTime });
-      const reader: NasReader = {
+      let reader: NasReader = {
         get: async (key) => {
           const o = await local.env.EVIDENCE.get(key);
           return o ? new Uint8Array(await o.arrayBuffer()) : null;
         },
       };
+      if (isolated) {
+        const out = (await local.mf.getR2Bucket('NAS_EXPORT')) as unknown as R2Bucket;
+        const pin = exportFixture();
+        for (let i = 0; i < 2; i++)
+          await syncNasExport(
+            {
+              EVIDENCE: local.env.EVIDENCE,
+              NAS_EXPORT: out,
+              PERSONAL_EXPORT_PINS: JSON.stringify(pin),
+            },
+            pin,
+            source,
+            'initial',
+            gpuTime,
+          );
+        reader = guardedNasReader(
+          {
+            get: async (key) => {
+              const o = await out.get(key);
+              return o ? new Uint8Array(await o.arrayBuffer()) : null;
+            },
+          },
+          pin,
+          source,
+          'initial',
+          () => gpuTime,
+        );
+      }
       const config = {
         source_id: source,
         contract_hash: binding.contract_hash,
@@ -241,7 +277,7 @@ describe(
       return { reader, config, options };
     };
     it('encrypts, decrypts, restores, retries idempotently and detects ciphertext damage', async () => {
-      const { reader, config, options } = await setup();
+      const { reader, config, options } = await setup('highreso_public', true);
       expect(await personalNasCycle(reader, config, options)).toMatchObject({
         state: 'verified',
         observation_count: 4,

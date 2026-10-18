@@ -17,7 +17,7 @@ export async function personalLocalEnv(
     compatibilityDate: '2026-07-30',
     log: new Log(LogLevel.ERROR),
     d1Databases: ['PRIVATE_DB'],
-    r2Buckets: ['EVIDENCE'],
+    r2Buckets: ['EVIDENCE', 'NAS_EXPORT', 'NAS_HEALTH'],
     ...(persist ? { d1Persist: persist + '/d1', r2Persist: persist + '/r2' } : {}),
   });
   try {

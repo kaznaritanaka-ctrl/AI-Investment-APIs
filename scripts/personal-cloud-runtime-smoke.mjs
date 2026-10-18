@@ -27,7 +27,7 @@ const mf = new Miniflare({
   compatibilityDate: '2026-07-30',
   log: new Log(LogLevel.ERROR),
   d1Databases: ['PRIVATE_DB'],
-  r2Buckets: ['EVIDENCE'],
+  r2Buckets: ['EVIDENCE', 'NAS_EXPORT'],
   bindings: { ENVIRONMENT: 'test', PERSONAL_STORE_ID: 'synthetic-store' },
 });
 try {

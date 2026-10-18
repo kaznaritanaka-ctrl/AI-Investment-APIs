@@ -229,6 +229,9 @@ async function admit(
   o: DailyNasOptions,
   restore: boolean,
 ) {
+  // A cancelled run may already have lost its exported manifest. Remember the
+  // tombstone before loading that manifest so local ciphertext can be removed.
+  await runAllowed(reader, source, run, dir, o.now());
   const root = dailyRoot(source),
     m = DailyManifest.parse(await json(reader, root + 'runs/' + run + '.json'));
   if (
@@ -344,6 +347,19 @@ export async function dailyNasCycle(reader: NasReader, source: string, o: DailyN
       code = 'backup_failed';
       pending = 1;
     } else {
+      if (
+        (await reader.get(dailyRoot(source) + 'revoked.json')) ||
+        (await reader.get(
+          'personal-research/control/' +
+            source +
+            '/research-control/revocations/' +
+            source +
+            '.json',
+        ))
+      ) {
+        await atomic(join(dir, 'source-denied.json'), stable({ at }));
+        throw new Error('nas_authority_blocked');
+      }
       const raw = await json(reader, dailyRoot(source) + 'catalog.json');
       if (!raw) {
         status = 'empty';

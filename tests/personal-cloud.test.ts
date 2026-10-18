@@ -1,3 +1,4 @@
+import { exportFixture } from './nas-export-fixture';
 import { it, expect, describe, beforeEach, afterEach, vi } from 'vitest';
 import { personalLocalEnv } from '../scripts/personal-local-env';
 import { cloudFixture } from './personal-cloud-fixture';
@@ -59,6 +60,8 @@ describe('Cloud personal projection (synthetic only)', { timeout: 120000 }, () =
     };
     const base = {
       ...local.env,
+      NAS_EXPORT: await local.mf.getR2Bucket('NAS_EXPORT'),
+      PERSONAL_EXPORT_PINS: JSON.stringify(exportFixture()),
       PERSONAL_MAINTENANCE_ENABLED: 'true',
       PERSONAL_CLOUD_PINS: JSON.stringify(pins),
     } as any;

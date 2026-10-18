@@ -1,5 +1,7 @@
 # Highreso / Rebro：Cloudflare初回収集とNAS保存の設定・承認案
 
+2026-10-18更新: 私的例外・長期保存は所有者承認済みです。NASには既存EVIDENCEを読めるcredentialを渡しません。[専用exportの実装・現行設定案](nas-export-isolation-20261018.md) が以下のshared-bucket案と旧CLI v1案に優先します。実行・deploy・実鍵・NAS実機変更は未承認。以下は段階ごとの履歴です。
+
 後続の[実装・ローカルsynthetic検証](personal-cloud-nas-implementation-20261018.md)を追加した。以下は着手前の設定提案として保存する。実設定・本番・NAS実機は引き続き未実施。
 
 2026-10-18 JST。**今回の成果は設定と実行契約の具体案。実収集、実契約の承認、権利grant変更、本番反映、鍵作成、NAS変更はしていない。** ローカルはsynthetic専用、初回実データもCloudflareで取得するという所有者の最新回答を反映した。

@@ -249,6 +249,8 @@ export type Observation = Candidate & {
   supersedes_observation_id: string | null;
 };
 export type CollectorEnv = {
+  NAS_EXPORT?: R2Bucket;
+  PERSONAL_EXPORT_PINS?: string;
   PERSONAL_DAILY_MAINTENANCE_ENABLED?: string;
   PERSONAL_DAILY_COLLECTION_ENABLED?: string;
   PERSONAL_DAILY_PINS?: string;

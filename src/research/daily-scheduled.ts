@@ -11,6 +11,7 @@ import {
   type DailyEnv,
 } from './personal-daily';
 import { dailySource, digest } from './daily-protocol';
+import { nasExportBinding, syncNasExport } from './nas-export';
 const Pins = z
   .object({
     account_id: z.string().regex(/^[a-f0-9]{32}$/),
@@ -29,6 +30,7 @@ export async function dailyScheduled(base: CollectorEnv, opt: PersonalOptions = 
     throw new Error('daily_synthetic_boundary');
   const pins = Pins.parse(JSON.parse(base.PERSONAL_DAILY_PINS ?? 'null')),
     at = (opt.now ?? (() => new Date().toISOString()))();
+  const transport = nasExportBinding(base, pins);
   // Capabilities projected explicitly; never forward PUBLIC_DB to personal code.
   const env: DailyEnv = {
     PRIVATE_DB: base.PRIVATE_DB,
@@ -74,12 +76,14 @@ export async function dailyScheduled(base: CollectorEnv, opt: PersonalOptions = 
         /* current authority is required */
       }
       const nas = await dailyMonitor(env, c, at);
+      const exported = await syncNasExport(base, transport, pin.source_id, 'daily', at);
       results.push({
         source_id: pin.source_id,
         collection,
         maintenance: maintenance.state,
         history,
         nas: nas.state,
+        nas_export: exported.state,
       });
     } catch {
       results.push({ source_id: pin.source_id, state: 'configuration_or_maintenance_failed' });

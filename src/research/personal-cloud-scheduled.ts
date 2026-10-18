@@ -9,6 +9,7 @@ import {
 import type { CollectorEnv } from '../schema';
 import { hash, stable } from '../util';
 import { collectPersonalGpu, type PersonalOptions } from './personal';
+import { nasExportBinding, syncNasExport } from './nas-export';
 
 const Pins = z
   .object({
@@ -34,6 +35,7 @@ export async function personalCloudScheduled(base: CollectorEnv, opt: PersonalOp
   if (base.ENVIRONMENT !== 'test' && (opt.now || opt.fetcher))
     throw new Error('personal_synthetic_boundary');
   const pins = Pins.parse(JSON.parse(base.PERSONAL_CLOUD_PINS ?? 'null'));
+  const transport = nasExportBinding(base, pins);
   const results = [];
   for (const pin of pins.contracts) {
     try {
@@ -63,7 +65,13 @@ export async function personalCloudScheduled(base: CollectorEnv, opt: PersonalOp
       }
       const state = await exportCloudPersonal(env, base.EVIDENCE, contract, opt);
       await cleanCloudPersonal(base.EVIDENCE, pin.source_id, at);
-      results.push({ source_id: pin.source_id, state: state.state, acquisition });
+      const exported = await syncNasExport(base, transport, pin.source_id, 'initial', at);
+      results.push({
+        source_id: pin.source_id,
+        state: state.state,
+        acquisition,
+        nas_export: exported.state,
+      });
     } catch {
       results.push({ source_id: pin.source_id, state: 'maintenance_failed' });
     }

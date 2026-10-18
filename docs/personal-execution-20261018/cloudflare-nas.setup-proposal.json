@@ -1,6 +1,6 @@
 {
   "document_kind": "personal-cloudflare-nas-setup-proposal-v1",
-  "status": "planning_only",
+  "status": "superseded_non_executable_reference",
   "executable": false,
   "prepared_on": "2026-10-18",
   "scope": "First real acquisition on Cloudflare; local work synthetic only; NAS backup",
@@ -103,7 +103,7 @@
       "C drive"
     ],
     "reported_locations_prove_key_readiness": false,
-    "nas_r2_access": "S3 Object Read only scoped to the existing named bucket; application prefix allowlist is not token-level isolation",
+    "nas_r2_access": "OBSOLETE shared-bucket proposal. Never issue NAS credentials for EVIDENCE. Use dedicated NAS_EXPORT bucket-only Object Read; see nas-export.setup-proposal.json.",
     "bucket_wide_read_risk_approval_ref": null,
     "nas_d1_token_required_for_this_projection_plan": false,
     "credentials_created": false
@@ -254,5 +254,6 @@
     "cloudflare_nas_integration_tested": false,
     "live_collected": false,
     "production_running": false
-  }
+  },
+  "superseded_by": "nas-export.setup-proposal.json"
 }

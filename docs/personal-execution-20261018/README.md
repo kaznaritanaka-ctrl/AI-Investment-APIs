@@ -1,5 +1,7 @@
 # Highreso / Rebro 初回ローカル実行契約案
 
+最新: 非公開・個人研究の例外と長期保存は承認済みです。実行自体は未承認。初回Cloud向けの新しい `*.cloud-method-v2-draft.json` と `nas-export.setup-proposal.json`、[NAS専用export資料](../nas-export-isolation-20261018.md) を使用してください。旧local/Cloud method-v1案は実行しません。以下は旧段階の履歴です。
+
 最新レビュー: [source別受入条件](../public-gpu-review-acceptance-20261018.md)と[11/1以降の審査票](highreso-post-20261101.review.json)。既存契約draftに埋め込まれたmethod v1は互換確認用の未承認旧案です。新しい開始にはv2の候補config/cohortを別契約としてレビューし、config_sha256とresource pinを再作成する必要があります。旧hashを流用せず、NAS専用exportの実効分離を先に解決してください。
 
 最新の日次拡張は [実装・未有効化設定](../personal-daily-cloud-nas-20261018.md)を参照。`*.daily-cloud-draft.json` はnull/未承認を含む非実行draft。旧初回専用契約を日次契約へ自動昇格しない。

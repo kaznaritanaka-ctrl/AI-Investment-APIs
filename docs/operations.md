@@ -1,5 +1,7 @@
 # 運用手順（現在地: 2026-10-04）
 
+2026-10-18追記: 私的例外と長期保存は所有者承認済み。NAS専用exportの分離・未有効化のCloud準備・現在の残件は [最新資料](nas-export-isolation-20261018.md) を参照。提供者許諾と通常grantは変更せず、実行／本番反映／実鍵／NAS変更は未承認。以下の以前の承認状態・shared-bucket案は当時の記録です。
+
 2026-10-18のPrivate研究拡張は[別runbook](private-research-runbook.md)と[状態・保持・統合計画](research-long-retention-20261016.md)に分離しています。review_dueは許諾内で保持し再レビュー、削除義務があるrunだけ段階削除します。0007/0008/0009はローカルのみ、既存Cron・grants・Admin/Public/NASは不変。production schedulerには未接続です。mainと本番PoC/Collectorの差分は[実査台帳](source-expansion-20261015.md)を確認し、過去状態だけを根拠にdeployしないでください。
 
 [本番対応・受け入れ記録](operations-acceptance.md)を先に参照。0005/現Collector/Admin/台帳5件は反映済み、通知0006とそのcodeは候補です。

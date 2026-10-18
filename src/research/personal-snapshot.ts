@@ -100,7 +100,7 @@ async function copyAuthority(env: PersonalEnv, input: unknown, at: string) {
   await assertNotRevoked(env, c.config.source.source_id, await personalRunId(c));
   return { c, digest: validated.contract_hash, head };
 }
-async function validateSnapshot(c: ContinuingPersonalContract, s: PersonalSnapshot) {
+export async function validateSnapshot(c: ContinuingPersonalContract, s: PersonalSnapshot) {
   if (
     s.contract_hash !== (await hash(stable(c))) ||
     s.run_id !== (await personalRunId(c)) ||

@@ -1,18 +1,107 @@
 {
   "document_kind": "private_research_start_review_not_execution_contract",
-  "status": "pending_owner_review",
-  "intent": { "personal_research_only": true, "public_export": false, "external_llm": false, "raw_html_persistence": false, "owner_confirmed_purpose": true },
+  "status": "owner_exception_and_continuing_retention_approved_execution_pending",
+  "intent": {
+    "personal_research_only": true,
+    "public_export": false,
+    "external_llm": false,
+    "raw_html_persistence": false,
+    "owner_confirmed_purpose": true
+  },
   "execution_approved": false,
   "provider_permission": "unconfirmed",
   "normal_rights_grants_changed": false,
   "method_version": "domestic-gpu-html-v2",
   "source_reviews": [
-    { "source_id": "highreso_public", "cohort": { "models": ["A100", "H100"], "gpu_counts": [1] }, "structure_review": "../public-gpu-dom-review-20261018.json", "checked_selected_rows": 24, "checked_price_slots": 48, "headroom_observations": 0, "purpose_confirmed": true, "service_agreement_state": "unconfirmed", "applicability_review_ref": null, "private_use_basis_ref": null, "risk_acceptance_ref": null, "owner_execution_approval_ref": null, "old_terms_stop_at": "2026-10-31T15:00:00.000Z", "post_change_monitor_candidate": "https://soroban.highreso.jp/5401872" },
-    { "source_id": "rebro_public", "cohort": { "models": ["A100", "H100"], "basis": "selected_public_case" }, "structure_review": "../public-gpu-dom-review-20261018.json", "checked_selected_rows": 4, "checked_price_slots": 4, "purpose_confirmed": true, "service_agreement_state": "unconfirmed", "separate_site_terms_identified": false, "applicability_review_ref": null, "private_use_basis_ref": null, "risk_acceptance_ref": null, "owner_execution_approval_ref": null }
+    {
+      "source_id": "highreso_public",
+      "cohort": {
+        "models": [
+          "A100",
+          "H100"
+        ],
+        "gpu_counts": [
+          1
+        ]
+      },
+      "structure_review": "../public-gpu-dom-review-20261018.json",
+      "checked_selected_rows": 24,
+      "checked_price_slots": 48,
+      "headroom_observations": 0,
+      "purpose_confirmed": true,
+      "service_agreement_state": "unconfirmed",
+      "applicability_review_ref": null,
+      "private_use_basis_ref": null,
+      "risk_acceptance_ref": null,
+      "owner_execution_approval_ref": null,
+      "old_terms_stop_at": "2026-10-31T15:00:00.000Z",
+      "post_change_monitor_candidate": "https://soroban.highreso.jp/5401872",
+      "owner_private_exception_approval_ref": "Owner message 2026-10-18: Highreso/Rebro private personal research exception and continuing retention approved; no execution/deploy/keys/NAS changes"
+    },
+    {
+      "source_id": "rebro_public",
+      "cohort": {
+        "models": [
+          "A100",
+          "H100"
+        ],
+        "basis": "selected_public_case"
+      },
+      "structure_review": "../public-gpu-dom-review-20261018.json",
+      "checked_selected_rows": 4,
+      "checked_price_slots": 4,
+      "purpose_confirmed": true,
+      "service_agreement_state": "unconfirmed",
+      "separate_site_terms_identified": false,
+      "applicability_review_ref": null,
+      "private_use_basis_ref": null,
+      "risk_acceptance_ref": null,
+      "owner_execution_approval_ref": null,
+      "owner_private_exception_approval_ref": "Owner message 2026-10-18: Highreso/Rebro private personal research exception and continuing retention approved; no execution/deploy/keys/NAS changes"
+    }
   ],
-  "retention_proposal": { "normalized_mode": "owner_continuing", "age_based_history_deletion": false, "evidence_projection_days": 7, "raw_archive_days": 0, "backup_generation_days": 90, "backup_interval_hours": 24, "restore_check_hours": 24, "continuing_storage_basis_ref": null, "copy_inventory_ref": null },
-  "initial_execution_proposal": { "environment": "cloudflare", "local_live_collection": false, "attempts_per_source": 1, "window_hours": 24, "max_gets_per_source": 3, "request_timeout_seconds": 15, "internal_retries": 0, "start_at": null, "end_at": null, "contract_hash": null, "resource_pins": null, "approval_ref": null },
-  "daily_proposal": { "separate_approval_required": true, "attempts_per_source_per_utc_day": 1, "backfill": false, "routine_human_work_required": false, "review_interval_days": 30, "earlier_terms_stop_takes_precedence": true, "approval_ref": null },
-  "deployment": { "approved": false, "nas_export_effective_isolation": "not_implemented_release_blocker", "real_keys_configured": false, "remote_migration_authorized": false, "nas_changes_authorized": false },
-  "live_observations": 0
+  "retention_proposal": {
+    "normalized_mode": "owner_continuing",
+    "age_based_history_deletion": false,
+    "evidence_projection_days": 7,
+    "raw_archive_days": 0,
+    "backup_generation_days": 90,
+    "backup_interval_hours": 24,
+    "restore_check_hours": 24,
+    "continuing_storage_basis_ref": "Owner message 2026-10-18: Highreso/Rebro private personal research exception and continuing retention approved; no execution/deploy/keys/NAS changes",
+    "copy_inventory_ref": null
+  },
+  "initial_execution_proposal": {
+    "environment": "cloudflare",
+    "local_live_collection": false,
+    "attempts_per_source": 1,
+    "window_hours": 24,
+    "max_gets_per_source": 3,
+    "request_timeout_seconds": 15,
+    "internal_retries": 0,
+    "start_at": null,
+    "end_at": null,
+    "contract_hash": null,
+    "resource_pins": null,
+    "approval_ref": null
+  },
+  "daily_proposal": {
+    "separate_approval_required": true,
+    "attempts_per_source_per_utc_day": 1,
+    "backfill": false,
+    "routine_human_work_required": false,
+    "review_interval_days": 30,
+    "earlier_terms_stop_takes_precedence": true,
+    "approval_ref": null
+  },
+  "deployment": {
+    "approved": false,
+    "nas_export_effective_isolation": "dedicated_export_synthetic_verified_live_IAM_unverified",
+    "real_keys_configured": false,
+    "remote_migration_authorized": false,
+    "nas_changes_authorized": false
+  },
+  "live_observations": 0,
+  "owner_exception_approval_ref": "Owner message 2026-10-18: Highreso/Rebro private personal research exception and continuing retention approved; no execution/deploy/keys/NAS changes",
+  "owner_long_term_retention_approval_ref": "Owner message 2026-10-18: Highreso/Rebro private personal research exception and continuing retention approved; no execution/deploy/keys/NAS changes"
 }

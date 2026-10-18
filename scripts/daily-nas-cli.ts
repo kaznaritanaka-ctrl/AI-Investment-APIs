@@ -4,17 +4,19 @@ import { z } from 'zod';
 import { checkedLocalPath, separatePaths } from './personal-vault';
 import { createPersonalR2Reader, createNasReceiptWriter } from './personal-nas-transport';
 import { dailyNasCycle, restoreDailyNas, type DailyNasOptions } from './daily-nas';
+import { NasExportBinding } from '../src/research/nas-export-protocol';
 import { dailySource } from '../src/research/daily-protocol';
 const path = z.string().refine(isAbsolute),
   ref = z.string().trim().min(1).max(500);
 const Config = z
   .object({
-    version: z.literal('daily-nas-runtime-v1'),
+    version: z.literal('daily-nas-runtime-v2'),
     enabled: z.literal(true),
     owner_activation_ref: ref,
     native_custody_review_ref: ref,
     recovery_custody_review_ref: ref,
     monitoring_permission_ref: ref,
+    transport: NasExportBinding,
     account_id: z.string().regex(/^[a-f0-9]{32}$/),
     data_bucket: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
     health_bucket: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
@@ -51,14 +53,16 @@ export async function dailyNasMain(args: string[]) {
         network: false,
         history_ttl_days: null,
         scheduled_tasks_installed: false,
+        proposed_poll_minutes: 5,
         required: [
           'approved daily contract',
           'private migration 0013',
-          'data bucket Object Read',
+          'dedicated export bucket Object Read',
+          'personal-nas-export-v1 transport pin and live IAM isolation review',
           'separate health bucket Object Read/Write',
           'receipt HMAC Secret',
           'NAS custody approval',
-          'hourly timer approval',
+          'five-minute timer approval',
         ],
       }),
     );
@@ -74,6 +78,12 @@ export async function dailyNasMain(args: string[]) {
   if (!file || (!(mode === 'daily-once' && flags.join(' ') === '--allow-network') && !restore))
     throw new Error('nas_explicit_run_required');
   const c = Config.parse(JSON.parse(await readFile(file, 'utf8')));
+  if (
+    c.transport.account_id !== c.account_id ||
+    c.transport.export_bucket !== c.data_bucket ||
+    c.transport.health_bucket !== c.health_bucket
+  )
+    throw new Error('nas_export_transport_scope');
   for (const file of [
     c.identity_file,
     c.data_read_credentials_file,
@@ -101,6 +111,8 @@ export async function dailyNasMain(args: string[]) {
       {
         account_id: c.account_id,
         bucket: c.data_bucket,
+        transport: c.transport,
+        kind: 'daily',
         source_id: source.source_id,
         allow_network: true,
       },
@@ -112,7 +124,7 @@ export async function dailyNasMain(args: string[]) {
       recipient: c.recipient,
       identityFile: c.identity_file,
       account_id: c.account_id,
-      bucket: c.data_bucket,
+      bucket: c.transport.origin_bucket,
       store_id: source.store_id,
       data_origin: 'live',
       now: () => new Date().toISOString(),

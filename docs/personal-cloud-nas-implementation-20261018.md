@@ -1,5 +1,7 @@
 # Cloudflare → NAS 個人研究履歴：実装と受入
 
+2026-10-18更新: 私的例外・長期保存は所有者承認済みです。NASには既存EVIDENCEを読めるcredentialを渡しません。[専用exportの実装・現行設定案](nas-export-isolation-20261018.md) が以下のshared-bucket案と旧CLI v1案に優先します。実行・deploy・実鍵・NAS実機変更は未承認。以下は段階ごとの履歴です。
+
 2026-10-18。ローカルsynthetic検証用の実装。実データ取得、provider grant変更、本番deploy／migration、実鍵設定、NAS接続・変更は実行していない。旧[設定提案](personal-cloudflare-nas-setup-20261018.md)の後続。価格・規約の現状調査をやり直したものでもない。
 
 ## 保存と権限

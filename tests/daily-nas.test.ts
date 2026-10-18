@@ -1,3 +1,6 @@
+import { syncNasExport } from '../src/research/nas-export';
+import { exportFixture } from './nas-export-fixture';
+import { guardedNasReader } from '../scripts/personal-nas-transport';
 import { beforeEach, afterEach, it, describe, expect, vi } from 'vitest';
 import { mkdtemp, mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
@@ -80,7 +83,11 @@ describe(
       at: string;
     beforeEach(async () => {
       local = await personalLocalEnv('synthetic-store');
-      env = { ...local.env, NAS_HEALTH: local.env.EVIDENCE, NAS_RECEIPT_SECRET: receiptSecret };
+      env = {
+        ...local.env,
+        NAS_HEALTH: (await local.mf.getR2Bucket('NAS_HEALTH')) as unknown as R2Bucket,
+        NAS_RECEIPT_SECRET: receiptSecret,
+      };
       await mkdir('work/nas-synthetic', { recursive: true });
       root = await mkdtemp(resolve('work/nas-synthetic/daily-'));
       const binary = resolve(
@@ -137,6 +144,28 @@ describe(
       }
       // Oldest run refresh can be selected first. Drain the remaining bounded export.
       for (let i = 0; i < 2; i++) await exportDailyHistory(env, 'rebro_public', at);
+      const output = (await local.mf.getR2Bucket('NAS_EXPORT')) as unknown as R2Bucket;
+      const transport = exportFixture('synthetic-health-only');
+      const exportBase = {
+        EVIDENCE: env.EVIDENCE,
+        NAS_EXPORT: output,
+        NAS_HEALTH: env.NAS_HEALTH,
+        PERSONAL_EXPORT_PINS: JSON.stringify(transport),
+      };
+      for (let i = 0; i < 4; i++)
+        await syncNasExport(exportBase, transport, 'rebro_public', 'daily', at);
+      reader = guardedNasReader(
+        {
+          get: async (key) => {
+            const o = await output.get(key);
+            return o ? new Uint8Array(await o.arrayBuffer()) : null;
+          },
+        },
+        transport,
+        'rebro_public',
+        'daily',
+        () => at,
+      );
       const firstPage = await dailyNasCycle(reader, 'rebro_public', opt);
       expect(firstPage.receipt.last_inventory_at).toBeNull();
       const result = await dailyNasCycle(reader, 'rebro_public', opt);
@@ -179,6 +208,8 @@ describe(
       ).rejects.toThrow('already_complete');
       at = '2026-10-19T02:00:00.000Z';
       await env.EVIDENCE.put(dailyRoot('rebro_public') + 'revoked.json', '{}');
+      for (let i = 0; i < 4; i++)
+        await syncNasExport(exportBase, transport, 'rebro_public', 'daily', at);
       expect((await dailyNasCycle(reader, 'rebro_public', opt)).state).toBe('failed');
       at = '2026-10-19T03:00:00.000Z';
       await dailyNasCycle(reader, 'rebro_public', opt);

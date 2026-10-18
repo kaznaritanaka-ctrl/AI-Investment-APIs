@@ -4,16 +4,18 @@ import { isAbsolute } from 'node:path';
 import { NasSourceSchema, personalNasSources, restoreNasGeneration } from './personal-nas';
 import { createPersonalR2Reader } from './personal-nas-transport';
 import { checkedLocalPath, separatePaths } from './personal-vault';
+import { NasExportBinding } from '../src/research/nas-export-protocol';
 import { dailyNasMain } from './daily-nas-cli';
 const path = z.string().refine(isAbsolute);
 const ref = z.string().trim().min(1).max(500);
 const Deployment = z
   .object({
-    version: z.literal('personal-nas-runtime-v1'),
+    version: z.literal('personal-nas-runtime-v2'),
     enabled: z.literal(true),
     owner_activation_ref: ref,
     native_custody_review_ref: ref,
     recovery_custody_review_ref: ref,
+    transport: NasExportBinding,
     account_id: z.string().regex(/^[a-f0-9]{32}$/),
     bucket: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
     root: path,
@@ -44,7 +46,8 @@ export async function nasMain(args: string[]) {
           'dedicated root',
           'age public recipient',
           'separate restore identity',
-          'R2 Object Read credentials',
+          'dedicated export bucket Object Read credentials',
+          'personal-nas-export-v1 transport pin and live IAM isolation review',
         ],
         poll_hours: 1,
         restore_check_hours: 24,
@@ -65,6 +68,8 @@ export async function nasMain(args: string[]) {
     throw new Error('nas_explicit_run_required');
   const input = JSON.parse(await readFile(configFile, 'utf8'));
   const c = Deployment.parse(input);
+  if (c.transport.export_bucket !== c.bucket || c.transport.account_id !== c.account_id)
+    throw new Error('nas_export_transport_scope');
   // Only configuration with separate native custody approval can activate a NAS run.
   // This is not a substitute for OS ACL/UID admission; the shipped template is disabled.
   const credentialsPath = await checkedLocalPath(c.s3_credentials_file),
@@ -102,7 +107,10 @@ export async function nasMain(args: string[]) {
     const source = c.sources.find((s) => s.source_id === flags[1]);
     if (!source) throw new Error('nas_restore_source_required');
     const result = await restoreNasGeneration(
-      createPersonalR2Reader({ ...c, source_id: source.source_id, allow_network: true }, secret),
+      createPersonalR2Reader(
+        { ...c, source_id: source.source_id, kind: 'initial', allow_network: true },
+        secret,
+      ),
       source,
       options,
       path.parse(flags[3]),
@@ -114,7 +122,10 @@ export async function nasMain(args: string[]) {
   const results = await personalNasSources(
     c.sources,
     (source) =>
-      createPersonalR2Reader({ ...c, source_id: source.source_id, allow_network: true }, secret),
+      createPersonalR2Reader(
+        { ...c, source_id: source.source_id, kind: 'initial', allow_network: true },
+        secret,
+      ),
     options,
   );
   console.log(

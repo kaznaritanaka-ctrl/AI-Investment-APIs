@@ -1,5 +1,7 @@
 # 日次個人研究履歴・Cloudflare → NAS（未有効化）
 
+2026-10-18更新: 私的例外・長期保存は所有者承認済みです。NASには既存EVIDENCEを読めるcredentialを渡しません。[専用exportの実装・現行設定案](nas-export-isolation-20261018.md) が以下のshared-bucket案と旧CLI v1案に優先します。実行・deploy・実鍵・NAS実機変更は未承認。以下は段階ごとの履歴です。
+
 レビュー追補: [parser/cohort・規約切替・NAS専用export分離案](public-gpu-review-acceptance-20261018.md)が最新の受入条件。既存EVIDENCE全体の読取credentialをNASへ渡す案はrelease blocker。0012には後続レビューで台帳DELETE保護を復元するtriggerを追加し、0014と両順序で検証する。以下の「0001〜0012は変更せず」は日次拡張時点の記録。
 
 2026-10-18、Highreso/Rebro専用。所有者が今回承認した範囲は実装とローカルsynthetic検証まで。実収集、権利grant変更、remote migration、deploy、実鍵設定、NAS変更は行わない。本資料は先行の[初回一run実装](personal-cloud-nas-implementation-20261018.md)にあった「日次・複数run・NAS監視は未実装」を更新する。先行の初回専用契約は互換維持し、日次契約へ自動変換しない。

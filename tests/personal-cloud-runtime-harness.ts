@@ -1,3 +1,5 @@
+import { syncNasExport } from '../src/research/nas-export';
+import { exportFixture } from './nas-export-fixture';
 import { cloudFixture } from './personal-cloud-fixture';
 import {
   cloudPersonalEnv,
@@ -9,7 +11,7 @@ import { type PersonalEnv } from '../src/research/personal';
 import { stable } from '../src/util';
 import { robots, terms, gpuTime } from './public-gpu-fixture-config';
 import { personalCloudScheduled } from '../src/research/personal-cloud-scheduled';
-export async function cloudRuntime(base: PersonalEnv, html: string[]) {
+export async function cloudRuntime(base: PersonalEnv & { NAS_EXPORT: R2Bucket }, html: string[]) {
   const results = [];
   let calls = 0;
   for (const [index, source] of (['highreso_public', 'rebro_public'] as const).entries()) {
@@ -31,6 +33,7 @@ export async function cloudRuntime(base: PersonalEnv, html: string[]) {
     const dispatched = await personalCloudScheduled(
       {
         ...base,
+        PERSONAL_EXPORT_PINS: JSON.stringify(exportFixture()),
         PERSONAL_MAINTENANCE_ENABLED: 'true',
         PERSONAL_INITIAL_COLLECTION_ENABLED: 'true',
         PERSONAL_CLOUD_PINS: JSON.stringify({
@@ -44,8 +47,15 @@ export async function cloudRuntime(base: PersonalEnv, html: string[]) {
     );
     if (dispatched[0]?.state !== 'complete') throw new Error('synthetic_initial_dispatch_failed');
     const result = await exportCloudPersonal(env, base.EVIDENCE, contract, { now: () => gpuTime });
-    const control = await (await base.EVIDENCE.get(cloudControlKey(source)))!.json<any>();
-    const manifest = await (await base.EVIDENCE.get(control.latest_manifest))!.json<any>();
+    await syncNasExport(
+      { ...base, PERSONAL_EXPORT_PINS: JSON.stringify(exportFixture()) },
+      exportFixture(),
+      source,
+      'initial',
+      gpuTime,
+    );
+    const control = await (await base.NAS_EXPORT.get(cloudControlKey(source)))!.json<any>();
+    const manifest = await (await base.NAS_EXPORT.get(control.latest_manifest))!.json<any>();
     results.push({
       state: result.state,
       complete: manifest.complete,

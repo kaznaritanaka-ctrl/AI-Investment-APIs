@@ -2,6 +2,15 @@ import { createHash, createHmac } from 'node:crypto';
 import { cloudSource } from '../src/research/personal-cloud';
 import { z } from 'zod';
 import { NasReceipt } from '../src/research/daily-protocol';
+import {
+  NasExportBinding,
+  checkExportGate,
+  exportGateKey,
+  personalObjectKey,
+  type NasExportPin,
+  type ExportKind,
+} from '../src/research/nas-export-protocol';
+export { personalObjectKey } from '../src/research/nas-export-protocol';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const hmac = (key: string | Buffer, value: string) =>
@@ -20,36 +29,6 @@ export class NasReadError extends Error {
     super(code);
   }
 }
-export function personalObjectKey(key: string) {
-  if (
-    /^personal-daily\/(highreso_public|rebro_public)\/(catalog\.json|revoked\.json|catalog\/\d+\.json|authority\/[a-f0-9]{64}\.json|deleted\/[a-f0-9]{64}\.json|runs\/[a-f0-9]{64}\.json|exports\/[a-f0-9]{64}\/\d{4}-\d{2}-\d{2}\/part-[0-3]\.json)$/.test(
-      key,
-    )
-  )
-    return true;
-  const native = key.match(
-    /^personal-research\/control\/(highreso_public|rebro_public)\/research-control\/(.+)$/,
-  );
-  if (native) {
-    const s = native[1],
-      tail = native[2];
-    return (
-      tail === 'revocations/' + s + '.json' ||
-      new RegExp('^deletions/' + s + '/[a-f0-9]{64}\\.json$').test(tail) ||
-      new RegExp('^personal-heads/' + s + '/[a-z0-9][a-z0-9_-]{0,79}\\.json$').test(tail) ||
-      new RegExp(
-        '^personal-(?:reviews|backups)/' + s + '/[a-z0-9][a-z0-9_-]{0,79}/[a-f0-9]{64}\\.json$',
-      ).test(tail)
-    );
-  }
-  return (
-    /^personal-research\/control\/(highreso_public|rebro_public)\/current\.json$/.test(key) ||
-    /^personal-research\/backups\/(highreso_public|rebro_public)\/[a-f0-9]{64}\/\d{4}-\d{2}-\d{2}\/(manifest\.json|part-[0-3]\.json)$/.test(
-      key,
-    )
-  );
-}
-
 // A SEPARATE health bucket/credential. No write capability for the data reader.
 export function createNasReceiptWriter(
   config: { account_id: string; bucket: string; source_id: string; allow_network: boolean },
@@ -126,18 +105,32 @@ export function createNasReceiptWriter(
   };
 }
 export function createPersonalR2Reader(
-  config: { account_id: string; bucket: string; source_id: string; allow_network: boolean },
+  config: {
+    account_id: string;
+    bucket: string;
+    source_id: string;
+    allow_network: boolean;
+    transport: NasExportPin;
+    kind: ExportKind;
+  },
   credentials: { accessKeyId: string; secretAccessKey: string },
   fetcher: typeof fetch = fetch,
 ): NasReader {
   if (!/^[a-f0-9]{32}$/.test(config.account_id) || !/^[a-z0-9][a-z0-9-]{2,62}$/.test(config.bucket))
     throw new Error('nas_r2_scope_invalid');
   cloudSource.parse(config.source_id);
+  const pin = NasExportBinding.parse(config.transport);
+  if (pin.account_id !== config.account_id || pin.export_bucket !== config.bucket)
+    throw new Error('nas_export_transport_scope');
+  const gateKey = exportGateKey(config.source_id, config.kind);
   const host = config.account_id + '.r2.cloudflarestorage.com';
-  return {
+  const raw: NasReader = {
     async get(key) {
       if (!config.allow_network) throw new NasReadError('nas_network_opt_in_required');
-      if (!personalObjectKey(key) || !key.includes('/' + config.source_id + '/'))
+      if (
+        (key !== gateKey && !personalObjectKey(key)) ||
+        !key.includes('/' + config.source_id + '/')
+      )
         throw new NasReadError('nas_key_forbidden');
       const path = '/' + config.bucket + '/' + key.split('/').map(encode).join('/');
       const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''),
@@ -231,6 +224,44 @@ export function createPersonalR2Reader(
         if (e instanceof NasReadError) throw e;
         throw new NasReadError('nas_r2_unavailable');
       }
+    },
+  };
+  return guardedNasReader(raw, pin, config.source_id, config.kind, () => new Date().toISOString());
+}
+
+// Recheck the committed projection barrier before and after each read. A missing
+// revocation object is meaningful only inside a fresh completed control sweep.
+export function guardedNasReader(
+  raw: NasReader,
+  pin: NasExportPin,
+  source: string,
+  kind: ExportKind,
+  now: () => string,
+): NasReader {
+  const key = exportGateKey(source, kind);
+  let last = '';
+  const gate = async () => {
+    const b = await raw.get(key);
+    if (!b) throw new Error('nas_export_control_missing');
+    const g = await checkExportGate(
+      JSON.parse(Buffer.from(b).toString()),
+      pin,
+      source,
+      kind,
+      now(),
+    );
+    if (g.checked_at < last) throw new Error('nas_export_control_rollback');
+    last = g.checked_at;
+    return JSON.stringify(g);
+  };
+  return {
+    async get(object) {
+      if (!personalObjectKey(object) || !object.includes('/' + source + '/'))
+        throw new NasReadError('nas_key_forbidden');
+      const before = await gate();
+      const body = await raw.get(object);
+      if (before !== (await gate())) throw new Error('nas_export_control_changed');
+      return body;
     },
   };
 }

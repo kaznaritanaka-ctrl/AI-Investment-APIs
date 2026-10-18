@@ -1,5 +1,5 @@
 {
-  "version": "personal-nas-runtime-v1",
+  "version": "personal-nas-runtime-v2",
   "enabled": false,
   "owner_activation_ref": null,
   "native_custody_review_ref": null,
@@ -11,5 +11,14 @@
   "recipient": null,
   "restore_identity_file": null,
   "s3_credentials_file": null,
-  "sources": []
+  "sources": [],
+  "transport": {
+    "version": "personal-nas-export-v1",
+    "account_id": null,
+    "private_database_id": null,
+    "origin_bucket": null,
+    "export_bucket": null,
+    "health_bucket": null,
+    "isolation_review_ref": null
+  }
 }

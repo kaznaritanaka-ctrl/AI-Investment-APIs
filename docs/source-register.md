@@ -1,5 +1,7 @@
 # ソース台帳 — Phase 0
 
+2026-10-18追記: 私的例外と長期保存は所有者承認済み。NAS専用exportの分離・未有効化のCloud準備・現在の残件は [最新資料](nas-export-isolation-20261018.md) を参照。提供者許諾と通常grantは変更せず、実行／本番反映／実鍵／NAS変更は未承認。以下の以前の承認状態・shared-bucket案は当時の記録です。
+
 最新の[Private開始審査](public-gpu-private-start-review-20261018.md): 非公開の本人研究という用途を再確認。2026-10-18 06:47 UTCの一回限りDOM調査ではHighreso 24対象行/48枠、Rebro 4対象行。これは構造metadataで実価格観測ではありません。公開/商用再配布権をPrivate開始の前提にせず、source別の適用根拠・所有者例外・Cloud実行承認を分けています。
 
 2026-10-18 PR #18レビュー後の状態は[Highreso/Rebro受入表](public-gpu-review-acceptance-20261018.md)を参照。disabled proposalは明示cohort/掲載事例キーのmethod v2へ更新したが、権利grant・source有効化は変更していない。実観測は両社0件。Highreso改定後の固定規約候補と未承認審査票、Rebroの未解決条件、NAS専用export隔離のrelease blockerを分けて記録した。

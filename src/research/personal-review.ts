@@ -33,7 +33,7 @@ export const PersonalReviewSchema = z
     'personal_review_dates_invalid',
   );
 export type PersonalReview = z.infer<typeof PersonalReviewSchema>;
-const HeadSchema = z
+export const HeadSchema = z
   .object({
     contract_hash: digest,
     sequence: z.number().int().min(0),
