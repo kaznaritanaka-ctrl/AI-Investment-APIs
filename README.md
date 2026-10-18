@@ -1,6 +1,34 @@
 # AI-Investment-APIs
 
+2026-10-18 本番基点のローカル統合: 本番CollectorのGit記録 `0abf2b6` にPR #18 `2f32cf9`（#16を含む）を隔離branchで統合しました。[統合内容・synthetic検証](docs/collector-integration-validation-20261018.md)と[直前の本番read-only監査](docs/collector-production-integration-20261018.md)を参照してください。ECB・Models.dev・private PoC、既存Cron、source grant、Public APIを維持し、個人研究の新flags/bindingsは未設定です。以下のmain由来branchに関する注意は統合前の履歴です。本番deploy・remote migration・実収集は行っていません。
+
+2026-10-18 最新の承認・実装: 所有者はHighreso/Rebroの非公開・個人研究限定の例外と長期保存を承認済みです。NAS専用exportの分離と停止状態の初回Cloud準備は [専用資料](docs/nas-export-isolation-20261018.md) を参照してください。提供者許諾はunconfirmed、実収集・権利grant変更・本番deploy・実鍵・NAS実機変更は未実施です。以下の旧段階の「例外承認待ち」「分離は設計のみ」は履歴で、現在の実行承認待ちとは区別します。
+
+2026-10-18 非公開の個人研究: [現行DOM・規約適用・具体的な開始承認票](docs/public-gpu-private-start-review-20261018.md)。一回限りの構造調査は完了、価格履歴の実収集は未開始です。
+
+2026-10-18 レビュー修正: [source別受入表・parser/cohort・11/1規約版・NAS権限分離のrelease blocker](docs/public-gpu-review-acceptance-20261018.md)。PR #16の再削除/台帳保護を取り込み、Highresoの見出しスコープと明示cohort、Rebroの重複事例を修正しました。実市場観測0件、未有効化。既存private evidence全体を読めるcredentialをNASへ渡す構成ではreleaseしません。
+
+2026-10-18 日次拡張: [日次取得・複数run履歴export・NAS監視連携](docs/personal-daily-cloud-nas-20261018.md)を未有効化で実装しました。正規化履歴に年齢TTLを設けず、日次の取得・暗号化backup・整合性/復元検査・監視を自動継続する構成です。[synthetic検証記録](docs/personal-daily-validation-20261018.md)と未承認の初期設定案を参照してください。実収集・実鍵・実NAS・本番変更はありません。以下の初回一runのみという説明は追加前の記録です。
+
+2026-10-18 Cloudflare→NAS実装: [実装・synthetic受入・未有効化設定・承認事項](docs/personal-cloud-nas-implementation-20261018.md)を追加しました。専用Cloud契約、private分割export、最新control、NAS固定read、age暗号化、自動保守、空のローカルD1への復元検査に対応します。実収集・実鍵・NAS実機・本番変更は未実施。日次新規取得は別スコープです。
+
+2026-10-18 初回実行準備の方針更新: 所有者の指示により、ローカルはsynthetic専用、初回実データもCloudflareで取得しNASへバックアップする準備に変更しました。[設定・実行契約・鍵管理・承認事項](docs/personal-cloudflare-nas-setup-20261018.md)と[非実行の設定提案](docs/personal-execution-20261018/cloudflare-nas.setup-proposal.json)を参照してください。既存personal-gpu-v2はローカル専用の実装で、local v2による本番接続はできません。後続のCloud専用実装は上記の通り未有効化です。従来のローカルlive契約案は有効化せず参照資料として残します。実収集・鍵作成・NAS設定・grant変更・本番反映は行っていません。
+
+2026-10-18 継続保存の追加: [個人研究v2の実装・運用手順](docs/personal-continuing-20261018.md)を追加しました。正規化履歴の年齢による削除をなくし、追加の契約レビュー、暗号化バックアップ、最新の取消しを反映した復元、自動保守の停止状態の設定案に対応します。以下の有限保持v1は互換性維持対象です。実収集・実契約・鍵設定・タスク登録・権利grant変更・本番反映は未実施です。
+
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
+
+2026-10-18 個人研究例外: 追加指示により[Highreso/Rebro限定のlocal実装とsynthetic検証](docs/personal-gpu-implementation-20261018.md)まで進めました。提供者の許諾未確認と所有者の実行判断を分離し、初回1試行・有限保持・復元後の停止を専用経路で検査します。通常の権利gate・grant・disabled設定は維持。[判断票](docs/public-gpu-personal-research-draft-20261018.json)は未承認で、実収集・watch稼働・本番反映は未実施です。
+
+2026-10-18 公開GPUの条件確認追補: [Highresoの11/1改定（国外例外あり）・Rebroの未特定規約と初回準備](docs/public-gpu-rights-review-20261018.md)を整理しました。`node scripts/public-gpu-check.mjs` は両社の設定を通信/保存なしで診断します。現状は両方blocked（exit 2）。権利grant・本番設定は変更せず、実収集も開始していません。
+
+2026-10-18 Issue #17: [Highreso/Rebroの公開HTMLを使うPrivate研究経路](docs/public-gpu-research-20261018.md)を、PR #16から独立したstacked Draft PRとして追加しました。固定URL、専用GPU履歴0010、最小R2証拠、再観測/改定/not_seen、source別停止と保持をsynthetic検証します。公開ページの接続・構造を確認しましたが、自動取得/保存/内部分析はreview_requiredのまま、collector live観測0件・日次稼働0日です。公式未公開feedの返答を必須条件にせず、この公開範囲の条件を別途レビューします。本番dispatch/保持scheduler・grant・deployは未反映です。以下のPR #16のfeed待ち記述は、その時点の履歴です。
+
+2026-10-18: PR #16の追加指示に従い、[研究履歴のレビュー待ち・収集停止・削除義務と保持モード](docs/research-long-retention-20261016.md)を分離しました。review_dueでは許諾内の履歴を保持し、明示された継続保管根拠とowner承認があるsourceだけuntil_revokedを選べます。0007/0008/0009はローカルのみ、旧期限は不変です。[運用手順](docs/private-research-runbook.md)と[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。新sourceの実観測数0、本番変更0。次の候補はHighreso/GPUSOROBANとRebroの公式feed・権利確認待ちで、EIA/JEPXはcritical path外です。容量試算は参考に留め、新archive/DB分割は実装しません。Cloudflare配信版はmainと異なり、このbranchを古い設定のままdeployしないでください。[調査台帳](docs/source-expansion-20261015.md)に差分を記録しています。
+
+10/18最終修正: 通常のfixed_days/until_revoked収集では `storage_review_hold` を一律必須にしません。実際の保存権が不明でholdもない場合は取得/readを止め、保存可否と削除期限を即時人間レビューへ上げます。無期限保管の許可は付与しません。
+
+以下の本番対応の記録は2026-10-04〜05時点です。10/15のread-only確認との差分は上記台帳へ分離しています。
 
 現在の本番はWorkers Paid・stage=enabledで、ECBとModels.devの5 provider/17 fieldを既存の日次Cronで収集・公開しています。2026-10-04にCollector a534ff0、Admin 97277deとprivate 0005/配信台帳を反映済みです。public APIは24768e9です。GPU実ソースはdisabledのままです。[本番対応・継続運用の受け入れ](docs/operations-acceptance.md)に配信version/tree/artifact、履歴保全、通知・復旧・保持の確認結果と現在の残件をまとめています。通知修正/0006とschema drift recoveryは未配信・未適用です。2026-10-05の所有者によるNetlify確認でGitHub push/PR保留を解除し、最新作業branchを公開して[Draft PR #7](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/7)を作成しました。main mergeと本番変更は引き続き別承認です。
 
@@ -19,7 +47,7 @@ GPUはrun/partition/page/snapshotを分離し、leaseとcheckpointで再開し�
 
 ## 開発・検証
 
-Node 24、pnpm 11.19.0。
+Node 24、pnpm 11.19.0。NAS暗号化試験の初期tool準備は `node scripts/setup-test-age.mjs --allow-download`（公式age、checksum固定、ignored work内、実鍵なし）。通常test/buildはtoolをdownloadしません。全件進捗は `pnpm test --reporter=verbose` で確認できます。
 
 ```sh
 pnpm install --frozen-lockfile

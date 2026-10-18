@@ -1,0 +1,191 @@
+{
+  "version": "personal-gpu-cloud-v1",
+  "authority_kind": "owner_personal_research_exception",
+  "status": "draft_pending_owner_approval",
+  "data_origin": "live",
+  "config": {
+    "source": {
+      "source_id": "highreso_public",
+      "dataset_type": "gpu_rental",
+      "operator": "Highreso / GPUSOROBAN",
+      "source_url": "https://soroban.highreso.jp/compute/instances",
+      "documentation_url": "https://soroban.highreso.jp/compute/instances",
+      "terms_url": "https://soroban.highreso.jp/terms",
+      "license_url": null,
+      "endpoint": "https://soroban.highreso.jp/compute/instances",
+      "acquisition_method": "Fixed public HTML; reviewed robots/terms fingerprints required before data GET",
+      "authentication_required": false,
+      "native_currency": "JPY",
+      "native_unit": "JPY per instance hour / month",
+      "geography": [],
+      "native_frequency": "irregular",
+      "expected_update_calendar": "Proposed one complete page per UTC day",
+      "expected_lag": "unknown",
+      "rights_checked_at": "2026-10-17T16:51:35.001Z",
+      "rights_evidence_ref": "docs/public-gpu-research-20261018.md",
+      "attribution_text": "Source: Highreso / GPUSOROBAN; preserve original basis, period precision and unknown conditions",
+      "known_limitations": [
+        "Public instance quote, not realized rental price or utilization",
+        "Per-offer location, dedicated/shared and minimum term not confirmed",
+        "Only explicitly listed A100/H100 products in the selected page; no whole-market coverage"
+      ],
+      "enabled": false,
+      "adapter": "candidate",
+      "selection": [],
+      "max_bytes": 1000000,
+      "max_records": 48,
+      "policy": {
+        "version": "highreso_public-20261018-proposal-v1",
+        "rights": {
+          "automated_collection": "review_required",
+          "private_storage": "review_required",
+          "internal_analysis": "review_required",
+          "external_llm_processing": "denied",
+          "public_display": "review_required",
+          "raw_redistribution": "denied",
+          "normalized_redistribution": "review_required",
+          "derived_redistribution": "review_required",
+          "commercial_redistribution": "review_required"
+        },
+        "fields": [
+          "domestic_gpu_projection_v1"
+        ],
+        "conditions": [
+          "Private research proposal only; no active grant",
+          "No raw response archive, no public projection, no external LLM"
+        ],
+        "valid_from": "2026-10-17T16:51:35.001Z",
+        "valid_until": "2027-01-15T00:00:00.000Z",
+        "retention_days": 7,
+        "retention_limit_days": null,
+        "decision_actor": "pending_owner_review",
+        "evidence_version": "highreso_public-terms-review-20261018",
+        "evidence_refs": [
+          "https://soroban.highreso.jp/terms",
+          "https://soroban.highreso.jp/compute/instances",
+          "docs/public-gpu-research-20261018.md"
+        ]
+      }
+    },
+    "adapter": "highreso_public",
+    "visibility": "private_only",
+    "method_version": "domestic-gpu-html-v1",
+    "public_access": {
+      "robots_sha256": null,
+      "terms_sha256": null,
+      "robots_decision": "unreviewed",
+      "reviewed_ref": null
+    },
+    "owner_approval_ref": null,
+    "wire_contract_review_ref": null,
+    "history_access": [],
+    "terms": {
+      "version": "highreso_public-terms-review-20261018",
+      "checked_at": "2026-10-17T16:51:35.001Z",
+      "review_after": "2027-01-15T00:00:00.000Z",
+      "evidence_refs": [
+        "https://soroban.highreso.jp/terms",
+        "docs/public-gpu-research-20261018.md"
+      ]
+    },
+    "scope": {
+      "kind": "highreso_public",
+      "models": [
+        "A100",
+        "H100"
+      ]
+    },
+    "limits": {
+      "page_size": 48,
+      "max_pages": 1,
+      "max_input_rows": 100
+    },
+    "retention": {
+      "strategy": "d1_history",
+      "target_days": 1095,
+      "evidence_days": 7,
+      "archive_days": 0,
+      "normalized_mode": "unapproved",
+      "normalized_days": null,
+      "ongoing_storage": null,
+      "storage_review_hold": null,
+      "backup_days": 30,
+      "time_travel_days": null,
+      "lifecycle_review_ref": null,
+      "reviewed_ref": null
+    }
+  },
+  "config_sha256": "3da4318b8eed921ebaa702ab9f7b657d072960193d2940c77c1de4976c2e9826",
+  "decision": {
+    "exception_id": null,
+    "provider_permission": "unconfirmed",
+    "owner_execution_approval_ref": null,
+    "risk_acceptance_ref": null,
+    "unresolved_conditions": [
+      "Provider has not confirmed automated collection, private storage or internal analysis permission.",
+      "Applicability of the public-page terms and the owner location-dependent terms version remains unconfirmed.",
+      "The fixed monitor covers only /terms; applicability of the domestic pre-20261101 version must be confirmed before execution."
+    ],
+    "approved_at": null,
+    "acquisition_from": null,
+    "acquisition_until": null,
+    "analysis_until": null,
+    "storage_until": null,
+    "max_attempts": 1,
+    "fields": [
+      "domestic_gpu_projection_v1"
+    ],
+    "terms": {
+      "version": null,
+      "monitored_url": "https://soroban.highreso.jp/terms",
+      "applicable_terms_review_ref": null,
+      "review_after": null,
+      "terms_sha256": null,
+      "robots_sha256": null,
+      "robots_decision": "unreviewed",
+      "access_review_ref": null,
+      "applicability": null
+    },
+    "retention": {
+      "mode": "owner_continuing",
+      "evidence_days": 7,
+      "normalized_days": null,
+      "archive_days": 0,
+      "time_travel": "cloudflare_d1",
+      "backup_recoverability_days": 90,
+      "copy_inventory_review_ref": null,
+      "automatic_cleanup_review_ref": null,
+      "revocation_restore_review_ref": null,
+      "store_id": null,
+      "continuing_storage": {
+        "basis_ref": null,
+        "owner_approval_ref": null,
+        "purpose_ref": "Ten-year research value objective; no age-based deletion"
+      },
+      "backup": {
+        "destination_id": null,
+        "key_id": null,
+        "interval_hours": 24,
+        "retention_days": 90,
+        "restore_check_hours": 24,
+        "max_copies": 96,
+        "reviewed_ref": null,
+        "recovery_review_ref": null
+      }
+    },
+    "public_export": false,
+    "external_llm": false,
+    "raw_persistence": false
+  },
+  "cloud": {
+    "account_id": null,
+    "private_database_id": null,
+    "bucket": null,
+    "d1_time_travel_days": null,
+    "deployment_approval_ref": null,
+    "lifecycle_review_ref": null,
+    "nas_admission_review_ref": null,
+    "restore_review_ref": null,
+    "initial_acquisition_only": true
+  }
+}

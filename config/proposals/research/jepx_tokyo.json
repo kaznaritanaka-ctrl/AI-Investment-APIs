@@ -1,0 +1,103 @@
+{
+  "source": {
+    "source_id": "jepx_tokyo",
+    "dataset_type": "electricity",
+    "operator": "Japan Electric Power Exchange",
+    "source_url": "https://www.jepx.jp/electricpower/market-data/spot/",
+    "documentation_url": "https://www.jepx.jp/js/spot_summary.js",
+    "terms_url": "https://www.jepx.jp/disclaimer/",
+    "license_url": null,
+    "endpoint": "https://www.jepx.jp/js/csv_read.php",
+    "acquisition_method": "Official site CSV reader; wire format and automated retention require review",
+    "authentication_required": false,
+    "native_currency": "JPY",
+    "native_unit": "JPY/kWh",
+    "geography": [
+      "JP/Tokyo"
+    ],
+    "native_frequency": "30_minutes",
+    "expected_update_calendar": "Daily day-ahead publication; proposed one delivery day per run",
+    "expected_lag": "unknown",
+    "rights_checked_at": "2026-10-15T00:00:00.000Z",
+    "rights_evidence_ref": "docs/source-expansion-20261015.md",
+    "attribution_text": "出典：一般社団法人日本卸電力取引所（JEPX）",
+    "known_limitations": [
+      "One area, one delivery day; not all Japan",
+      "Annual fiscal-year input; only selected day price projection retained",
+      "CSV header/encoding synthetic-only; wire contract review required",
+      "Automatic historical storage/commercial redistribution scope requires owner review"
+    ],
+    "enabled": false,
+    "adapter": "candidate",
+    "selection": [],
+    "max_bytes": 6000000,
+    "max_records": 48,
+    "policy": {
+      "version": "jepx_tokyo-20261016-proposal-v2",
+      "rights": {
+        "automated_collection": "review_required",
+        "private_storage": "review_required",
+        "internal_analysis": "review_required",
+        "external_llm_processing": "denied",
+        "public_display": "review_required",
+        "raw_redistribution": "denied",
+        "normalized_redistribution": "review_required",
+        "derived_redistribution": "review_required",
+        "commercial_redistribution": "review_required"
+      },
+      "fields": [
+        "electricity_projection_v1"
+      ],
+      "conditions": [
+        "Private research proposal only; no active grant",
+        "No raw response archive, no public projection, no external LLM"
+      ],
+      "valid_from": "2026-10-15T00:00:00.000Z",
+      "valid_until": "2027-01-13T00:00:00.000Z",
+      "retention_days": 7,
+      "retention_limit_days": null,
+      "decision_actor": "pending_owner_review",
+      "evidence_version": "jepx_tokyo-terms-review-20261015",
+      "evidence_refs": [
+        "https://www.jepx.jp/disclaimer/"
+      ]
+    }
+  },
+  "adapter": "jepx_spot",
+  "visibility": "private_only",
+  "method_version": "electricity-research-v1",
+  "owner_approval_ref": null,
+  "wire_contract_review_ref": null,
+  "history_access": [],
+  "terms": {
+    "version": "jepx_tokyo-terms-review-20261015",
+    "checked_at": "2026-10-15T00:00:00.000Z",
+    "review_after": "2027-01-13T00:00:00.000Z",
+    "evidence_refs": [
+      "docs/source-expansion-20261015.md"
+    ]
+  },
+  "scope": {
+    "kind": "jepx_spot",
+    "area": "Tokyo"
+  },
+  "limits": {
+    "page_size": 48,
+    "max_pages": 1,
+    "max_input_rows": 18000
+  },
+  "retention": {
+    "strategy": "d1_history",
+    "target_days": 1095,
+    "evidence_days": 7,
+    "archive_days": 0,
+    "normalized_days": null,
+    "normalized_mode": "unapproved",
+    "ongoing_storage": null,
+    "storage_review_hold": null,
+    "backup_days": 30,
+    "time_travel_days": null,
+    "lifecycle_review_ref": null,
+    "reviewed_ref": null
+  }
+}

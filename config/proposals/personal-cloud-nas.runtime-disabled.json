@@ -1,0 +1,24 @@
+{
+  "version": "personal-nas-runtime-v2",
+  "enabled": false,
+  "owner_activation_ref": null,
+  "native_custody_review_ref": null,
+  "recovery_custody_review_ref": null,
+  "account_id": null,
+  "bucket": null,
+  "root": null,
+  "age_binary": null,
+  "recipient": null,
+  "restore_identity_file": null,
+  "s3_credentials_file": null,
+  "sources": [],
+  "transport": {
+    "version": "personal-nas-export-v1",
+    "account_id": null,
+    "private_database_id": null,
+    "origin_bucket": null,
+    "export_bucket": null,
+    "health_bucket": null,
+    "isolation_review_ref": null
+  }
+}

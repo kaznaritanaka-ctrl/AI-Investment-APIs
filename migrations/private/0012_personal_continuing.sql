@@ -1,0 +1,45 @@
+-- Forward local migration: preserve every existing research row and deadline verbatim.
+-- Owner-continuing is a distinct authority, never a provider grant.
+CREATE TABLE research_runs_v12 ( run_id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES research_sources(source_id), config_hash TEXT NOT NULL, query_hash TEXT NOT NULL, policy_version TEXT NOT NULL, terms_version TEXT NOT NULL, scheduled_for TEXT NOT NULL, recorded_at TEXT NOT NULL, synthetic INTEGER NOT NULL CHECK(synthetic IN (0,1)), state TEXT NOT NULL CHECK(state IN ('collecting','partial','complete','purging','purged')), next_page INTEGER CHECK(next_page >= 0), observation_count INTEGER NOT NULL DEFAULT 0, http_page_attempts INTEGER NOT NULL DEFAULT 0 CHECK(http_page_attempts BETWEEN 0 AND 3), last_error TEXT, retry_at TEXT, lease_token TEXT, lease_until TEXT, evidence_expires_at TEXT NOT NULL, evidence_purged_at TEXT, normalized_expires_at TEXT, retention_snapshot_json TEXT CHECK(retention_snapshot_json IS NULL OR json_valid(retention_snapshot_json)), all_copies_expires_at TEXT, deleted_at TEXT, backup_residual_until TEXT, normalized_mode TEXT NOT NULL DEFAULT 'fixed_days' CHECK(normalized_mode IN ('fixed_days','until_revoked','owner_continuing')), CHECK((normalized_mode='fixed_days' AND normalized_expires_at IS NOT NULL) OR (normalized_mode='until_revoked' AND normalized_expires_at IS NULL AND all_copies_expires_at IS NULL AND retention_snapshot_json IS NOT NULL AND json_extract(retention_snapshot_json,'$.version') IS 'research-retention-v2' AND json_extract(retention_snapshot_json,'$.normalized_mode') IS 'until_revoked') OR (normalized_mode='owner_continuing' AND normalized_expires_at IS NULL AND all_copies_expires_at IS NULL AND json_extract(retention_snapshot_json,'$.version') IS 'personal-retention-v2' AND json_extract(retention_snapshot_json,'$.authority_kind') IS 'owner_personal_research_exception' AND json_extract(retention_snapshot_json,'$.mode') IS 'owner_continuing')) );
+INSERT INTO research_runs_v12 SELECT * FROM research_runs;
+CREATE TABLE research_pages_v12 ( run_id TEXT NOT NULL REFERENCES research_runs_v12(run_id), page_number INTEGER NOT NULL, evidence_key TEXT NOT NULL UNIQUE, evidence_hash TEXT NOT NULL, observed_at TEXT NOT NULL, evidence_expires_at TEXT NOT NULL, evidence_deleted_at TEXT, reported_total INTEGER, received_count INTEGER NOT NULL, coverage TEXT NOT NULL CHECK(coverage IN ('complete','partial')), PRIMARY KEY(run_id,page_number) );
+INSERT INTO research_pages_v12 SELECT * FROM research_pages;
+CREATE TABLE research_observations_v12 ( observation_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES research_runs_v12(run_id), page_number INTEGER NOT NULL, record_key TEXT NOT NULL, source_url TEXT NOT NULL, method_version TEXT NOT NULL, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, record_hash TEXT NOT NULL, previous_observation_id TEXT, change_kind TEXT NOT NULL CHECK(change_kind IN ('first_seen','reobserved','revised')), domain_json TEXT NOT NULL CHECK(json_valid(domain_json)), UNIQUE(run_id,record_key) );
+INSERT INTO research_observations_v12 SELECT * FROM research_observations;
+CREATE TABLE research_gpu_observations_v12 ( observation_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES research_runs_v12(run_id), page_number INTEGER NOT NULL, record_key TEXT NOT NULL, source_url TEXT NOT NULL, method_version TEXT NOT NULL, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, record_hash TEXT NOT NULL, previous_observation_id TEXT, change_kind TEXT NOT NULL CHECK(change_kind IN ('first_seen','reobserved','revised','not_seen')), domain_json TEXT NOT NULL CHECK(json_valid(domain_json)), UNIQUE(run_id,record_key) );
+INSERT INTO research_gpu_observations_v12 SELECT * FROM research_gpu_observations;
+CREATE TABLE research_retention_assessments_v12 ( assessment_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES research_runs_v12(run_id), assessed_at TEXT NOT NULL, config_hash TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('active','review_due','collection_stopped','rights_unknown','retention_expired','delete_required')), decision_json TEXT NOT NULL CHECK(json_valid(decision_json)) );
+INSERT INTO research_retention_assessments_v12 SELECT * FROM research_retention_assessments;
+CREATE TABLE research_personal_runs_v12 ( run_id TEXT PRIMARY KEY REFERENCES research_runs_v12(run_id), contract_hash TEXT NOT NULL REFERENCES research_personal_contracts(contract_hash), UNIQUE(contract_hash) );
+INSERT INTO research_personal_runs_v12 SELECT * FROM research_personal_runs;
+DROP TABLE research_personal_runs;
+DROP TABLE research_retention_assessments;
+DROP TABLE research_gpu_observations;
+DROP TABLE research_observations;
+DROP TABLE research_pages;
+DROP TABLE research_runs;
+ALTER TABLE research_runs_v12 RENAME TO research_runs;
+ALTER TABLE research_pages_v12 RENAME TO research_pages;
+ALTER TABLE research_observations_v12 RENAME TO research_observations;
+ALTER TABLE research_gpu_observations_v12 RENAME TO research_gpu_observations;
+ALTER TABLE research_retention_assessments_v12 RENAME TO research_retention_assessments;
+ALTER TABLE research_personal_runs_v12 RENAME TO research_personal_runs;
+CREATE INDEX research_runs_retention ON research_runs(normalized_expires_at,state);
+CREATE INDEX research_runs_source ON research_runs(source_id,scheduled_for,state);
+CREATE INDEX research_retention_source ON research_runs(source_id,state,normalized_expires_at);
+CREATE UNIQUE INDEX research_one_run_per_day ON research_runs(source_id,substr(scheduled_for,1,10),synthetic);
+CREATE INDEX research_records_key ON research_observations(record_key,observed_at);
+CREATE TRIGGER research_observations_immutable BEFORE UPDATE ON research_observations BEGIN SELECT RAISE(ABORT,'immutable_research_observation'); END;
+CREATE TRIGGER research_observations_retention BEFORE DELETE ON research_observations WHEN (SELECT state FROM research_runs WHERE run_id=OLD.run_id) != 'purging' BEGIN SELECT RAISE(ABORT,'research_retention_required'); END;
+CREATE TRIGGER research_run_contract_immutable BEFORE UPDATE OF source_id,config_hash,policy_version,terms_version,recorded_at,scheduled_for,synthetic,evidence_expires_at,normalized_expires_at,normalized_mode,retention_snapshot_json,all_copies_expires_at ON research_runs BEGIN SELECT RAISE(ABORT,'immutable_research_retention'); END;
+CREATE INDEX research_retention_assessment_run ON research_retention_assessments(run_id,assessed_at);
+CREATE TRIGGER research_retention_assessments_immutable BEFORE UPDATE ON research_retention_assessments BEGIN SELECT RAISE(ABORT,'immutable_research_assessment'); END;
+-- Preserve 0014 protection when this stacked migration follows an already-journaled 0014.
+CREATE TRIGGER research_retention_assessments_no_delete BEFORE DELETE ON research_retention_assessments BEGIN SELECT RAISE(ABORT,'immutable_research_assessment'); END;
+CREATE INDEX research_gpu_records_key ON research_gpu_observations(record_key,observed_at);
+CREATE INDEX research_gpu_records_run ON research_gpu_observations(run_id,record_key);
+CREATE TRIGGER research_gpu_observations_immutable BEFORE UPDATE ON research_gpu_observations BEGIN SELECT RAISE(ABORT,'immutable_research_observation'); END;
+CREATE TRIGGER research_gpu_observations_retention BEFORE DELETE ON research_gpu_observations WHEN (SELECT state FROM research_runs WHERE run_id=OLD.run_id) != 'purging' BEGIN SELECT RAISE(ABORT,'research_retention_required'); END;
+CREATE TRIGGER research_personal_runs_immutable BEFORE UPDATE ON research_personal_runs BEGIN SELECT RAISE(ABORT,'immutable_personal_run'); END;
+CREATE TABLE research_personal_reviews ( review_hash TEXT PRIMARY KEY, contract_hash TEXT NOT NULL REFERENCES research_personal_contracts(contract_hash), sequence INTEGER NOT NULL, reviewed_at TEXT NOT NULL, review_json TEXT NOT NULL CHECK(json_valid(review_json)), UNIQUE(contract_hash,sequence) );
+CREATE TRIGGER research_personal_reviews_immutable BEFORE UPDATE ON research_personal_reviews BEGIN SELECT RAISE(ABORT,'immutable_personal_review'); END;

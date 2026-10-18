@@ -123,46 +123,52 @@ it('preserves the original permitted fields and time, holds publication and does
   ).toBe(stored);
 });
 
-it('normal acquisition still completes with capture enabled; unchanged prices remain legitimate observations', async () => {
-  const s = expandedSource();
-  const first = await finishModels(local.env, s, catalog());
-  expect(first.result.state).toBe('complete');
-  const next = '2026-10-04T18:17:00.000Z';
-  const second = await finishModels(local.env, s, catalog(), next);
-  expect(second.result.state).toBe('complete');
-  expect(first.calls).toBe(1);
-  expect(second.calls).toBe(1);
-  expect(await count(local.env.PRIVATE_DB, 'observations')).toBe(20);
-  expect(await count(local.env.PRIVATE_DB, 'raw_artifacts')).toBe(4);
-  expect((await readOperationalStatus(local.env, [s], next)).overnight.sources[0]).toMatchObject({
-    collection_status: 'complete',
-    publication_status: 'complete',
-    missing_observation_count: 0,
-  });
-  const recovered = await readOperationalStatus(local.env, [s], at(1));
-  expect(recovered.sources[0].signals).toContainEqual({
-    key: 'models_dev:schema_drift',
-    condition: 'clear',
-    code: 'schema_recovery_complete',
-  });
-  const notifications = { ...local.env, NOTIFICATIONS_ACTIVE_FROM: time };
-  await recordNotificationSignals(
-    notifications,
-    [{ key: 'models_dev:schema_drift', condition: 'alert', code: 'schema_drift_detected' }],
-    time,
-  );
-  const cleared = await recordNotificationSignals(
-    notifications,
-    recovered.sources[0].signals,
-    at(1),
-  );
-  expect(cleared.events).toContain('models_dev:schema_drift:recovered');
-  expect(
-    await local.env.PRIVATE_DB.prepare(
-      "SELECT active FROM notification_incidents WHERE incident_key='models_dev:schema_drift'",
-    ).first<number>('active'),
-  ).toBe(0);
-});
+// Two full Models.dev days plus recovery/notification history use the same slow
+// Node -> workerd RPC path as models-integration. Keep the assertions and a finite budget.
+it(
+  'normal acquisition still completes with capture enabled; unchanged prices remain legitimate observations',
+  { timeout: 120000 },
+  async () => {
+    const s = expandedSource();
+    const first = await finishModels(local.env, s, catalog());
+    expect(first.result.state).toBe('complete');
+    const next = '2026-10-04T18:17:00.000Z';
+    const second = await finishModels(local.env, s, catalog(), next);
+    expect(second.result.state).toBe('complete');
+    expect(first.calls).toBe(1);
+    expect(second.calls).toBe(1);
+    expect(await count(local.env.PRIVATE_DB, 'observations')).toBe(20);
+    expect(await count(local.env.PRIVATE_DB, 'raw_artifacts')).toBe(4);
+    expect((await readOperationalStatus(local.env, [s], next)).overnight.sources[0]).toMatchObject({
+      collection_status: 'complete',
+      publication_status: 'complete',
+      missing_observation_count: 0,
+    });
+    const recovered = await readOperationalStatus(local.env, [s], at(1));
+    expect(recovered.sources[0].signals).toContainEqual({
+      key: 'models_dev:schema_drift',
+      condition: 'clear',
+      code: 'schema_recovery_complete',
+    });
+    const notifications = { ...local.env, NOTIFICATIONS_ACTIVE_FROM: time };
+    await recordNotificationSignals(
+      notifications,
+      [{ key: 'models_dev:schema_drift', condition: 'alert', code: 'schema_drift_detected' }],
+      time,
+    );
+    const cleared = await recordNotificationSignals(
+      notifications,
+      recovered.sources[0].signals,
+      at(1),
+    );
+    expect(cleared.events).toContain('models_dev:schema_drift:recovered');
+    expect(
+      await local.env.PRIVATE_DB.prepare(
+        "SELECT active FROM notification_incidents WHERE incident_key='models_dev:schema_drift'",
+      ).first<number>('active'),
+    ).toBe(0);
+  },
+);
 
 it('keeps permission gates and default-off behavior, including source suspension during HTTP', async () => {
   local.env.SCHEMA_RECOVERY_ENABLED = undefined;

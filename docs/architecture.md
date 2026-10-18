@@ -1,5 +1,13 @@
 # Phase 0 — 構成と判断
 
+2026-10-18追記: 私的例外と長期保存は所有者承認済み。NAS専用exportの分離・未有効化のCloud準備・現在の残件は [最新資料](nas-export-isolation-20261018.md) を参照。提供者許諾と通常grantは変更せず、実行／本番反映／実鍵／NAS変更は未承認。以下の以前の承認状態・shared-bucket案は当時の記録です。
+
+個人研究の継続保存v2: [設計・実装・復元境界](personal-continuing-20261018.md)。専用local DBの0012、データとは別の現在制御ストア、正規化履歴のみの暗号化snapshotを使用します。公開Workerや本番Collectorには接続せず、既存バインディング・source・Cronを維持します。
+
+2026-10-18 個人研究例外: [専用local経路](personal-gpu-implementation-20261018.md)を追加。元sourceの権利評価とは別のowner契約とrunをprivate 0011で関連付け、価格は既存0010へ格納する。実行用承認なし、production/通常research経路からは拒否、Public DB bindingなし。データ本文と復元対象外の試行/manifest/停止記録を分ける。実sourceの収集・grant・本番設定は変更しない。
+
+2026-10-18更新: [Private研究用経路](private-research-runbook.md)は既存Collector未接続。0009は0007/0008の期限を維持し、明示的なuntil_revokedモードと状態評価台帳を追加します。review_due/collection_stopped/rights_unknownを削除義務から分離し、D1正規化履歴と短期R2証拠を独立管理。[外部取消し/削除記録と現行権利](research-long-retention-20261016.md)で復元後のreadを守ります。Public API/migration、稼働source、Cronは変更せず、archive/新DB/分割も追加しません。[mainと本番の差分](source-expansion-20261015.md)をdeploy前に再確認してください。
+
 調査日: 2026-09-27 JST (2026-09-26 UTC)。開始時のmainは `c64950ec0612f03a3556457583e17906ec9d2e78`、README一行のみ。既存実装・AGENTS.mdなし。開発ブランチ `codex/phase-0-1-foundation`。本番リソースは作成しない。
 
 Cloudflare Cron → collector Worker → 取得/保存の独立policy gate → 決定的HTTP → private R2証拠 → private D1の追記履歴 → 品質/公開gate → public D1。

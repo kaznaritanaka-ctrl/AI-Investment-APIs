@@ -1,0 +1,77 @@
+{
+  "document_type": "personal_research_exception_design_draft",
+  "created_on": "2026-10-18",
+  "reference_commit": "e60d6d204d05408b22be13421d028dc3f5e4f744",
+  "status": "draft_not_executable",
+  "authorized_work": "design_and_preparation_only",
+  "runtime_supported": false,
+  "sources": [
+    {
+      "source_id": "highreso_public",
+      "data_url": "https://soroban.highreso.jp/compute/instances",
+      "models": ["A100", "H100"],
+      "provider_permission": "unconfirmed",
+      "inquiry_status": "owner_reported_sent_no_reply",
+      "inquiry_independently_verified": false,
+      "owner_execution_approval_ref": null,
+      "approved_execution_contract_hash": null,
+      "acquisition_window": null,
+      "applicable_terms_review_ref": null,
+      "access_fingerprint_review_ref": null,
+      "retention_decision_ref": null,
+      "unresolved": [
+        "public_page_terms_applicability",
+        "location_dependent_terms_version",
+        "applicable_terms_and_fixed_monitor_url_alignment",
+        "collection_storage_analysis_basis"
+      ]
+    },
+    {
+      "source_id": "rebro_public",
+      "data_url": "https://gpu-kaitori.com/reason/",
+      "models": ["A100", "H100"],
+      "provider_permission": "unconfirmed",
+      "inquiry_status": "owner_reported_sent_no_reply",
+      "inquiry_independently_verified": false,
+      "owner_execution_approval_ref": null,
+      "approved_execution_contract_hash": null,
+      "acquisition_window": null,
+      "applicable_terms_review_ref": null,
+      "access_fingerprint_review_ref": null,
+      "retention_decision_ref": null,
+      "unresolved": [
+        "separately_referenced_site_terms_unidentified",
+        "article_10_applicability_to_public_case_extraction",
+        "collection_storage_analysis_basis"
+      ]
+    }
+  ],
+  "proposed_execution_scope": {
+    "environment": "local_only",
+    "max_initial_attempts_per_source": 1,
+    "max_http_requests_per_attempt": 3,
+    "max_data_pages": 1,
+    "max_request_seconds": 15,
+    "automatic_http_retry": false,
+    "scheduled_collection": false,
+    "raw_html_persistence": false,
+    "public_export": false,
+    "external_llm": false,
+    "production": false
+  },
+  "retention_decision_template": {
+    "scope": "instantiate_and_approve_separately_for_each_source",
+    "candidate_mode": "fixed_days",
+    "approved_evidence_days": null,
+    "approved_normalized_days": null,
+    "approved_archive_days": null,
+    "local_storage_path": null,
+    "local_copy_inventory_review_ref": null,
+    "approved_backup_recoverability_days": null,
+    "automatic_retention_review_ref": null,
+    "storage_after_acquisition_window": null,
+    "analysis_after_acquisition_window": null,
+    "all_copies_deadline_rule": null,
+    "revocation_and_restore_review_ref": null
+  }
+}

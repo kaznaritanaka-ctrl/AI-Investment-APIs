@@ -1,0 +1,140 @@
+# Private研究用収集 — 実装契約と承認手順
+
+2026-10-18追補: [purged runのR2再削除・台帳DELETE禁止・stacked migration](research-review-fixes-20261018.md)。R2単独復元時も対象runを再reconcileし、pending cleanupを完了させてから復元を受け入れる。
+
+対象はIssue #15のローカル候補。productionでは関数が `research_production_not_integrated` で停止し、既存Collectorからも呼ばれない。候補JSONはconfig/proposals/researchだけに置き、config/sourcesへコピーしない。本書は有効化計画であり実行承認ではない。
+
+Issue #17の[公開GPUページ経路](public-gpu-research-20261018.md)はこの基盤を再利用し、GPUの値だけ専用0010へ保存する。共有の `hasCollectionRights` は従来の有効期間/enabled/Private3権限判定、ResearchConfigはdomain固有のscope/保持/レビュー判定を担う。既存Phase2の `canCollect` のGPU/Models追加gateは維持。以下の電力input件数/HTTP条件や公式feed待ちは当時の範囲であり、公開GPUの固定3 GET・15秒・source停止はリンク先を適用する。
+
+## 権利と公開境界
+
+既存Source/PolicyとcanCollectを使う。ライセンスURLがnullでも、automated_collection/private_storage/internal_analysisの各allowedと適用根拠、期間、field scope、owner/wire/retentionレビューが揃えばPrivate処理できる。1項目でもreview_required/denied/expiredならHTTPより前に停止する。本PRでallowedを記録した実ソースは0件。
+
+9権限は独立。候補では取得/保存/内部分析/表示/正規化再配布/派生再配布/商用再配布がreview_required、外部LLM/raw再配布がdenied。Private 3権限だけの合成grantで保存が成功し、既存canPublishはfalseを返す。新経路自身にpublic/raw/LLM exportは実装しない。public DB bindingを受け取らず、API schema/OpenAPIを変更しない。
+
+sourceのfull config hashと各版をresearch_sources / research_config_versionsへ記録する。同一policy版の変更では再開を拒否する。ローカルの `adoptReviewedResearchConfig` は現行hash、新policy版、同一source/adapter/scope/fieldsを検査する。enabled版は全取得権を要求する。disabled版はownerのunknown/denied評価も記録できるが、利用許可ではない。過去版のreadには `history_access` のhash/承認根拠と現行権利/termsが必要で、過去runの期限を伸ばさない。
+
+収集のdisabledと過去履歴の権利停止は別。disabledなら新規取得不可だが、現行のprivate_storage/internal_analysis・terms・期間・保持が有効なら履歴は読める。source suspended、権利失効、config/terms不一致、R2取消し/削除記録は読取を遮断する。公開経路には接続しない。
+
+## 保存と復旧
+
+```mermaid
+flowchart LR
+  A[Source別権利・scope gate] --> B[固定request / synthetic]
+  B --> C[最小projection]
+  C --> D[private R2 / 条件付き保存]
+  D --> E[private D1 / 20 SQL文ずつ]
+  E --> F[page checkpoint]
+  F --> G[complete runだけPrivate読取]
+```
+
+- run IDはsource/policy/scheduled slot/query/synthetic区分で決定。再実行で履歴を増殖させない。翌日の同価格は別のreobserved観測。
+- 同一runには5分lease。期限切れwriterのSQLはlease tokenで拒否。source単位の呼出しは分離され、あるsource失敗後も別sourceを処理できる。
+- R2 captureはsource/run/page固定キー、初回writeのみ。失敗したpageは保存済みprojectionを使って復旧し、後刻の価格を過去時刻へ偽装しない。最大6時間を越えた取得/再開は別runとして再審査する。
+- raw全体は永続化しない。evidenceにはtyped record、query/config hash、source/policy/terms/method、observed_at、synthetic、payload hash、page/coverage。EIA request envelopeや認証情報を除外。全responseのhashは内容同一性の証拠であり、本文を配布する許可ではない。
+- EIAは1系列/最大12か月、6件×2page。JEPXは1地域/1日/48枠、年度input最大18,000行/6MB。R2 projectionは128KiB上限。入力limitを超えたらsourceだけ停止する。
+- HTTPは既存bounded実装の20秒（body含む）、最大3試行、Retry-Afterを利用。長い待機はretry_atへ保存し同じrunの早過ぎる再試行を抑制。redirect、他endpoint、巨大body、HTML/schema変化を拒否。レスポンスからURLをたどらない。
+- 取得済みpageと総数を照合、跨pageのrecord重複/total変化を拒否。partialは完全履歴として読めない。JEPX 48枠があって価格nullならcoverage complete・値欠測であり0にしない。EIA completeはAPIが報告した絞込結果の完了を表し、全対象月の公表を保証しない。
+- 0007 observationsはUPDATE不可。previous_observation_id/change_kindでfirst_seen/reobserved/revisedを区別。大幅な価格変化だけでは隔離せず、条件変更/構造不良とは分ける。国内GPUは比較条件未確認ならnot_comparable、50%超の同条件変化はwarning付きobserved_change。
+- 正規化履歴はmethod/source URL、公表日時nullable、対象期間/原通貨単位、観測/記録時刻、hashを保存。EIA月次periodを架空の月初観測日時へ置き換えない。
+
+これは既存GPU/modelのライフサイクルを変更する実装ではない。国内GPU受入契約はprivate electricityテーブルへ投入しない。DCもschema/hash付きrevisionだけで、企業開示の自動抽出/永続化は次の承認単位。
+
+## 保持と復元
+
+10/18最終指示に対応した[状態・保持モード・次の2候補](research-long-retention-20261016.md)を適用する。証拠と正規化履歴は独立。EIA/JEPXはevidence7日・archiveなし・target1095日・backup上限30日のproposalだが、実権利未確認、`normalized_mode=unapproved`、日数/継続保存根拠/Time Travelはnullで取得不能。holdは任意であり、null自体は通常取得の停止理由ではない。3〜5年は研究目標であり廃棄期限ではない。明示許諾ならuntil_revoked、期限付きならfixed_daysを個別承認する。通常の取得/保存/分析・scope・terms・owner/wire/retention・backup/Time Travel条件が揃えば両モードともholdなしで取得できる。テスト用90日は回帰試験窓で本番案ではない。
+
+- review_due: terms.review_after超過はHTTP/readを止めるが、保存権が有効な履歴は保持。永久削除マーカーを作らない。根拠再確認→新policy版と過去hashの明示承認→ローカルadopt→reconcile/read確認で復旧する。
+- collection_stopped: 収集停止後も保存・分析権が有効なら保持/readできる。
+- rights_unknown: 取得/保存/分析のどこが未確認か台帳へ残し、人間レビュー。保存も不明なら、事前承認したstorage_review_holdの有限全コピー期限と元期限の早い方を守る。取得時holdがなければHTTP/readを停止し、storage=unknown / review_deadline=評価時刻として保存可否と削除期限の判断を即時人間レビューへ上げる。既知の期限は維持し、null期限を無期限保存許可にしない。後からholdを遡及付与せず、無根拠の猶予/削除期限を作らない。分析権だけ不明なら保存権を別評価する。
+- retention_expired/delete_required: 固定期限、明示保存権終了、revoke、適用される削除要求、承認済みhold終了だけを削除対象とする。requestResearchDeletionには根拠と全コピー期限を指定する。review_dueからの一律permission_lapsed削除は禁止。
+- 状態/根拠/次の対応をresearch_retention_assessmentsへ保存。証拠はdeleted/expired/within_retention_unverified、再検証はunavailable/requires_projection_check。未検査の実在やhash一致を保証しない。
+
+- purgeResearchEvidence: 1回最大5run×4pageをR2削除。SQL checkpoint前に落ちたcaptureも対象。削除済みcheckpointを記録し同じ先頭pageに停滞しない。
+- 0008でrunにimmutable retention snapshot / all_copies_expires_atを追加。既存0007 runを後から長期保持へ変換せず、未レビューの過去runは読取不可。現行条件が短くなったら早い期限を使い、長くなっても元期限を越えない。
+- purgeResearchRun: expiryまたは取消し後、先に外部R2削除記録とpurging状態で読取停止、最大20 observation/呼出しで削除。source取消しはR2 `research-control/revocations/` を先に記録し、D1 suspendedを設定する。進行中leaseと競合する本文削除を拒否してもread gateは閉じる。全行削除後にpage metadataを削除し、本文なしのpurged記録・削除時刻・backup残存期限を残す。Time Travel内のコピーを即時消したとは扱わない。
+- reconcileResearchRun: collection enabledに依存せず状態を1runずつ評価し、上記の削除義務があるときだけ最大20行ずつpurgeする。許可が失効した履歴を復活させない。current limitとbackup残存期限の不整合はdeadline missedとして報告する。re-review対象は保存許諾内で保持し、revoke/deletionマーカー対象は再削除する。
+- 現在はローカル関数であり、本番の自動retention scheduler/R2 lifecycleは未接続。将来既存continuation内でbounded cleanupを呼ぶこと、backlogを検知することが有効化の前提。新Cronを勝手に足さず、日次手動削除を要求する運転にしない。
+- D1復元前にgateを閉じ、復元対象の外にある最新承認config/termsとR2 control記録を再適用する。古いDBのrights/suspendedは信用せず、期限・取消し対象を再削除してから再開する。control prefixを証拠7日のlifecycleへ含めず、最長復元可能期間を越えて保持する。R2 lifecycleは削除遅延があり、期限厳守の唯一の仕組みにしない。
+- 0009は0007/0008の既存行・固定期限を変えず親子テーブルを再構築し、modeと状態台帳を追加するローカル前進migration。旧SQLを変更しない。rollbackは呼出し停止/無効化と必要なretention処理。read gateのない旧research版への巻戻し、既存historyの復活/削除は禁止。
+
+## 初期コスト上限案
+
+料金契約の変更は0件。以下は入力量/保持の**上限計算**であり、Cloudflareの実測CPU/課金/Free適合を意味しない。
+
+| source | 予定正常要求 / 月 | 失敗retry込み上限 / 月 | 投影行 / 月 | input bytes上限 / 月 | R2投影の上限目安 |
+|---|---:|---:|---:|---:|---|
+| EIA | 31〜62（通常直近3か月で1page） | 186 | 372 | 186MB（1MB×186、retry含む） | 2page×128KiB×7日、約1.75MiB |
+| JEPX | 31（年度fileを1日1回） | 93 | 1,488 | 558MB（6MB×93） | 1page×128KiB×7日、約0.88MiB |
+
+同runの再開時はcaptureを再利用する。source/UTC日ごとに1runの一意制約、pageごとに再実行をまたいで合計3 HTTP試行の永続予算を実装した。query変更による同日の予算リセットは拒否する。新policy/source IDへの変更は別owner reviewのため、回数制限回避に使わない。本番統合ではこの上限と停止/再開を運用監視へ接続する。CPU/memoryは年度CSV解析をCloudflare互換runtimeで計測し、通常dayの差分機械feedが許可されるなら低負荷経路を優先する。
+
+上記はEIA/JEPXの実装上限で、次の有効化順ではない。両候補はblocked、live smokeなし。過去の費用計算/5年容量/80%閾値は参考値へ下げ、ソース獲得や安全な実装を止めない。既存metricsでD1/R2実使用量・日次増分・容量エラーを観測し、物理上限への接近という実測があれば警告・別対策にする。archive/DB分割/新DBは作らない。新source観測0、将来feed価格unknownを無料扱いしない。
+
+## Source別owner承認チェックリスト
+
+各項目は未承認。すべて個別に判断し、一つのsource待ちで他のローカル作業を止めない。次の本番有効化候補は**Rebro / Highresoの最大2件だけ**。[必要情報と許可・費用・監視・rollbackのチェックリスト](research-long-retention-20261016.md#次の有効化候補は2つだけ)を優先し、以下の他候補は調査バックログとする。
+
+### EIA CO / IND monthly
+
+- [ ] 根拠: API Terms of Service + Copyrights and Reuse、出典・公表日・加工明記、対象price/period/state/sector/unitのみの適用を確認。
+- [ ] 認証: キー存在は未確認、取得・登録しない。URLキー必須とIssueの禁止を解消する方法をownerが選択。架空header認証にしない。
+- [ ] 権限: private 3権限を新policyで承認、public系は別審査、raw/LLMはdenied維持。
+- [ ] 費用/量: 無料API、通常1〜2page/日、最大12行/日、上記月予算を承認。backfillは別承認。
+- [ ] 保持: evidence 7日 / target 1095日 / approved normalized null / backup上限30日を個別審査し、復元後削除、実Time Travel日数、terms review期限を確定。
+- [ ] 受入: 正式wire契約、認証非露出、範囲外region拒否、月精度/単位/null、訂正/replay、期限切れ拒否を小規模live opt-in後に確認。
+- [ ] 取消し/rollback: source単独停止、読取停止、revoke/purge、既存ECB/Models/PoCが動くことを確認。
+
+### JEPX Tokyo 30分
+
+- [ ] 根拠: 出典付き利用条件の自動取得・日次履歴保存への適用をowner確認。不可なら停止しOCCTOの特定系列を別審査。
+- [ ] 認証: 公開CSV readerはキー不要。CSVの小規模live取得を別途許可してencoding/header/content-type/年度境界を確認。
+- [ ] 権限: private 3権限だけ新policy、public/商用は未承認。wire_contract_review_refを根拠付きで記録。
+- [ ] 費用/量: 1file/日、6MB/18,000input行/48投影行、月次上限とCPU計測を承認。
+- [ ] 保持: evidence 7日 / target 1095日 / approved normalized null / backup上限30日を個別審査。raw年度fileを保存せず、source別cleanupを受入。
+- [ ] 受入: JST48枠、3月/4月年度切替、空欄/0/負値、部分日、重複、schema変更、429/5xx/timeout、捕捉済みpage復旧、再取得でも元観測時刻を保持。
+- [ ] 取消し/rollback: source単独suspend、complete読取遮断、必要削除。本番統合前のため現在のrollbackは候補不採用だけで既存処理への影響なし。
+
+### Highreso / GPUSOROBAN
+
+- [ ] 根拠/経路: ownerによる未送信/送信済みを確認した上で、公式API/CSV/feedの書面条件、取得・保存・派生・再配布を個別確定。こちらから問い合わせない。
+- [ ] キー: 要否・存在unknown。Secret読み取り/追加なし。
+- [ ] 量/費用: 初期A100/H100/B200/B300のうち提供が確認されたSKUのみ、候補1page/50offer/日から協議。販売/契約費unknown。
+- [ ] 保持: evidence 7日 / target 1095日 / backup上限30日を提供者条件と照合。許諾済み期間は未設定、許諾前にHTML全保存しない。
+- [ ] 受入: hour/minute/month/point、専有/共有、GPU数、region証拠、税/最低契約/割込み。価格とavailabilityを別々に検証。
+- [ ] 取消し: feed停止・既存GPU履歴への誤投入なしを確認。今回実装は受入型だけで本番接続なし。
+
+### さくらDOK
+
+- [ ] 根拠: API契約の履歴保存・内部分析・アカウント固有価格利用を確認。仕様書ライセンスをデータgrantにしない。
+- [ ] キー: 本番metadataには2 Secret binding名があるが値/有効性未検証。この作業で使用しない。
+- [ ] 量/費用: 既存adapterの50件/page・1page/invocationとsource scopeをreview、API単独費/rate unknownを解決。
+- [ ] 保持: 既存候補retentionと提供者条件を照合し別policyで承認。
+- [ ] 受入: is1aと地域根拠、begin/end日時、JPY/second、overridden/account-specific、pagination、empty/error分離。
+- [ ] 取消し: source単独停止・現行public非表示維持・private削除/復元試験。既存認証/設定を変更せず受入契約だけ追加済み。
+
+### Rebro / GPU買取センター
+
+- [ ] 根拠: 公開事例と非公開成立seriesを区別し、正規の機械feed提供・匿名化・保存・利用範囲をowner/提供者が合意。非公開情報へ独自アクセスしない。
+- [ ] キー: 要否・存在unknown、Secret追加なし。
+- [ ] 量/費用: 初期A100/H100の許諾事例最大50件/日案、feed費/全期間coverage unknown。
+- [ ] 保持: evidence 7日 / target 1825日 / backup上限30日と契約上限を照合。許諾済み期間は未設定、個人/取引相手情報を受け取らないprojectionを承認。
+- [ ] 受入: 4価格種別、month/day精度、実行根拠、lot数量/状態/税、出品消失≠成立、一業者≠日本全体。
+- [ ] 取消し: feed停止、権利停止後のread/purge/backup確認。本PRに実価格/非公開成立例は0件。
+
+### DC採択開示（METI候補）
+
+- [ ] 根拠: 403を回避せず、公式資料と当該利用条件を確認。未解決なら仕様/テストまでで維持。
+- [ ] キー: 公表資料には通常不要という想定だが機械取得経路未確定、認証追加なし。
+- [ ] 量/費用: 週1差分・選定資料1件/回を初期案、PDF size/抽出CPU上限を実測して確定。
+- [ ] 保持: 最小evidence7日/target1825日/backup上限30日案。許諾済み期間は未設定、全文archiveは別許諾なしに作らない。
+- [ ] 受入: project/site/phase、発表日/対象年度/観測日、planned/contracted/energized/IT operational、水3区分、取消/修正の追記を確認。
+- [ ] 取消し: collector/永続化はまだ存在しない。次段階の実装時に停止・復元手順を受入。
+
+## 統合時の順序（今回実行しない）
+
+1. source単位の上記承認と不足仕様を解決。新sourceの具体的grantとscopeをレビュー可能な差分にする。
+2. 本番稼働commitとmainのdriftを再照合。PoC enabled/profileを古いmainで上書きしない。
+3. 0007/0008/0009の本番適用計画、Collector呼出し/日次予算/自動retention統合を別PRで提示。既存3 Cron以外のscheduleを増やさない。prod拒否の解除はその承認単位で行う。
+4. ownerがremote migration/deploy/必要Secretを個別承認してから反映。先に無効状態で確認し、source単位で初回収集を承認する。
+5. observation freshness・partial・429・retention backlog・日次予算を自動監視。正常運転にCSV転記、毎日のWeb巡回、手動download/uploadを要求しない。

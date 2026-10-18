@@ -1,0 +1,292 @@
+import { z } from 'zod';
+import { hash, isoTime, stable } from '../util';
+import { ResearchConfigSchema } from './schema';
+import {
+  isPublicGpu,
+  publicGpuEndpoints,
+  HIGHRESO_POST_TERMS_URL,
+  HIGHRESO_DOMESTIC_TERMS_BOUNDARY,
+} from './public-gpu-contract';
+
+const ref = z.string().trim().min(1).max(500);
+const digest = z.string().regex(/^[a-f0-9]{64}$/);
+const time = z.iso.datetime().refine((v) => new Date(v).toISOString() === v);
+const PersonalV1Base = z
+  .object({
+    version: z.literal('personal-gpu-v1'),
+    authority_kind: z.literal('owner_personal_research_exception'),
+    status: z.literal('approved_for_local_execution'),
+    data_origin: z.enum(['synthetic', 'live']),
+    // The original disabled proposal is captured verbatim, never promoted to allowed.
+    config: ResearchConfigSchema,
+    config_sha256: digest,
+    decision: z
+      .object({
+        exception_id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/),
+        provider_permission: z.literal('unconfirmed'),
+        owner_execution_approval_ref: ref,
+        risk_acceptance_ref: ref,
+        unresolved_conditions: z.array(ref).min(1).max(16),
+        approved_at: time,
+        acquisition_from: time,
+        acquisition_until: time,
+        analysis_until: time,
+        storage_until: time,
+        max_attempts: z.literal(1),
+        fields: z.tuple([z.literal('domestic_gpu_projection_v1')]),
+        terms: z
+          .object({
+            version: ref,
+            monitored_url: z.url(),
+            applicable_terms_review_ref: ref,
+            review_after: time,
+            terms_sha256: digest,
+            robots_sha256: digest,
+            robots_decision: z.literal('allowed'),
+            access_review_ref: ref,
+            applicability: z.enum([
+              'highreso_domestic_pre_20261101',
+              'highreso_domestic_post_20261101',
+              'rebro_public_scope_review',
+            ]),
+            // Mandatory only for a separately reviewed post-change contract. Never
+            // reinterpret the old fingerprint or extend a pre-change contract.
+            transition: z
+              .object({
+                effective_from: z.literal(HIGHRESO_DOMESTIC_TERMS_BOUNDARY),
+                previous_terms_sha256: digest,
+                new_document_review_ref: ref,
+                public_page_applicability_ref: ref,
+                private_acquisition_storage_analysis_basis_ref: ref,
+              })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+        retention: z
+          .object({
+            mode: z.literal('fixed_days'),
+            evidence_days: z.number().int().min(1).max(30),
+            normalized_days: z.number().int().min(1).max(3650),
+            archive_days: z.literal(0),
+            time_travel: z.literal('not_applicable_local'),
+            // v1 only supports a reviewed local store with no backup/sync copies.
+            backup_recoverability_days: z.literal(0),
+            copy_inventory_review_ref: ref,
+            automatic_cleanup_review_ref: ref,
+            revocation_restore_review_ref: ref,
+            store_id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/),
+          })
+          .strict(),
+        public_export: z.literal(false),
+        external_llm: z.literal(false),
+        raw_persistence: z.literal(false),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const PersonalBackupSchema = z
+  .object({
+    destination_id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/),
+    key_id: ref,
+    interval_hours: z.number().int().min(1).max(168),
+    retention_days: z.number().int().min(1).max(90),
+    restore_check_hours: z.number().int().min(1).max(720),
+    max_copies: z.number().int().min(2).max(96),
+    reviewed_ref: ref,
+    recovery_review_ref: ref,
+  })
+  .strict()
+  .refine(
+    (v) => v.max_copies * v.interval_hours >= v.retention_days * 24,
+    'personal_backup_capacity_invalid',
+  );
+const PersonalV2Base = z
+  .object({
+    ...PersonalV1Base.shape,
+    version: z.literal('personal-gpu-v2'),
+    decision: z
+      .object({
+        ...PersonalV1Base.shape.decision.shape,
+        storage_until: z.null(),
+        retention: z
+          .object({
+            ...PersonalV1Base.shape.decision.shape.retention.shape,
+            mode: z.literal('owner_continuing'),
+            normalized_days: z.null(),
+            backup_recoverability_days: z.number().int().min(1).max(90),
+            continuing_storage: z
+              .object({ basis_ref: ref, owner_approval_ref: ref, purpose_ref: ref })
+              .strict(),
+            backup: PersonalBackupSchema,
+          })
+          .strict(),
+      })
+      .strict(),
+  })
+  .strict();
+// A distinct cloud authority. Local v1/v2 contracts never become production grants.
+const PersonalCloudBase = PersonalV2Base.extend({
+  version: z.literal('personal-gpu-cloud-v1'),
+  status: z.literal('approved_for_cloud_execution'),
+  decision: PersonalV2Base.shape.decision.extend({
+    retention: PersonalV2Base.shape.decision.shape.retention.extend({
+      time_travel: z.literal('cloudflare_d1'),
+    }),
+  }),
+  cloud: z
+    .object({
+      account_id: z.string().regex(/^[a-f0-9]{32}$/),
+      private_database_id: z.uuid(),
+      bucket: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
+      d1_time_travel_days: z.union([z.literal(7), z.literal(30)]),
+      deployment_approval_ref: ref,
+      lifecycle_review_ref: ref,
+      nas_admission_review_ref: ref,
+      restore_review_ref: ref,
+      initial_acquisition_only: z.literal(true),
+    })
+    .strict(),
+}).strict();
+const PersonalDailyBase = PersonalCloudBase.extend({
+  version: z.literal('personal-gpu-cloud-daily-v1'),
+  cloud: PersonalCloudBase.shape.cloud.extend({ initial_acquisition_only: z.literal(false) }),
+  daily: z
+    .object({
+      approval_ref: ref,
+      timezone: z.literal('UTC'),
+      collection_hour: z.number().int().min(0).max(23),
+      max_attempts_per_day: z.literal(1),
+      backfill: z.literal(false),
+      monitoring_review_ref: ref,
+      bootstrap_hours: z.number().int().min(0).max(24),
+      heartbeat_max_hours: z.number().int().min(1).max(24),
+      backup_max_hours: z.number().int().min(24).max(48),
+      inventory_max_days: z.number().int().min(1).max(30),
+    })
+    .strict(),
+}).strict();
+function common(
+  v:
+    | z.infer<typeof PersonalV1Base>
+    | z.infer<typeof PersonalV2Base>
+    | z.infer<typeof PersonalCloudBase>
+    | z.infer<typeof PersonalDailyBase>,
+  ctx: z.RefinementCtx,
+) {
+  const c = v.config,
+    d = v.decision,
+    t = d.terms;
+  if (
+    !isPublicGpu(c.adapter) ||
+    c.source.enabled ||
+    c.history_access.length ||
+    !c.source.policy.fields.includes('domestic_gpu_projection_v1') ||
+    ['automated_collection', 'private_storage', 'internal_analysis'].some(
+      (key) =>
+        c.source.policy.rights[key as keyof typeof c.source.policy.rights] !== 'review_required',
+    )
+  )
+    ctx.addIssue({ code: 'custom', message: 'personal_source_scope_invalid' });
+  const post =
+    c.adapter === 'highreso_public' && t.applicability === 'highreso_domestic_post_20261101';
+  const validTerms = post
+    ? t.monitored_url === HIGHRESO_POST_TERMS_URL &&
+      !!t.transition &&
+      t.transition.previous_terms_sha256 !== t.terms_sha256 &&
+      d.acquisition_from >= HIGHRESO_DOMESTIC_TERMS_BOUNDARY &&
+      t.review_after > HIGHRESO_DOMESTIC_TERMS_BOUNDARY
+    : isPublicGpu(c.adapter) &&
+      !t.transition &&
+      t.monitored_url === publicGpuEndpoints[c.adapter].terms &&
+      (c.adapter === 'highreso_public'
+        ? t.applicability === 'highreso_domestic_pre_20261101' &&
+          t.review_after <= HIGHRESO_DOMESTIC_TERMS_BOUNDARY
+        : t.applicability === 'rebro_public_scope_review');
+  if (!validTerms) ctx.addIssue({ code: 'custom', message: 'personal_terms_scope_invalid' });
+  if (
+    d.approved_at > d.acquisition_from ||
+    d.acquisition_from >= d.acquisition_until ||
+    d.acquisition_until > t.review_after ||
+    d.acquisition_until > d.analysis_until ||
+    (d.storage_until !== null && d.analysis_until > d.storage_until) ||
+    (d.retention.normalized_days !== null &&
+      d.retention.evidence_days > d.retention.normalized_days)
+  )
+    ctx.addIssue({ code: 'custom', message: 'personal_deadlines_invalid' });
+  if (
+    v.version !== 'personal-gpu-v1' &&
+    v.decision.retention.backup_recoverability_days !== v.decision.retention.backup.retention_days
+  )
+    ctx.addIssue({ code: 'custom', message: 'personal_backup_retention_mismatch' });
+}
+export const PersonalV1Schema = PersonalV1Base.superRefine(common);
+export const PersonalV2Schema = PersonalV2Base.superRefine(common);
+export const PersonalCloudSchema = PersonalCloudBase.superRefine(common).refine(
+  (c) =>
+    Date.parse(c.decision.acquisition_until) - Date.parse(c.decision.acquisition_from) <=
+      86400000 && c.cloud.d1_time_travel_days <= c.decision.retention.backup_recoverability_days,
+  'personal_cloud_copy_or_window_invalid',
+);
+export const PersonalContractSchema = z.union([PersonalV1Schema, PersonalV2Schema]);
+export const PersonalDailySchema = PersonalDailyBase.superRefine(common).refine(
+  (c) =>
+    c.cloud.d1_time_travel_days <= c.decision.retention.backup_recoverability_days &&
+    c.daily.inventory_max_days < c.decision.retention.backup.retention_days &&
+    c.decision.retention.backup.interval_hours === 24 &&
+    c.decision.retention.backup.restore_check_hours === 24 &&
+    c.decision.retention.backup.max_copies >= c.decision.retention.backup.retention_days + 1,
+  'daily_backup_window_invalid',
+);
+export type PersonalDailyContract = z.infer<typeof PersonalDailySchema>;
+export type PersonalV2Contract = z.infer<typeof PersonalV2Schema>;
+export type PersonalCloudContract = z.infer<typeof PersonalCloudSchema>;
+export type ContinuingPersonalContract = PersonalV2Contract | PersonalCloudContract;
+export type PersonalContract = z.infer<typeof PersonalContractSchema> | PersonalCloudContract;
+export type PersonalOperation = 'collect' | 'read' | 'maintain';
+
+export async function inspectPersonalContract(
+  input: unknown,
+  at: string,
+  environment: 'test' | 'development' | 'production',
+  operation: PersonalOperation,
+) {
+  if (environment !== 'test' && environment !== 'development')
+    throw new Error('personal_production_forbidden');
+  if (!isoTime(at)) throw new Error('invalid_personal_time');
+  const parsed = PersonalContractSchema.safeParse(input);
+  if (!parsed.success) throw new Error('personal_contract_invalid');
+  const c = parsed.data,
+    d = c.decision;
+  if ((environment === 'test') !== (c.data_origin === 'synthetic'))
+    throw new Error('personal_synthetic_boundary');
+  if ((await hash(stable(c.config))) !== c.config_sha256)
+    throw new Error('personal_config_hash_mismatch');
+  if (at < d.approved_at) throw new Error('personal_approval_not_effective');
+  if (operation !== 'maintain') {
+    if (at < d.approved_at || (d.storage_until !== null && at >= d.storage_until))
+      throw new Error('personal_storage_expired');
+    if (at >= d.analysis_until) throw new Error('personal_analysis_expired');
+    if (at >= d.terms.review_after) throw new Error('personal_terms_review_required');
+    if (operation === 'collect' && (at < d.acquisition_from || at >= d.acquisition_until))
+      throw new Error('personal_acquisition_window_closed');
+  }
+  return { contract: c, contract_hash: await hash(stable(c)) };
+}
+
+export function personalDeadlines(c: PersonalContract, capturedAt: string) {
+  const day = (n: number) => new Date(Date.parse(capturedAt) + n * 86400000).toISOString();
+  const normalized =
+    c.version !== 'personal-gpu-v1'
+      ? null
+      : [day(c.decision.retention.normalized_days), c.decision.storage_until].sort()[0];
+  return {
+    evidence: [
+      day(c.decision.retention.evidence_days),
+      ...(normalized ? [normalized] : []),
+    ].sort()[0],
+    normalized,
+    all_copies: normalized,
+  };
+}

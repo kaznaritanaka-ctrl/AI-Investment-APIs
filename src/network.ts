@@ -14,6 +14,7 @@ export type NetworkOptions = {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   timeout_ms?: number;
+  max_attempts?: 1 | 2 | 3;
   onAttempt?: (attempt: Attempt) => Promise<void>;
   // Validated bounded body only; never headers, credentials, redirects or OAuth responses.
   // Persistence failures must not be retried as a new market-data acquisition.
@@ -52,7 +53,12 @@ export async function fetchSource(
   if (source.authentication_required) throw new FetchFailure('authentication_not_configured');
   return fetchBounded(source, { url: source.endpoint, method: 'GET', headers: {} }, opt);
 }
-async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptions = {}) {
+export async function fetchBounded(
+  source: Source,
+  plan: RequestPlan,
+  opt: NetworkOptions = {},
+  format: 'json' | 'xml' | 'csv' | 'html' = source.adapter === 'ecb' ? 'xml' : 'json',
+) {
   const now = opt.now ?? (() => new Date().toISOString());
   const fetcher = opt.fetcher ?? fetch,
     sleep = opt.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
@@ -63,7 +69,8 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
       throw new FetchFailure('attempt_log_failed');
     }
   };
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const maxAttempts = opt.max_attempts ?? 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const started = now(),
       clock = Date.now(),
       controller = new AbortController();
@@ -72,7 +79,14 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
       retryDelay = 0;
     try {
       const headers = new Headers({
-        accept: source.adapter === 'ecb' ? 'application/xml' : 'application/json',
+        accept:
+          format === 'xml'
+            ? 'application/xml'
+            : format === 'csv'
+              ? 'text/csv, text/plain'
+              : format === 'html'
+                ? 'text/html'
+                : 'application/json',
       });
       for (const [key, value] of Object.entries(plan.headers)) headers.set(key, value);
       if (opt.validators?.etag) headers.set('If-None-Match', opt.validators.etag);
@@ -108,7 +122,7 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
           : 1000 * 2 ** (attempt - 1);
         if (!Number.isFinite(retryDelay)) retryDelay = 2000;
         await response.body?.cancel();
-        if (retryDelay > 30000)
+        if (retryDelay > 30000 || maxAttempts === 1)
           throw new FetchFailure(
             'rate_limited',
             new Date(Date.parse(now()) + retryDelay).toISOString(),
@@ -129,7 +143,17 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
         throw new FetchFailure('response_too_large');
       }
       const contentType = response.headers.get('content-type') ?? '';
-      if (!(source.adapter === 'ecb' ? /xml/ : /json/).test(contentType)) {
+      if (
+        !(
+          format === 'xml'
+            ? /xml/
+            : format === 'html'
+              ? /^text\/html(?:;|$)/i
+              : format === 'csv'
+                ? /^(?:text\/(?:csv|plain)|application\/csv)(?:;|$)/i
+                : /json/
+        ).test(contentType)
+      ) {
         await response.body?.cancel();
         throw new FetchFailure('unexpected_content_type');
       }
@@ -194,7 +218,7 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
       // Never issue an internal sub-second retry after a PoC HTTP 2xx.
       if (pocRetryAt) throw new FetchFailure(e.message, pocRetryAt);
       if (
-        attempt === 3 ||
+        attempt === maxAttempts ||
         !['retryable_429', 'retryable_5xx', 'timeout', 'network_error'].includes(e.message)
       )
         throw e;

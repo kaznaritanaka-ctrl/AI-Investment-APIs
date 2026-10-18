@@ -249,6 +249,16 @@ export type Observation = Candidate & {
   supersedes_observation_id: string | null;
 };
 export type CollectorEnv = {
+  NAS_EXPORT?: R2Bucket;
+  PERSONAL_EXPORT_PINS?: string;
+  PERSONAL_DAILY_MAINTENANCE_ENABLED?: string;
+  PERSONAL_DAILY_COLLECTION_ENABLED?: string;
+  PERSONAL_DAILY_PINS?: string;
+  NAS_HEALTH?: R2Bucket;
+  NAS_RECEIPT_SECRET?: string;
+  PERSONAL_MAINTENANCE_ENABLED?: string;
+  PERSONAL_INITIAL_COLLECTION_ENABLED?: string;
+  PERSONAL_CLOUD_PINS?: string;
   PRIVATE_DB: D1Database;
   PUBLIC_DB: D1Database;
   EVIDENCE: R2Bucket;

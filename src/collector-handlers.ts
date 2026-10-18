@@ -1,4 +1,6 @@
 import type { CollectorEnv } from './schema';
+import { personalCloudScheduled } from './research/personal-cloud-scheduled';
+import { dailyScheduled } from './research/daily-scheduled';
 import { activeSources } from './sources';
 import { collectAll } from './pipeline';
 import { resumeGPURuns, queueGPURuns } from './gpu-pipeline';
@@ -43,6 +45,10 @@ export default {
         started_at: now,
       };
     emitLog({ ...context, phase: 'collector_start' });
+    // Only an idle continuation may spend a separate private-research budget.
+    // Reserve every third slot for legacy GPU retention even when both private
+    // modes are enabled. Missing flags preserve the production schedule exactly.
+    let personalMaintenance: 'initial' | 'daily' | null = null;
     try {
       let results;
       let gpuMaintenance = false;
@@ -66,6 +72,14 @@ export default {
         results = resumed.results;
         // A full GPU page and a full retention batch have separate SQL budgets.
         gpuMaintenance = !resumed.models_work && resumed.results.length === 0;
+        if (gpuMaintenance) {
+          const turn = Math.floor(controller.scheduledTime / 300000) % 3;
+          if (turn === 1 && env.PERSONAL_MAINTENANCE_ENABLED === 'true')
+            personalMaintenance = 'initial';
+          else if (turn === 2 && env.PERSONAL_DAILY_MAINTENANCE_ENABLED === 'true')
+            personalMaintenance = 'daily';
+          if (personalMaintenance) gpuMaintenance = false;
+        }
       } else if (controller.cron === env.WATCHDOG_CRON) {
         results = [
           ...(await watchdog(
@@ -126,6 +140,32 @@ export default {
         safeLogCode(error instanceof Error ? error.message : 'operation_failed') ??
           'operation_failed',
       );
+    } finally {
+      // Once an idle budget is established, unrelated summary/health failures
+      // cannot skip private maintenance. A failed resume has unknown budget and
+      // defers it; never stack it onto Models, GPU capture or retention work.
+      if (personalMaintenance) {
+        const event =
+          personalMaintenance === 'initial' ? 'personal_maintenance' : 'personal_daily_maintenance';
+        try {
+          console.log(
+            JSON.stringify({
+              event,
+              sources:
+                personalMaintenance === 'initial'
+                  ? await personalCloudScheduled(env)
+                  : await dailyScheduled(env),
+            }),
+          );
+        } catch {
+          console.warn(
+            JSON.stringify({
+              event,
+              state: 'configuration_invalid',
+            }),
+          );
+        }
+      }
     }
   },
   async fetch() {

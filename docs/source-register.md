@@ -1,5 +1,15 @@
 # ソース台帳 — Phase 0
 
+2026-10-18追記: 私的例外と長期保存は所有者承認済み。NAS専用exportの分離・未有効化のCloud準備・現在の残件は [最新資料](nas-export-isolation-20261018.md) を参照。提供者許諾と通常grantは変更せず、実行／本番反映／実鍵／NAS変更は未承認。以下の以前の承認状態・shared-bucket案は当時の記録です。
+
+最新の[Private開始審査](public-gpu-private-start-review-20261018.md): 非公開の本人研究という用途を再確認。2026-10-18 06:47 UTCの一回限りDOM調査ではHighreso 24対象行/48枠、Rebro 4対象行。これは構造metadataで実価格観測ではありません。公開/商用再配布権をPrivate開始の前提にせず、source別の適用根拠・所有者例外・Cloud実行承認を分けています。
+
+2026-10-18 PR #18レビュー後の状態は[Highreso/Rebro受入表](public-gpu-review-acceptance-20261018.md)を参照。disabled proposalは明示cohort/掲載事例キーのmethod v2へ更新したが、権利grant・source有効化は変更していない。実観測は両社0件。Highreso改定後の固定規約候補と未承認審査票、Rebroの未解決条件、NAS専用export隔離のrelease blockerを分けて記録した。
+
+2026-10-15追加: [全分野の実査台帳](source-expansion-20261015.md)へ、国内GPU/電力/メモリ/DC/水/ラボ/Physical AIと既存ソースの優先判断を分離しました。稼働用sourceは増やしていません。EIA/JEPXの承認待ちproposalはconfig/proposals/researchに置き、Private合成検証のみです。以下の過去台帳と10/15の配信版には差分があるため、最新のmetadata確認は追加台帳を参照してください。
+
+10/18最終指示の反映: 次の有効化候補は[Highreso/GPUSOROBANとRebroの2件だけ](research-long-retention-20261016.md#次の有効化候補は2つだけ)。所有者が公式feed・自動取得/保存/分析・契約終了後の継続保存・認証/費用を確認します。有限holdは提供者が認める場合の任意例外で、通常取得の追加条件ではありません。許諾済みならuntil_revokedを検討し、3〜5年を自動廃棄期限にしません。内部review_dueは取得/read停止と再レビューへ進め、保存許諾内の履歴を保持します。新sourceの実観測数=0、新allowed/source enable/商用許諾=0。EIA/JEPXはblockedでcritical path外。5年容量/80%は参考でありソース獲得の停止条件ではありません。
+
 調査日時: 2026-09-26 18:23 UTC以降（2026-09-27 JST）。権限の判断と価格の取得日時は別。機械可読の全項目・9権限・対象範囲・有効期間・保持日数は config/sources/*.json、検証スキーマは src/schema.ts / config/source.schema.json。
 
 | source_id | 投資上の用途・取得方法 | 初期判定 |
@@ -33,6 +43,10 @@
 [Models API仕様](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties)、[endpoint API](https://openrouter.ai/docs/api/api-reference/endpoints/list-all-endpoints-for-a-model)、[価格単位とpagination](https://openrouter.ai/docs/guides/overview/models)、[規約7項](https://openrouter.ai/terms)を確認。自動コピー制限と、APIによる価格履歴蓄積・外部データAPI提供の適用関係は未解決。禁止と法的に断定せずreview_required。モデル一覧とendpoint価格を同系列にせず、token/request単位を保持。実取得・保存・配信はdisabled、syntheticテストのみ。HTMLへの迂回なし。
 
 ## GPU候補の接続準備
+
+2026-10-18条件確認追補: [Highreso改定告知の解消・Rebro追加条件と初回準備](public-gpu-rights-review-20261018.md)。Highreso新版は一般適用11/1、国外ユーザーは8/27。現行 `/terms` のhashだけでは別URLの告知を検知できない。Rebroはサイトマップ確認後も別サイト利用規約の全文/適用未確定。両社ともprivate3権限はreview_required、enabled=falseのまま。実収集可能なsourceが確定したとの報告ではない。
+
+2026-10-18 Issue #17: [Highreso/Rebroの公開ページ調査・実装・未解決条件](public-gpu-research-20261018.md)を追加。`highreso_public` / `rebro_public` は既存候補と分けたdisabled研究proposalで、Private専用のHTML parserと0010履歴をsynthetic検証する。技術確認のHTTP200は収集許諾でもlive履歴でもない。実観測0件。以下のfeed/API候補の過去調査を自動承認しない。
 
 - さくら: [公式API](https://manual.sakura.ad.jp/koukaryoku-dok-api/spec.html)に石狩is1aとunit_pricesが記載。year/month/dayとpagination、is_overriddenによるアカウント価格を区別。秒単位。認証必須。[約款一覧](https://www.sakura.ad.jp/corporate/agreement/)と[改定告知](https://www.sakura.ad.jp/corporate/information/announcements/2025/02/13/1968218534/)を確認。API文書のCC BY-ND-4.0はレスポンス価格データの許諾として使わない。
 - Highreso: [公式サービス](https://soroban.highreso.jp/)に石川県のデータセンターからの提供説明。[規約2025-12-01](https://soroban.highreso.jp/terms)と[利用案内](https://soroban.highreso.jp/article/article-002)を調査。offer単位のregion、価格feed、継続保存・再配布条件が未確認。国は事業者本社から推測しない。

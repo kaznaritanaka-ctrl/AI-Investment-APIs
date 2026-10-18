@@ -1,5 +1,15 @@
 # 権限ルール
 
+2026-10-18追記: 私的例外と長期保存は所有者承認済み。NAS専用exportの分離・未有効化のCloud準備・現在の残件は [最新資料](nas-export-isolation-20261018.md) を参照。提供者許諾と通常grantは変更せず、実行／本番反映／実鍵／NAS変更は未承認。以下の以前の承認状態・shared-bucket案は当時の記録です。
+
+個人研究v2は提供者許諾を変更する仕組みではありません。[専用の所有者判断・継続保存・更新・復元ルール](personal-continuing-20261018.md)に従い、review_requiredとunconfirmedを保持します。分析レビュー期限と保存終了を分離し、取消し・明示終了は古いバックアップにも適用します。v1の有限期限を延長しません。
+
+2026-10-18 個人研究の限定例外は、追加指示により[専用local経路の実装とsynthetic検証](personal-gpu-implementation-20261018.md)まで進めました。提供者の許諾未確認と所有者の内部実行判断を分け、sourceの9権限を変更せず専用契約を記録します。以下の通常経路のgateは変更せず、例外データを通常のread/purgeや公開に流用しません。実行用判断票・実収集は未承認。以前の設計用下書きはgrantでも実行設定でもありません。
+
+2026-10-15 Private研究案: `license_url:null` は未確認情報であり、それだけで拒否/許可を決めません。既存9権限を独立検査し、適用根拠・field・期間・保持が揃ったsourceだけowner reviewへ提示します。今回の候補JSONは新規allowedなし。公開/外部LLM/raw exportなしの[ローカル経路と復元条件](private-research-runbook.md)を参照してください。
+
+2026-10-18最終修正: 研究のreview_dueはHTTP/read停止と再確認の状態であり、保存権が有効なら履歴を削除しません。取得停止・分析権不明も保存権と別評価します。unapproved/fixed_days/until_revokedを明示し、nullだけでは許可しません。until_revokedには継続保管の根拠とowner承認を要求します。holdは通常取得の必須条件ではなく、保存権が実際に不明になった際の事前承認済み有限例外だけに使います。holdなしの保存権不明は取得/read停止と即時人間レビューへ上げ、無期限保管を許可しません。3〜5年は目標であり強制廃棄期限ではありません。旧runの固定期限は延長せず、明示保存権終了・削除要求・revoke・保持期限だけを削除対象にします。D1復元の外に取消し/削除記録を残し、Time Travel残存も含む[保持・復旧手順](research-long-retention-20261016.md)を適用します。実sourceの新grant/本番有効化は行っていません。
+
 9種類の権限は allowed / denied / review_required / expired。source設定に対象フィールド、条件、判断主体、根拠版、有効期間、保持日数を持つ。既知の明示ライセンスに対する実装ルールであり、新規の許諾をAIが作るものではない。
 
 収集にはautomated_collection、証拠/履歴保存にはprivate_storage、処理にはinternal_analysisが必要。公開にはpublic_display・normalized_redistribution・commercial_redistributionを要求する（将来の有料化でも原権利を失わないよう、初期公開はこの共通部分に限定）。派生は全入力のderived_redistributionも必要。外部LLM送信とraw配信は独立で、初期runtimeにはどちらも実装しない。
@@ -19,6 +29,8 @@ OpenRouter、GPU候補、将来分野はreview_required・disabled。APIの存�
 policy・endpoint・選定範囲は同じpolicy版のまま書き換えられない。hash不一致は公開停止。初期valid_untilは2026-12-26（運用上の再確認期限でありライセンス自体の失効日の主張ではない）。失効前に根拠を再確認する例外タスクが必要で、放置した場合は自動停止する。
 
 ## Phase 2の追加gate
+
+Issue #17の公開GPUページは[独立したPrivate研究契約](public-gpu-research-20261018.md)で接続する。Phase2の権利を流用せず、共有3権限にResearchConfigのscope/field/owner/terms/wire/保持/accessレビューを追加する。両sourceとも現時点ではreview_required・disabled。robots/200/個人研究/無返信からallowedを導かず、Public/商用/過去分の再利用は別審査。以下のPhase2既存gateは変更しない。
 
 GPUは既存9区分に加え、owner_approval_ref、gpu_projection_v1のfield承認、retention.reviewed_refとevidence/archive/normalized/backupの個別日数を要求する。認証があること、公開APIであること、内部保存であることは許諾の代わりにしない。今回の新規sourceにallowedを付与していない。
 
