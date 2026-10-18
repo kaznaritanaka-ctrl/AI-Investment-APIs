@@ -15,14 +15,14 @@ import {
   sourceRevocation,
   type RetainedRun,
 } from './retention';
-import {
-  inspectPersonalContract,
-  personalDeadlines,
-  type PersonalContract,
-} from './personal-contract';
+import { personalDeadlines, type PersonalContract } from './personal-contract';
+import { inspectPersonalAuthority, type CloudPersonalBinding } from './personal-cloud-authority';
 import type { ResearchEnv } from './pipeline';
 
-export type PersonalEnv = ResearchEnv & { PERSONAL_STORE_ID: string };
+export type PersonalEnv = ResearchEnv & {
+  PERSONAL_STORE_ID: string;
+  PERSONAL_CLOUD?: CloudPersonalBinding;
+};
 export type PersonalOptions = {
   allow_network?: boolean;
   fetcher?: typeof fetch;
@@ -82,7 +82,7 @@ const runIdFor = (c: PersonalContract) =>
   hash(stable(['personal-gpu-v1', prefix(c), c.data_origin]));
 
 function clock(env: PersonalEnv, opt: PersonalOptions) {
-  if (env.ENVIRONMENT !== 'test' && env.ENVIRONMENT !== 'development')
+  if (env.ENVIRONMENT !== 'test' && env.ENVIRONMENT !== 'development' && !env.PERSONAL_CLOUD)
     throw new Error('personal_production_forbidden');
   if (env.ENVIRONMENT !== 'test' && (opt.fetcher || opt.now))
     throw new Error('personal_synthetic_boundary');
@@ -94,13 +94,13 @@ export async function validatePersonalState(
   at: string,
   operation: 'collect' | 'read' | 'maintain',
 ) {
-  const result = await inspectPersonalContract(input, at, env.ENVIRONMENT, 'maintain');
+  const result = await inspectPersonalAuthority(env, input, at, 'maintain');
   if (result.contract.decision.retention.store_id !== env.PERSONAL_STORE_ID)
     throw new Error('personal_store_mismatch');
   const c = result.contract;
   if (c.version === 'personal-gpu-v1')
     return {
-      ...(await inspectPersonalContract(input, at, env.ENVIRONMENT, operation)),
+      ...(await inspectPersonalAuthority(env, input, at, operation)),
       current_review: null,
     };
   if ('PUBLIC_DB' in env) throw new Error('personal_public_binding_forbidden');
@@ -215,6 +215,20 @@ export async function collectPersonalGpu(
   await assertNotRevoked(env, sourceId, runId);
   if (await env.EVIDENCE.head(collectionStopKey(c))) throw new Error('personal_collection_stopped');
   const priorAttempt = await attempt(env, c, digest, runId);
+  if (c.version === 'personal-gpu-cloud-v1') {
+    // Independent of DB restoration and exception IDs. A new contract cannot reset the budget.
+    const key = 'research-control/personal-cloud-first/' + sourceId + '.json';
+    await env.EVIDENCE.put(key, stable({ contract_hash: digest }), {
+      onlyIf: { etagDoesNotMatch: '*' },
+    });
+    const anchor = await env.EVIDENCE.get(key);
+    if (
+      !anchor ||
+      anchor.size > 1024 ||
+      (await anchor.json<{ contract_hash: string }>()).contract_hash !== digest
+    )
+      throw new Error('personal_cloud_initial_attempt_locked');
+  }
   const existing = await runRow(env, runId);
   const capturedAt = priorAttempt?.started_at ?? existing?.recorded_at ?? at;
   if (
@@ -266,7 +280,7 @@ export async function collectPersonalGpu(
         contract_hash: digest,
         ...c.decision.retention,
       }),
-      c.version === 'personal-gpu-v2' ? 'owner_continuing' : 'fixed_days',
+      c.version !== 'personal-gpu-v1' ? 'owner_continuing' : 'fixed_days',
     ),
     env.PRIVATE_DB.prepare(
       'INSERT OR IGNORE INTO research_personal_runs(run_id,contract_hash) VALUES (?,?)',
@@ -493,7 +507,7 @@ export async function maintainPersonalGpu(
   const runId = await runIdFor(c),
     r = await runRow(env, runId);
   if (!r) {
-    if (c.version === 'personal-gpu-v2') {
+    if (c.version !== 'personal-gpu-v1') {
       const revoked = await sourceRevocation(env, c.config.source.source_id);
       const deletion = await deletionObligation(env, {
         source_id: c.config.source.source_id,
@@ -539,7 +553,7 @@ export async function maintainPersonalGpu(
       .sort()[0] ?? null;
   const expired = deadline !== null && at >= deadline;
   if (r.lease_until && r.lease_until > at) return { state: 'leased', remaining: null };
-  if (c.version === 'personal-gpu-v2') await syncPersonalReviewAudit(env, c);
+  if (c.version !== 'personal-gpu-v1') await syncPersonalReviewAudit(env, c);
   if (revoked || deleted || expired || r.state === 'purged' || r.state === 'purging') {
     await recordDeletion(env, sourceId, runId, at, revoked ? 'revoked' : 'expired', {
       basis_refs: [c.decision.owner_execution_approval_ref],
@@ -572,7 +586,7 @@ export async function maintainPersonalGpu(
       ).bind(
         at,
         at,
-        c.version === 'personal-gpu-v2'
+        c.version !== 'personal-gpu-v1'
           ? new Date(
               Date.parse(at) + c.decision.retention.backup.retention_days * 86400000,
             ).toISOString()

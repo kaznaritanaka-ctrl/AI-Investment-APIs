@@ -1,3 +1,4 @@
+import { hasCloudPersonalAuthority } from './personal-cloud-authority';
 import { z } from 'zod';
 import { hash, isoTime, stable } from '../util';
 import {
@@ -343,7 +344,7 @@ export function runDeletionKey(sourceId: string, runId: string) {
   );
 }
 export async function assertNotRevoked(env: ResearchEnv, sourceId: string, runId?: string) {
-  localOnly(env);
+  if (!hasCloudPersonalAuthority(env)) localOnly(env);
   if (await env.EVIDENCE.head(sourceRevocationKey(sourceId)))
     throw new Error('research_source_revoked');
   if (runId && (await env.EVIDENCE.head(runDeletionKey(sourceId, runId))))
@@ -370,7 +371,7 @@ export async function recordDeletion(
     | 'explicit_delete_request',
   obligation?: { basis_refs: string[]; all_copies_delete_by: string | null },
 ) {
-  localOnly(env);
+  if (!hasCloudPersonalAuthority(env)) localOnly(env);
   if (!isoTime(at)) throw new Error('invalid_retention_time');
   const key = runDeletionKey(sourceId, runId);
   const existing = await env.EVIDENCE.get(key);
@@ -429,7 +430,7 @@ export async function deletionObligation(
   env: ResearchEnv,
   run: Pick<RetainedRun, 'source_id' | 'run_id'>,
 ) {
-  localOnly(env);
+  if (!hasCloudPersonalAuthority(env)) localOnly(env);
   const body = await env.EVIDENCE.get(runDeletionKey(run.source_id, run.run_id));
   if (!body) return null;
   if (body.size > 16384) throw new Error('invalid_deletion_marker');
@@ -439,7 +440,7 @@ export async function deletionObligation(
   return marker;
 }
 export async function sourceRevocation(env: ResearchEnv, sourceId: string) {
-  localOnly(env);
+  if (!hasCloudPersonalAuthority(env)) localOnly(env);
   const body = await env.EVIDENCE.get(sourceRevocationKey(sourceId));
   if (!body) return null;
   if (body.size > 16384) throw new Error('invalid_revocation_marker');

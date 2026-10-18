@@ -1,0 +1,29 @@
+# PROPOSAL ONLY: not installed/enabled. Native NAS ACL/key custody review required.
+# Daily history uses a separate root and service identity from initial-only backups.
+# personal-daily-backup.service
+[Unit]
+Description=Private daily history backup, verification and health receipt
+After=network-online.target
+[Service]
+Type=oneshot
+User=REVIEW_REQUIRED_DEDICATED_USER
+WorkingDirectory=REVIEW_REQUIRED_CODE_DIRECTORY
+ExecStart=REVIEW_REQUIRED_NODE scripts/personal-nas-runner.mjs daily-once REVIEW_REQUIRED_CONFIG --allow-network
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=REVIEW_REQUIRED_BACKUP_ROOT REVIEW_REQUIRED_LOCAL_WORK_DIR
+TimeoutStartSec=900
+UMask=0077
+
+# personal-daily-backup.timer: intentionally no [Install] or enable command
+[Unit]
+Description=Hourly bounded history backup with automatic checkpoints
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=180
+Unit=personal-daily-backup.service
+
+# Restore is an explicitly approved incident operation, not a scheduled production overwrite.

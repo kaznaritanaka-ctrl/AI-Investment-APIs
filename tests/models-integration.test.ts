@@ -30,7 +30,10 @@ const api = async (path: string, now = time) => {
 };
 const count = async (table: string) =>
   (await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM ' + table).first<{ n: number }>())!.n;
-describe('Models.dev bounded D1/R2 history (synthetic only)', () => {
+// Multi-day scenarios make hundreds of sequential Node -> workerd D1/R2 RPCs.
+// On Windows each hop is ~45ms (30 SELECTs measured at 1.4s), exceeding 30s
+// without a deadlock. Keep a finite budget here; unit/runtime defaults stay unchanged.
+describe('Models.dev bounded D1/R2 history (synthetic only)', { timeout: 120000 }, () => {
   it('keeps staging private, completes multiple providers and preserves legacy default API shape', async () => {
     const s = expandedSource(),
       body = catalog();

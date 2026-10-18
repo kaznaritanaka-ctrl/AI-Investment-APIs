@@ -1,5 +1,11 @@
 # AI-Investment-APIs
 
+2026-10-18 日次拡張: [日次取得・複数run履歴export・NAS監視連携](docs/personal-daily-cloud-nas-20261018.md)を未有効化で実装しました。正規化履歴に年齢TTLを設けず、日次の取得・暗号化backup・整合性/復元検査・監視を自動継続する構成です。[synthetic検証記録](docs/personal-daily-validation-20261018.md)と未承認の初期設定案を参照してください。実収集・実鍵・実NAS・本番変更はありません。以下の初回一runのみという説明は追加前の記録です。
+
+2026-10-18 Cloudflare→NAS実装: [実装・synthetic受入・未有効化設定・承認事項](docs/personal-cloud-nas-implementation-20261018.md)を追加しました。専用Cloud契約、private分割export、最新control、NAS固定read、age暗号化、自動保守、空のローカルD1への復元検査に対応します。実収集・実鍵・NAS実機・本番変更は未実施。日次新規取得は別スコープです。
+
+2026-10-18 初回実行準備の方針更新: 所有者の指示により、ローカルはsynthetic専用、初回実データもCloudflareで取得しNASへバックアップする準備に変更しました。[設定・実行契約・鍵管理・承認事項](docs/personal-cloudflare-nas-setup-20261018.md)と[非実行の設定提案](docs/personal-execution-20261018/cloudflare-nas.setup-proposal.json)を参照してください。既存personal-gpu-v2はローカル専用の実装で、local v2による本番接続はできません。後続のCloud専用実装は上記の通り未有効化です。従来のローカルlive契約案は有効化せず参照資料として残します。実収集・鍵作成・NAS設定・grant変更・本番反映は行っていません。
+
 2026-10-18 継続保存の追加: [個人研究v2の実装・運用手順](docs/personal-continuing-20261018.md)を追加しました。正規化履歴の年齢による削除をなくし、追加の契約レビュー、暗号化バックアップ、最新の取消しを反映した復元、自動保守の停止状態の設定案に対応します。以下の有限保持v1は互換性維持対象です。実収集・実契約・鍵設定・タスク登録・権利grant変更・本番反映は未実施です。
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
@@ -33,7 +39,7 @@ GPUはrun/partition/page/snapshotを分離し、leaseとcheckpointで再開し�
 
 ## 開発・検証
 
-Node 24、pnpm 11.19.0。
+Node 24、pnpm 11.19.0。NAS暗号化試験の初期tool準備は `node scripts/setup-test-age.mjs --allow-download`（公式age、checksum固定、ignored work内、実鍵なし）。通常test/buildはtoolをdownloadしません。全件進捗は `pnpm test --reporter=verbose` で確認できます。
 
 ```sh
 pnpm install --frozen-lockfile

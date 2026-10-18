@@ -1,4 +1,6 @@
 import type { CollectorEnv } from './schema';
+import { personalCloudScheduled } from './research/personal-cloud-scheduled';
+import { dailyScheduled } from './research/daily-scheduled';
 import { activeSources } from './sources';
 import { collectAll } from './pipeline';
 import { resumeGPURuns, queueGPURuns } from './gpu-pipeline';
@@ -96,6 +98,20 @@ export default {
       }
       await expireEvidence(env, now);
       await expireGPUData(env, activeSources, now);
+      if (env.PERSONAL_MAINTENANCE_ENABLED === 'true') {
+        try {
+          console.log(
+            JSON.stringify({
+              event: 'personal_maintenance',
+              sources: await personalCloudScheduled(env),
+            }),
+          );
+        } catch {
+          console.warn(
+            JSON.stringify({ event: 'personal_maintenance', state: 'configuration_invalid' }),
+          );
+        }
+      }
       await env.PUBLIC_DB.prepare(
         'INSERT INTO public_health(singleton,last_collector_completed_at,collection_enabled,monitor_connected) VALUES (1,?,1,0) ON CONFLICT(singleton) DO UPDATE SET last_collector_completed_at=excluded.last_collector_completed_at,collection_enabled=1',
       )
@@ -126,6 +142,26 @@ export default {
         safeLogCode(error instanceof Error ? error.message : 'operation_failed') ??
           'operation_failed',
       );
+    } finally {
+      // Independent private maintenance still runs after an unrelated pipeline failure.
+      // Shipped disabled; the existing Cron remains the only trigger.
+      if (env.PERSONAL_DAILY_MAINTENANCE_ENABLED === 'true') {
+        try {
+          console.log(
+            JSON.stringify({
+              event: 'personal_daily_maintenance',
+              sources: await dailyScheduled(env),
+            }),
+          );
+        } catch {
+          console.warn(
+            JSON.stringify({
+              event: 'personal_daily_maintenance',
+              state: 'configuration_invalid',
+            }),
+          );
+        }
+      }
     }
   },
   async fetch() {

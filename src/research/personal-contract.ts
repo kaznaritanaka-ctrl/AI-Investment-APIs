@@ -106,8 +106,53 @@ const PersonalV2Base = z
       .strict(),
   })
   .strict();
+// A distinct cloud authority. Local v1/v2 contracts never become production grants.
+const PersonalCloudBase = PersonalV2Base.extend({
+  version: z.literal('personal-gpu-cloud-v1'),
+  status: z.literal('approved_for_cloud_execution'),
+  decision: PersonalV2Base.shape.decision.extend({
+    retention: PersonalV2Base.shape.decision.shape.retention.extend({
+      time_travel: z.literal('cloudflare_d1'),
+    }),
+  }),
+  cloud: z
+    .object({
+      account_id: z.string().regex(/^[a-f0-9]{32}$/),
+      private_database_id: z.uuid(),
+      bucket: z.string().regex(/^[a-z0-9][a-z0-9-]{2,62}$/),
+      d1_time_travel_days: z.union([z.literal(7), z.literal(30)]),
+      deployment_approval_ref: ref,
+      lifecycle_review_ref: ref,
+      nas_admission_review_ref: ref,
+      restore_review_ref: ref,
+      initial_acquisition_only: z.literal(true),
+    })
+    .strict(),
+}).strict();
+const PersonalDailyBase = PersonalCloudBase.extend({
+  version: z.literal('personal-gpu-cloud-daily-v1'),
+  cloud: PersonalCloudBase.shape.cloud.extend({ initial_acquisition_only: z.literal(false) }),
+  daily: z
+    .object({
+      approval_ref: ref,
+      timezone: z.literal('UTC'),
+      collection_hour: z.number().int().min(0).max(23),
+      max_attempts_per_day: z.literal(1),
+      backfill: z.literal(false),
+      monitoring_review_ref: ref,
+      bootstrap_hours: z.number().int().min(0).max(24),
+      heartbeat_max_hours: z.number().int().min(1).max(24),
+      backup_max_hours: z.number().int().min(24).max(48),
+      inventory_max_days: z.number().int().min(1).max(30),
+    })
+    .strict(),
+}).strict();
 function common(
-  v: z.infer<typeof PersonalV1Base> | z.infer<typeof PersonalV2Base>,
+  v:
+    | z.infer<typeof PersonalV1Base>
+    | z.infer<typeof PersonalV2Base>
+    | z.infer<typeof PersonalCloudBase>
+    | z.infer<typeof PersonalDailyBase>,
   ctx: z.RefinementCtx,
 ) {
   const c = v.config,
@@ -144,16 +189,34 @@ function common(
   )
     ctx.addIssue({ code: 'custom', message: 'personal_deadlines_invalid' });
   if (
-    v.version === 'personal-gpu-v2' &&
+    v.version !== 'personal-gpu-v1' &&
     v.decision.retention.backup_recoverability_days !== v.decision.retention.backup.retention_days
   )
     ctx.addIssue({ code: 'custom', message: 'personal_backup_retention_mismatch' });
 }
 export const PersonalV1Schema = PersonalV1Base.superRefine(common);
 export const PersonalV2Schema = PersonalV2Base.superRefine(common);
+export const PersonalCloudSchema = PersonalCloudBase.superRefine(common).refine(
+  (c) =>
+    Date.parse(c.decision.acquisition_until) - Date.parse(c.decision.acquisition_from) <=
+      86400000 && c.cloud.d1_time_travel_days <= c.decision.retention.backup_recoverability_days,
+  'personal_cloud_copy_or_window_invalid',
+);
 export const PersonalContractSchema = z.union([PersonalV1Schema, PersonalV2Schema]);
+export const PersonalDailySchema = PersonalDailyBase.superRefine(common).refine(
+  (c) =>
+    c.cloud.d1_time_travel_days <= c.decision.retention.backup_recoverability_days &&
+    c.daily.inventory_max_days < c.decision.retention.backup.retention_days &&
+    c.decision.retention.backup.interval_hours === 24 &&
+    c.decision.retention.backup.restore_check_hours === 24 &&
+    c.decision.retention.backup.max_copies >= c.decision.retention.backup.retention_days + 1,
+  'daily_backup_window_invalid',
+);
+export type PersonalDailyContract = z.infer<typeof PersonalDailySchema>;
 export type PersonalV2Contract = z.infer<typeof PersonalV2Schema>;
-export type PersonalContract = z.infer<typeof PersonalContractSchema>;
+export type PersonalCloudContract = z.infer<typeof PersonalCloudSchema>;
+export type ContinuingPersonalContract = PersonalV2Contract | PersonalCloudContract;
+export type PersonalContract = z.infer<typeof PersonalContractSchema> | PersonalCloudContract;
 export type PersonalOperation = 'collect' | 'read' | 'maintain';
 
 export async function inspectPersonalContract(
@@ -188,7 +251,7 @@ export async function inspectPersonalContract(
 export function personalDeadlines(c: PersonalContract, capturedAt: string) {
   const day = (n: number) => new Date(Date.parse(capturedAt) + n * 86400000).toISOString();
   const normalized =
-    c.version === 'personal-gpu-v2'
+    c.version !== 'personal-gpu-v1'
       ? null
       : [day(c.decision.retention.normalized_days), c.decision.storage_until].sort()[0];
   return {

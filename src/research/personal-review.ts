@@ -1,6 +1,7 @@
+import { inspectPersonalAuthority } from './personal-cloud-authority';
 import { z } from 'zod';
 import { hash, stable } from '../util';
-import { inspectPersonalContract, type PersonalContract } from './personal-contract';
+import { type PersonalContract } from './personal-contract';
 import { assertNotRevoked } from './retention';
 import type { PersonalEnv, PersonalOptions } from './personal';
 
@@ -149,13 +150,13 @@ export async function renewPersonalReview(
   if (env.ENVIRONMENT !== 'test' && (opt.now || opt.fetcher))
     throw new Error('personal_synthetic_boundary');
   const at = (opt.now ?? (() => new Date().toISOString()))();
-  const { contract: c, contract_hash: digest } = await inspectPersonalContract(
+  const { contract: c, contract_hash: digest } = await inspectPersonalAuthority(
+    env,
     input,
     at,
-    env.ENVIRONMENT,
     'maintain',
   );
-  if (c.version !== 'personal-gpu-v2' || c.decision.retention.store_id !== env.PERSONAL_STORE_ID)
+  if (c.version === 'personal-gpu-v1' || c.decision.retention.store_id !== env.PERSONAL_STORE_ID)
     throw new Error('personal_review_scope_invalid');
   const r = PersonalReviewSchema.parse(update);
   const prior = (await personalReviewHead(env, c, true))!;

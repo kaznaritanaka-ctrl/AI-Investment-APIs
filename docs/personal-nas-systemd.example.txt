@@ -1,0 +1,30 @@
+# NOT INSTALLED OR ENABLED. Paths and service user require the NAS native custody review.
+# Place code on a read-only mount; credentials belong to the separate backup service identity.
+# The capture identity used by the separate NAS project must not write this service's sealed/control tree.
+# personal-research-backup.service
+[Unit]
+Description=Personal research encrypted backup and restore verification
+After=network-online.target
+[Service]
+Type=oneshot
+User=REVIEW_REQUIRED_DEDICATED_USER
+WorkingDirectory=REVIEW_REQUIRED_CODE_DIRECTORY
+ExecStart=REVIEW_REQUIRED_NODE scripts/personal-nas-runner.mjs once REVIEW_REQUIRED_CONFIG --allow-network
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=REVIEW_REQUIRED_BACKUP_ROOT REVIEW_REQUIRED_LOCAL_WORK_DIR
+TimeoutStartSec=300
+UMask=0077
+
+# personal-research-backup.timer (no [Install]; activation requires separate owner approval)
+[Unit]
+Description=Hourly personal research backup maintenance
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=180
+Unit=personal-research-backup.service
+
+# No real paths, service account, credential, timer or NAS setting has been installed.

@@ -12,7 +12,7 @@ import {
   type PersonalOptions,
   type PersonalRun,
 } from './personal';
-import type { PersonalContract, PersonalV2Contract } from './personal-contract';
+import type { PersonalContract, ContinuingPersonalContract } from './personal-contract';
 
 const columns = {
   research_sources: 'source_id,policy_version,config_hash,suspended',
@@ -57,7 +57,7 @@ const manifestKey = (c: PersonalContract, digest: string) =>
   '.json';
 export async function personalBackupManifest(
   env: PersonalEnv,
-  c: PersonalV2Contract,
+  c: ContinuingPersonalContract,
   digest: string,
 ) {
   if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('personal_backup_id_invalid');
@@ -92,7 +92,7 @@ function nowFor(env: PersonalEnv, opt: PersonalOptions) {
 async function copyAuthority(env: PersonalEnv, input: unknown, at: string) {
   const validated = await validatePersonalState(env, input, at, 'maintain');
   const c = validated.contract;
-  if (c.version !== 'personal-gpu-v2') throw new Error('personal_backup_v2_required');
+  if (c.version === 'personal-gpu-v1') throw new Error('personal_backup_v2_required');
   const head = (await personalReviewHead(env, c, true))!;
   if (head.head.storage_state !== 'continuing') throw new Error('personal_storage_review_required');
   if (head.head.storage_ends_at && at >= head.head.storage_ends_at)
@@ -100,7 +100,7 @@ async function copyAuthority(env: PersonalEnv, input: unknown, at: string) {
   await assertNotRevoked(env, c.config.source.source_id, await personalRunId(c));
   return { c, digest: validated.contract_hash, head };
 }
-async function validateSnapshot(c: PersonalV2Contract, s: PersonalSnapshot) {
+async function validateSnapshot(c: ContinuingPersonalContract, s: PersonalSnapshot) {
   if (
     s.contract_hash !== (await hash(stable(c))) ||
     s.run_id !== (await personalRunId(c)) ||

@@ -1,5 +1,11 @@
 # Highreso / Rebro 初回ローカル実行契約案
 
+最新の日次拡張は [実装・未有効化設定](../personal-daily-cloud-nas-20261018.md)を参照。`*.daily-cloud-draft.json` はnull/未承認を含む非実行draft。旧初回専用契約を日次契約へ自動昇格しない。
+
+[Cloudflare→NAS実装と検証](../personal-cloud-nas-implementation-20261018.md)が最新。ここにあるlocal契約案は移行・有効化しない。
+
+**後続指示による位置づけ変更:** 初回実データもCloudflareで取得しNASへバックアップする方針になりました。ローカルはsynthetic検証だけです。本ページの2契約は旧ローカル方式の未承認参照資料で、承認して実行する対象ではありません。最新の[Cloudflare→NAS設定・承認案](../personal-cloudflare-nas-setup-20261018.md)を使ってください。新しい設定提案は設計専用であり、現行runtimeの実行契約ではありません。
+
 2026-10-18。目標は10年後に価値を持つ履歴。30日削除案を撤回し、[長期履歴要件](long-term-history.md)に沿ったpersonal-gpu-v2の未承認案へ更新した。[実装・自動保守・復元・検証](../personal-continuing-20261018.md)を参照。
 
 | source | 契約案 | 状態 |
