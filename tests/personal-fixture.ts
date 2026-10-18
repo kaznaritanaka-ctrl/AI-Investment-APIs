@@ -1,7 +1,7 @@
 import highreso from '../config/proposals/research/highreso_public.json';
 import rebro from '../config/proposals/research/rebro_public.json';
 import { ResearchConfigSchema } from '../src/research/schema';
-import { PersonalContractSchema } from '../src/research/personal-contract';
+import { PersonalV1Schema } from '../src/research/personal-contract';
 import { hash, stable } from '../src/util';
 import { robotsFingerprint, termsFingerprint } from '../src/research/public-gpu-html';
 import { robots, terms, gpuTime } from './public-gpu-fixture-config';
@@ -11,7 +11,7 @@ export async function personalFixture(adapter: PublicGpuAdapter = 'highreso_publ
   const config = ResearchConfigSchema.parse(
     structuredClone(adapter === 'highreso_public' ? highreso : rebro),
   );
-  return PersonalContractSchema.parse({
+  return PersonalV1Schema.parse({
     version: 'personal-gpu-v1',
     authority_kind: 'owner_personal_research_exception',
     status: 'approved_for_local_execution',

@@ -1,5 +1,7 @@
 # Private研究履歴の長期保持と次の有効化判断（10/18最終修正）
 
+2026-10-18の所有者の明確化: 目標は「10年後に価値を持つ時系列データベース」。[長期履歴の要件](personal-execution-20261018/long-term-history.md)を以後の契約準備の基準とする。本書の3〜5年・1095/1825日は当時の研究目標で、現在の目標上限でも削除期限でもない。個人研究例外の30日削除案も撤回した。既存の許諾・保持根拠・停止/削除の分離は維持し、grantや本番設定を変更しない。
+
 Issue #17では[公開Highreso/RebroページのPrivate collector](public-gpu-research-20261018.md)を別PRで追加。以下の保持条件を継承し、公式feed回答を公開ページ研究の必須前提にはしない。権利レビューと本番接続は引き続き未完了。
 
 [PR #16の最終修正指示](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/16#issuecomment-6236225676)を適用する。**新sourceの実観測数=0、本番変更=0、新しい権利grant=0**。内部レビュー期限は削除義務ではない。許諾済みの履歴を残し、次の成果はHighreso/GPUSOROBANとRebroの承認後の連続実観測とする。本書はローカル実装と承認待ちの手順であり、有効化の指示ではない。

@@ -63,7 +63,9 @@ function localOnly(env: ResearchEnv) {
 function standardAuthorityOnly(run: RetainedRun) {
   if (
     run.retention_snapshot_json &&
-    JSON.parse(run.retention_snapshot_json).version === 'personal-retention-v1'
+    ['personal-retention-v1', 'personal-retention-v2'].includes(
+      JSON.parse(run.retention_snapshot_json).version,
+    )
   )
     throw new Error('personal_entrypoint_required');
 }
@@ -719,7 +721,7 @@ export async function purgeResearchEvidence(env: ResearchEnv, now: string) {
   localOnly(env);
   if (!isoTime(now)) throw new Error('invalid_retention_time');
   const runs = await env.PRIVATE_DB.prepare(
-    "SELECT source_id,run_id FROM research_runs WHERE json_extract(retention_snapshot_json,'$.version') IS NOT 'personal-retention-v1' AND evidence_expires_at<=? AND evidence_purged_at IS NULL AND (lease_until IS NULL OR lease_until<=?) ORDER BY evidence_expires_at LIMIT 5",
+    "SELECT source_id,run_id FROM research_runs WHERE json_extract(retention_snapshot_json,'$.version') IS NOT 'personal-retention-v1' AND json_extract(retention_snapshot_json,'$.version') IS NOT 'personal-retention-v2' AND evidence_expires_at<=? AND evidence_purged_at IS NULL AND (lease_until IS NULL OR lease_until<=?) ORDER BY evidence_expires_at LIMIT 5",
   )
     .bind(now, now)
     .all<{ source_id: string; run_id: string }>();

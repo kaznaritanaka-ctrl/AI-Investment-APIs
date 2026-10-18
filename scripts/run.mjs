@@ -47,7 +47,11 @@ const commands = {
       'dist/api',
     ],
   ],
-  runtime: [['scripts/runtime-smoke.mjs'], ['scripts/personal-runtime-smoke.mjs']],
+  runtime: [
+    ['scripts/runtime-smoke.mjs'],
+    ['scripts/personal-runtime-smoke.mjs'],
+    ['scripts/personal-continuing-runtime-smoke.mjs'],
+  ],
   live: [['scripts/live-runner.mjs', ...extra]],
   dev: [
     ['node_modules/wrangler/bin/wrangler.js', 'dev', '--config', 'wrangler.api.jsonc', ...extra],

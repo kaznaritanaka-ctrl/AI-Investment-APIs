@@ -6,7 +6,7 @@ import { isPublicGpu, publicGpuEndpoints } from './public-gpu-contract';
 const ref = z.string().trim().min(1).max(500);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const time = z.iso.datetime().refine((v) => new Date(v).toISOString() === v);
-export const PersonalContractSchema = z
+const PersonalV1Base = z
   .object({
     version: z.literal('personal-gpu-v1'),
     authority_kind: z.literal('owner_personal_research_exception'),
@@ -64,41 +64,95 @@ export const PersonalContractSchema = z
       })
       .strict(),
   })
+  .strict();
+
+export const PersonalBackupSchema = z
+  .object({
+    destination_id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/),
+    key_id: ref,
+    interval_hours: z.number().int().min(1).max(168),
+    retention_days: z.number().int().min(1).max(90),
+    restore_check_hours: z.number().int().min(1).max(720),
+    max_copies: z.number().int().min(2).max(96),
+    reviewed_ref: ref,
+    recovery_review_ref: ref,
+  })
   .strict()
-  .superRefine((v, ctx) => {
-    const c = v.config,
-      d = v.decision,
-      t = d.terms;
-    if (
-      !isPublicGpu(c.adapter) ||
-      c.source.enabled ||
-      c.history_access.length ||
-      !c.source.policy.fields.includes('domestic_gpu_projection_v1') ||
-      ['automated_collection', 'private_storage', 'internal_analysis'].some(
-        (key) =>
-          c.source.policy.rights[key as keyof typeof c.source.policy.rights] !== 'review_required',
-      )
+  .refine(
+    (v) => v.max_copies * v.interval_hours >= v.retention_days * 24,
+    'personal_backup_capacity_invalid',
+  );
+const PersonalV2Base = z
+  .object({
+    ...PersonalV1Base.shape,
+    version: z.literal('personal-gpu-v2'),
+    decision: z
+      .object({
+        ...PersonalV1Base.shape.decision.shape,
+        storage_until: z.null(),
+        retention: z
+          .object({
+            ...PersonalV1Base.shape.decision.shape.retention.shape,
+            mode: z.literal('owner_continuing'),
+            normalized_days: z.null(),
+            backup_recoverability_days: z.number().int().min(1).max(90),
+            continuing_storage: z
+              .object({ basis_ref: ref, owner_approval_ref: ref, purpose_ref: ref })
+              .strict(),
+            backup: PersonalBackupSchema,
+          })
+          .strict(),
+      })
+      .strict(),
+  })
+  .strict();
+function common(
+  v: z.infer<typeof PersonalV1Base> | z.infer<typeof PersonalV2Base>,
+  ctx: z.RefinementCtx,
+) {
+  const c = v.config,
+    d = v.decision,
+    t = d.terms;
+  if (
+    !isPublicGpu(c.adapter) ||
+    c.source.enabled ||
+    c.history_access.length ||
+    !c.source.policy.fields.includes('domestic_gpu_projection_v1') ||
+    ['automated_collection', 'private_storage', 'internal_analysis'].some(
+      (key) =>
+        c.source.policy.rights[key as keyof typeof c.source.policy.rights] !== 'review_required',
     )
-      ctx.addIssue({ code: 'custom', message: 'personal_source_scope_invalid' });
-    if (
-      isPublicGpu(c.adapter) &&
-      (t.monitored_url !== publicGpuEndpoints[c.adapter].terms ||
-        (c.adapter === 'highreso_public'
-          ? t.applicability !== 'highreso_domestic_pre_20261101' ||
-            t.review_after > '2026-10-31T15:00:00.000Z'
-          : t.applicability !== 'rebro_public_scope_review'))
-    )
-      ctx.addIssue({ code: 'custom', message: 'personal_terms_scope_invalid' });
-    if (
-      d.approved_at > d.acquisition_from ||
-      d.acquisition_from >= d.acquisition_until ||
-      d.acquisition_until > t.review_after ||
-      d.acquisition_until > d.analysis_until ||
-      d.analysis_until > d.storage_until ||
-      d.retention.evidence_days > d.retention.normalized_days
-    )
-      ctx.addIssue({ code: 'custom', message: 'personal_deadlines_invalid' });
-  });
+  )
+    ctx.addIssue({ code: 'custom', message: 'personal_source_scope_invalid' });
+  if (
+    isPublicGpu(c.adapter) &&
+    (t.monitored_url !== publicGpuEndpoints[c.adapter].terms ||
+      (c.adapter === 'highreso_public'
+        ? t.applicability !== 'highreso_domestic_pre_20261101' ||
+          t.review_after > '2026-10-31T15:00:00.000Z'
+        : t.applicability !== 'rebro_public_scope_review'))
+  )
+    ctx.addIssue({ code: 'custom', message: 'personal_terms_scope_invalid' });
+  if (
+    d.approved_at > d.acquisition_from ||
+    d.acquisition_from >= d.acquisition_until ||
+    d.acquisition_until > t.review_after ||
+    d.acquisition_until > d.analysis_until ||
+    (d.storage_until !== null && d.analysis_until > d.storage_until) ||
+    (d.retention.normalized_days !== null &&
+      d.retention.evidence_days > d.retention.normalized_days)
+  )
+    ctx.addIssue({ code: 'custom', message: 'personal_deadlines_invalid' });
+  if (
+    v.version === 'personal-gpu-v2' &&
+    v.decision.retention.backup_recoverability_days !== v.decision.retention.backup.retention_days
+  )
+    ctx.addIssue({ code: 'custom', message: 'personal_backup_retention_mismatch' });
+}
+export const PersonalV1Schema = PersonalV1Base.superRefine(common);
+export const PersonalV2Schema = PersonalV2Base.superRefine(common);
+export const PersonalContractSchema = z.union([PersonalV1Schema, PersonalV2Schema]);
+export type PersonalV2Contract = z.infer<typeof PersonalV2Schema>;
 export type PersonalContract = z.infer<typeof PersonalContractSchema>;
 export type PersonalOperation = 'collect' | 'read' | 'maintain';
 
@@ -121,7 +175,8 @@ export async function inspectPersonalContract(
     throw new Error('personal_config_hash_mismatch');
   if (at < d.approved_at) throw new Error('personal_approval_not_effective');
   if (operation !== 'maintain') {
-    if (at < d.approved_at || at >= d.storage_until) throw new Error('personal_storage_expired');
+    if (at < d.approved_at || (d.storage_until !== null && at >= d.storage_until))
+      throw new Error('personal_storage_expired');
     if (at >= d.analysis_until) throw new Error('personal_analysis_expired');
     if (at >= d.terms.review_after) throw new Error('personal_terms_review_required');
     if (operation === 'collect' && (at < d.acquisition_from || at >= d.acquisition_until))
@@ -132,12 +187,15 @@ export async function inspectPersonalContract(
 
 export function personalDeadlines(c: PersonalContract, capturedAt: string) {
   const day = (n: number) => new Date(Date.parse(capturedAt) + n * 86400000).toISOString();
-  const normalized = [
-    day(c.decision.retention.normalized_days),
-    c.decision.storage_until,
-  ].sort()[0];
+  const normalized =
+    c.version === 'personal-gpu-v2'
+      ? null
+      : [day(c.decision.retention.normalized_days), c.decision.storage_until].sort()[0];
   return {
-    evidence: [day(c.decision.retention.evidence_days), normalized].sort()[0],
+    evidence: [
+      day(c.decision.retention.evidence_days),
+      ...(normalized ? [normalized] : []),
+    ].sort()[0],
     normalized,
     all_copies: normalized,
   };

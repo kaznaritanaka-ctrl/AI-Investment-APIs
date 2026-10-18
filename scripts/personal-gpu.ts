@@ -35,6 +35,7 @@ async function main() {
     'development',
     mode === 'collect' ? 'collect' : mode === 'read' ? 'read' : 'maintain',
   );
+  if (c.version === 'personal-gpu-v2') throw new Error('personal_v2_use_automation_manifest');
   const local = await personalLocalEnv(
     c.decision.retention.store_id,
     'development',

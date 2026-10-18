@@ -1,3 +1,8 @@
+import {
+  personalReviewHead,
+  initializePersonalReview,
+  syncPersonalReviewAudit,
+} from './personal-review';
 import { z } from 'zod';
 import { errorCode, hash, stable } from '../util';
 import { FetchFailure } from '../network';
@@ -49,19 +54,20 @@ const attemptSchema = z
     started_at: z.iso.datetime(),
   })
   .strict();
-type Run = RetainedRun & {
+export type PersonalRun = RetainedRun & {
   run_id: string;
   config_hash: string;
   recorded_at: string;
   synthetic: number;
   state: string;
-  normalized_expires_at: string;
+  normalized_expires_at: string | null;
   evidence_expires_at: string;
-  all_copies_expires_at: string;
+  all_copies_expires_at: string | null;
   retention_snapshot_json: string;
   observation_count: number;
   http_page_attempts: number;
   lease_until: string | null;
+  lease_token: string | null;
 };
 const prefix = (c: PersonalContract) => c.config.source.source_id + '/' + c.decision.exception_id;
 export const personalAttemptKey = (c: PersonalContract) =>
@@ -82,21 +88,46 @@ function clock(env: PersonalEnv, opt: PersonalOptions) {
     throw new Error('personal_synthetic_boundary');
   return opt.now ?? (() => new Date().toISOString());
 }
-async function validated(
+export async function validatePersonalState(
   env: PersonalEnv,
   input: unknown,
   at: string,
   operation: 'collect' | 'read' | 'maintain',
 ) {
-  const result = await inspectPersonalContract(input, at, env.ENVIRONMENT, operation);
+  const result = await inspectPersonalContract(input, at, env.ENVIRONMENT, 'maintain');
   if (result.contract.decision.retention.store_id !== env.PERSONAL_STORE_ID)
     throw new Error('personal_store_mismatch');
-  return result;
+  const c = result.contract;
+  if (c.version === 'personal-gpu-v1')
+    return {
+      ...(await inspectPersonalContract(input, at, env.ENVIRONMENT, operation)),
+      current_review: null,
+    };
+  if ('PUBLIC_DB' in env) throw new Error('personal_public_binding_forbidden');
+  const run = await runRow(env, await runIdFor(c));
+  const current = await personalReviewHead(env, c, !!run);
+  if (current && at < current.head.approved_at) throw new Error('personal_review_not_effective');
+  if (operation !== 'maintain') {
+    const state = current?.head;
+    if (state?.storage_state === 'unknown') throw new Error('personal_storage_review_required');
+    if (state?.storage_ends_at && at >= state.storage_ends_at)
+      throw new Error('personal_storage_expired');
+    if (at >= (state?.analysis_until ?? c.decision.analysis_until))
+      throw new Error('personal_analysis_expired');
+    if (at >= (state?.review_after ?? c.decision.terms.review_after))
+      throw new Error('personal_terms_review_required');
+    if (
+      operation === 'collect' &&
+      (at < c.decision.acquisition_from || at >= c.decision.acquisition_until)
+    )
+      throw new Error('personal_acquisition_window_closed');
+  }
+  return { ...result, current_review: current?.head ?? null };
 }
 async function runRow(env: PersonalEnv, runId: string) {
   return env.PRIVATE_DB.prepare('SELECT * FROM research_runs WHERE run_id=?')
     .bind(runId)
-    .first<Run>();
+    .first<PersonalRun>();
 }
 async function attempt(env: PersonalEnv, c: PersonalContract, digest: string, runId: string) {
   const object = await env.EVIDENCE.get(personalAttemptKey(c));
@@ -119,7 +150,7 @@ async function current(
   at: string,
   operation: 'collect' | 'read',
 ) {
-  await validated(env, c, at, operation);
+  await validatePersonalState(env, c, at, operation);
   await assertNotRevoked(env, c.config.source.source_id, runId);
   const row = await env.PRIVATE_DB.prepare(
     'SELECT config_hash,suspended FROM research_sources WHERE source_id=?',
@@ -140,7 +171,7 @@ async function current(
       throw new Error('personal_read_review_required');
   }
 }
-function verifyRun(c: PersonalContract, digest: string, r: Run) {
+export function verifyPersonalRun(c: PersonalContract, digest: string, r: PersonalRun) {
   const deadlines = personalDeadlines(c, r.recorded_at);
   if (
     r.config_hash !== digest ||
@@ -150,7 +181,8 @@ function verifyRun(c: PersonalContract, digest: string, r: Run) {
     r.all_copies_expires_at !== deadlines.all_copies ||
     r.retention_snapshot_json !==
       stable({
-        version: 'personal-retention-v1',
+        version:
+          c.version === 'personal-gpu-v1' ? 'personal-retention-v1' : 'personal-retention-v2',
         authority_kind: authority,
         contract_hash: digest,
         ...c.decision.retention,
@@ -167,9 +199,14 @@ export async function collectPersonalGpu(
 ) {
   const now = clock(env, opt),
     at = now();
-  await validated(env, input, at, 'maintain');
+  await validatePersonalState(env, input, at, 'maintain');
   await maintainPersonalGpu(env, input, opt);
-  const { contract: c, contract_hash: digest } = await validated(env, input, at, 'collect');
+  const { contract: c, contract_hash: digest } = await validatePersonalState(
+    env,
+    input,
+    at,
+    'collect',
+  );
   if (!opt.allow_network) throw new Error('personal_network_opt_in_required');
   if (env.ENVIRONMENT === 'test' && !opt.fetcher)
     throw new Error('personal_fixture_fetcher_required');
@@ -187,7 +224,10 @@ export async function collectPersonalGpu(
   )
     throw new Error('personal_capture_time_mismatch');
   const deadlines = personalDeadlines(c, capturedAt);
-  if (at >= deadlines.normalized) throw new Error('personal_storage_expired');
+  if (deadlines.normalized !== null && at >= deadlines.normalized)
+    throw new Error('personal_storage_expired');
+  if (!existing && !priorAttempt) await initializePersonalReview(env, c);
+  else await personalReviewHead(env, c, true);
   await env.PRIVATE_DB.batch([
     env.PRIVATE_DB.prepare(
       'INSERT OR IGNORE INTO research_sources(source_id,policy_version,config_hash) VALUES (?,?,?)',
@@ -205,7 +245,7 @@ export async function collectPersonalGpu(
   if (registered?.contract_hash !== digest) throw new Error('personal_contract_reused');
   await env.PRIVATE_DB.batch([
     env.PRIVATE_DB.prepare(
-      "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at,all_copies_expires_at,retention_snapshot_json) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?,?,?)",
+      "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at,all_copies_expires_at,retention_snapshot_json,normalized_mode) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?,?,?,?)",
     ).bind(
       runId,
       sourceId,
@@ -220,11 +260,13 @@ export async function collectPersonalGpu(
       deadlines.normalized,
       deadlines.all_copies,
       stable({
-        version: 'personal-retention-v1',
+        version:
+          c.version === 'personal-gpu-v1' ? 'personal-retention-v1' : 'personal-retention-v2',
         authority_kind: authority,
         contract_hash: digest,
         ...c.decision.retention,
       }),
+      c.version === 'personal-gpu-v2' ? 'owner_continuing' : 'fixed_days',
     ),
     env.PRIVATE_DB.prepare(
       'INSERT OR IGNORE INTO research_personal_runs(run_id,contract_hash) VALUES (?,?)',
@@ -232,7 +274,7 @@ export async function collectPersonalGpu(
   ]);
   const r = await runRow(env, runId);
   if (!r) throw new Error('personal_daily_limit');
-  verifyRun(c, digest, r);
+  verifyPersonalRun(c, digest, r);
   if (r.state === 'complete') {
     if (!priorAttempt) throw new Error('personal_attempt_missing');
     return {
@@ -443,19 +485,61 @@ export async function maintainPersonalGpu(
 ) {
   const now = clock(env, opt),
     at = now();
-  const { contract: c, contract_hash: digest } = await validated(env, input, at, 'maintain');
+  const {
+    contract: c,
+    contract_hash: digest,
+    current_review,
+  } = await validatePersonalState(env, input, at, 'maintain');
   const runId = await runIdFor(c),
     r = await runRow(env, runId);
-  if (!r) return { state: 'no_run', remaining: 0 };
-  verifyRun(c, digest, r);
+  if (!r) {
+    if (c.version === 'personal-gpu-v2') {
+      const revoked = await sourceRevocation(env, c.config.source.source_id);
+      const deletion = await deletionObligation(env, {
+        source_id: c.config.source.source_id,
+        run_id: runId,
+      });
+      const deadline = [
+        revoked?.revoked_at,
+        deletion?.all_copies_delete_by,
+        current_review?.storage_ends_at,
+      ]
+        .filter((v): v is string => typeof v === 'string')
+        .sort()[0];
+      if (revoked || deletion || (deadline && at >= deadline)) {
+        await recordDeletion(
+          env,
+          c.config.source.source_id,
+          runId,
+          at,
+          revoked ? 'revoked' : 'expired',
+          {
+            basis_refs: [c.decision.owner_execution_approval_ref],
+            all_copies_delete_by: deadline ?? at,
+          },
+        );
+        await env.EVIDENCE.delete(evidenceKey(c, runId));
+        return { state: 'purged', remaining: 0, deadline_missed: !!deadline && at > deadline };
+      }
+    }
+    return { state: 'no_run', remaining: 0 };
+  }
+  verifyPersonalRun(c, digest, r);
   const sourceId = c.config.source.source_id;
   const revoked = await sourceRevocation(env, sourceId);
   const deleted = await deletionObligation(env, r);
-  const deadline = [r.all_copies_expires_at, revoked?.revoked_at, deleted?.all_copies_delete_by]
-    .filter((v): v is string => typeof v === 'string')
-    .sort()[0];
-  const expired = at >= r.normalized_expires_at;
+  const deadline =
+    [
+      r.all_copies_expires_at,
+      current_review?.storage_ends_at,
+      revoked?.revoked_at,
+      deleted?.all_copies_delete_by,
+    ]
+      .filter((v): v is string => typeof v === 'string')
+      .sort()[0] ?? null;
+  const expired = deadline !== null && at >= deadline;
   if (r.lease_until && r.lease_until > at) return { state: 'leased', remaining: null };
+  if (c.version === 'personal-gpu-v2') await syncPersonalReviewAudit(env, c);
   if (revoked || deleted || expired || r.state === 'purged' || r.state === 'purging') {
     await recordDeletion(env, sourceId, runId, at, revoked ? 'revoked' : 'expired', {
       basis_refs: [c.decision.owner_execution_approval_ref],
@@ -484,15 +568,24 @@ export async function maintainPersonalGpu(
     await env.PRIVATE_DB.batch([
       env.PRIVATE_DB.prepare('DELETE FROM research_pages WHERE run_id=?').bind(runId),
       env.PRIVATE_DB.prepare(
-        "UPDATE research_runs SET state='purged',deleted_at=COALESCE(deleted_at,?),evidence_purged_at=?,backup_residual_until=NULL WHERE run_id=?",
-      ).bind(at, at, runId),
+        "UPDATE research_runs SET state='purged',deleted_at=COALESCE(deleted_at,?),evidence_purged_at=?,backup_residual_until=CASE WHEN deleted_at IS NULL THEN ? ELSE backup_residual_until END WHERE run_id=?",
+      ).bind(
+        at,
+        at,
+        c.version === 'personal-gpu-v2'
+          ? new Date(
+              Date.parse(at) + c.decision.retention.backup.retention_days * 86400000,
+            ).toISOString()
+          : null,
+        runId,
+      ),
     ]);
     return {
       state: 'purged',
       remaining: 0,
       storage: 'owner_exception_ended',
       provider_permission: 'unconfirmed',
-      deadline_missed: at > deadline,
+      deadline_missed: deadline !== null && at > deadline,
     };
   }
   if (at >= r.evidence_expires_at) {
@@ -509,7 +602,13 @@ export async function maintainPersonalGpu(
     ]);
   }
   return {
-    state: at >= c.decision.terms.review_after ? 'review_due' : 'retained',
+    state:
+      current_review?.storage_state === 'unknown'
+        ? 'storage_unknown'
+        : at >= (current_review?.review_after ?? c.decision.terms.review_after) ||
+            at >= (current_review?.analysis_until ?? c.decision.analysis_until)
+          ? 'review_due'
+          : 'retained',
     remaining: r.observation_count,
     storage: 'owner_exception',
     provider_permission: 'unconfirmed',
@@ -519,7 +618,12 @@ export async function maintainPersonalGpu(
 export async function readPersonalGpu(env: PersonalEnv, input: unknown, opt: PersonalOptions = {}) {
   const now = clock(env, opt);
   await maintainPersonalGpu(env, input, opt);
-  const { contract: c, contract_hash: digest } = await validated(env, input, now(), 'read');
+  const { contract: c, contract_hash: digest } = await validatePersonalState(
+    env,
+    input,
+    now(),
+    'read',
+  );
   const runId = await runIdFor(c);
   await current(env, c, digest, runId, now(), 'read');
   const reservation = await attempt(env, c, digest, runId);
@@ -527,7 +631,7 @@ export async function readPersonalGpu(env: PersonalEnv, input: unknown, opt: Per
   const r = await runRow(env, runId);
   if (!r || r.state !== 'complete')
     return { results: [], authority_kind: authority, provider_permission: 'unconfirmed' };
-  verifyRun(c, digest, r);
+  verifyPersonalRun(c, digest, r);
   if (reservation.started_at !== r.recorded_at) throw new Error('personal_capture_time_mismatch');
   const rows = await env.PRIVATE_DB.prepare(
     'SELECT * FROM research_gpu_observations WHERE run_id=? ORDER BY record_key LIMIT 48',
@@ -544,7 +648,7 @@ export async function stopPersonalCollection(
   opt: PersonalOptions = {},
 ) {
   const now = clock(env, opt);
-  const { contract: c } = await validated(env, input, now(), 'maintain');
+  const { contract: c } = await validatePersonalState(env, input, now(), 'maintain');
   if (!basisRef.trim() || basisRef.length > 500) throw new Error('personal_stop_basis_required');
   await env.EVIDENCE.put(
     collectionStopKey(c),
@@ -565,7 +669,7 @@ export async function revokePersonalUse(
   opt: PersonalOptions = {},
 ) {
   const now = clock(env, opt);
-  const { contract: c } = await validated(env, input, now(), 'maintain');
+  const { contract: c } = await validatePersonalState(env, input, now(), 'maintain');
   if (!basisRef.trim() || basisRef.length > 500) throw new Error('personal_stop_basis_required');
   await recordDeletion(env, c.config.source.source_id, await runIdFor(c), now(), 'revoked', {
     basis_refs: [basisRef],

@@ -425,7 +425,10 @@ export async function requestResearchDeletion(
   });
 }
 
-export async function deletionObligation(env: ResearchEnv, run: RetainedRun) {
+export async function deletionObligation(
+  env: ResearchEnv,
+  run: Pick<RetainedRun, 'source_id' | 'run_id'>,
+) {
   localOnly(env);
   const body = await env.EVIDENCE.get(runDeletionKey(run.source_id, run.run_id));
   if (!body) return null;

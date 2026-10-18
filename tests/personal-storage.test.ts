@@ -21,6 +21,7 @@ import { researchSource, researchTime, eiaQuery, eiaPage, opts } from './researc
 import { personalFixture, gpuTime } from './personal-fixture';
 import { gpuFetcher, gpuHtml } from './public-gpu-helpers';
 import { stable } from '../src/util';
+import { renewPersonalReview } from '../src/research/personal-review';
 
 describe('local personal exception persistence (no live HTTP)', () => {
   let local: Awaited<ReturnType<typeof personalLocalEnv>>;
@@ -407,6 +408,54 @@ describe('local personal exception persistence (no live HTTP)', () => {
     ).toHaveLength(1);
     await expect(readPersonalGpu(local.env, c, options(fetcher, at))).rejects.toThrow();
   });
+  it('preserves populated personal v1 history and its finite deadlines through 0012', async () => {
+    const old = await localEnv('test', undefined, 11);
+    const env = {
+      PRIVATE_DB: old.env.PRIVATE_DB,
+      EVIDENCE: old.env.EVIDENCE,
+      ENVIRONMENT: 'test' as const,
+      PERSONAL_STORE_ID: 'synthetic-store',
+    };
+    try {
+      const c = await personalFixture(),
+        run = await collectPersonalGpu(env, c, options());
+      const tables = [
+        'research_runs',
+        'research_pages',
+        'research_gpu_observations',
+        'research_personal_contracts',
+        'research_personal_runs',
+      ];
+      const before = await Promise.all(
+        tables.map((t) => env.PRIVATE_DB.prepare('SELECT * FROM ' + t).all()),
+      );
+      await applyMigrations(env.PRIVATE_DB, 'private');
+      expect(
+        await Promise.all(
+          tables.map((t) =>
+            env.PRIVATE_DB.prepare('SELECT * FROM ' + t)
+              .all()
+              .then((r) => r.results),
+          ),
+        ),
+      ).toEqual(before.map((r) => r.results));
+      expect((await env.PRIVATE_DB.prepare('PRAGMA foreign_key_check').all()).results).toEqual([]);
+      await expect(
+        env.PRIVATE_DB.prepare('UPDATE research_gpu_observations SET observed_at=? WHERE run_id=?')
+          .bind(gpuTime, run.run_id)
+          .run(),
+      ).rejects.toThrow();
+      await expect(renewPersonalReview(env, c, {}, options())).rejects.toThrow(
+        'personal_review_scope_invalid',
+      );
+      expect(
+        await maintainPersonalGpu(env, c, { now: () => '2026-10-28T01:00:00.000Z' }),
+      ).toMatchObject({ state: 'purged', remaining: 0 });
+      expect(c.config.source.policy.rights.private_storage).toBe('review_required');
+    } finally {
+      await old.mf.dispose();
+    }
+  }, 120000);
   it('preserves populated 0010 history and deadlines through forward migration', async () => {
     const old = await localEnv('test', undefined, 10);
     try {
