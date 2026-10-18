@@ -20,11 +20,11 @@ UMask=0077
 
 # personal-research-backup.timer (no [Install]; activation requires separate owner approval)
 [Unit]
-Description=Hourly personal research backup maintenance
+Description=Five-minute personal research backup maintenance
 [Timer]
-OnCalendar=hourly
+OnCalendar=*-*-* *:0/5:00
 Persistent=true
-RandomizedDelaySec=180
+RandomizedDelaySec=30
 Unit=personal-research-backup.service
 
 # No real paths, service account, credential, timer or NAS setting has been installed.

@@ -1,0 +1,15 @@
+{
+  "validated_at": "2026-10-18T14:03:14.228Z",
+  "scope": "offline_preparation_only",
+  "new_drafts_rejected_for_execution": 2,
+  "embedded_source_configs_unchanged": true,
+  "migration_hashes_verified": 8,
+  "all_execution_approvals_null": true,
+  "nas_runtime_disabled": true,
+  "scheduler_examples_minutes": 5,
+  "staged_preflight_valid": true,
+  "cloud_readiness": false,
+  "network_performed": false,
+  "nas_contacted": false,
+  "staged_collector_sha256": "0147823f492d61d8080f781c3f07dc50f04f1ae4423a7bf48e74cc5dc7a8cbb8"
+}

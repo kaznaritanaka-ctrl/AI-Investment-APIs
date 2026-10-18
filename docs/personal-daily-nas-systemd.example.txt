@@ -19,11 +19,11 @@ UMask=0077
 
 # personal-daily-backup.timer: intentionally no [Install] or enable command
 [Unit]
-Description=Hourly bounded history backup with automatic checkpoints
+Description=Five-minute bounded history backup with automatic checkpoints
 [Timer]
-OnCalendar=hourly
+OnCalendar=*-*-* *:0/5:00
 Persistent=true
-RandomizedDelaySec=180
+RandomizedDelaySec=30
 Unit=personal-daily-backup.service
 
 # Restore is an explicitly approved incident operation, not a scheduled production overwrite.

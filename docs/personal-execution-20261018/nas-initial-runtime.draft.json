@@ -1,0 +1,31 @@
+{
+  "version": "personal-nas-runtime-v2",
+  "enabled": false,
+  "owner_activation_ref": null,
+  "native_custody_review_ref": null,
+  "recovery_custody_review_ref": null,
+  "transport": {
+    "version": "personal-nas-export-v1",
+    "account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+    "private_database_id": "f9239883-9929-4137-8079-5a03d9a8beb2",
+    "origin_bucket": "ai-investment-evidence-private",
+    "export_bucket": null,
+    "health_bucket": null,
+    "isolation_review_ref": null
+  },
+  "account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+  "bucket": null,
+  "root": null,
+  "age_binary": null,
+  "recipient": null,
+  "restore_identity_file": null,
+  "s3_credentials_file": null,
+  "sources": [
+    {
+      "source_id": "highreso_public",
+      "contract_hash": null,
+      "retention_days": 90,
+      "max_copies": 96
+    }
+  ]
+}

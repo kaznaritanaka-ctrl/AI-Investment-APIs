@@ -1,0 +1,256 @@
+{
+  "document_kind": "first_cloud_preparation_read_only_v1",
+  "executable": false,
+  "checked_at": "2026-10-18T13:53:41.458Z",
+  "account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+  "collector": {
+    "name": "ai-investment-collector",
+    "deployment": {
+      "id": "359cd6d0-395a-4863-ac85-0a6e6798aa18",
+      "created_on": "2026-10-09T12:58:42.946473Z",
+      "versions": [
+        {
+          "version_id": "cbf5a90d-9ab9-40b0-8847-eb0149f20e58",
+          "percentage": 100
+        }
+      ]
+    },
+    "version": {
+      "id": "cbf5a90d-9ab9-40b0-8847-eb0149f20e58",
+      "git_tag": "0abf2b647f1e1da23e91473f8c4f26d83e739802",
+      "created_on": "2026-10-09T12:57:57.977963Z"
+    },
+    "settings": {
+      "compatibility_date": "2026-09-01",
+      "limits": {
+        "cpu_ms": 5000
+      },
+      "bindings": [
+        {
+          "name": "AGENT_ENABLED",
+          "type": "plain_text",
+          "text": "false"
+        },
+        {
+          "name": "COLLECTION_CRON",
+          "type": "plain_text",
+          "text": "17 18 * * *"
+        },
+        {
+          "name": "COLLECTION_ENABLED",
+          "type": "plain_text",
+          "text": "true"
+        },
+        {
+          "name": "ENVIRONMENT",
+          "type": "plain_text",
+          "text": "production"
+        },
+        {
+          "name": "EVIDENCE",
+          "type": "r2_bucket",
+          "bucket_name": "ai-investment-evidence-private"
+        },
+        {
+          "name": "GPU_RESUME_CRON",
+          "type": "plain_text",
+          "text": "*/5 18-23 * * *"
+        },
+        {
+          "name": "LAMBDA_API_KEY",
+          "type": "secret_text"
+        },
+        {
+          "name": "PRIVATE_DB",
+          "type": "d1",
+          "id": "f9239883-9929-4137-8079-5a03d9a8beb2"
+        },
+        {
+          "name": "PUBLIC_DB",
+          "type": "d1",
+          "id": "cf0f6bf8-142a-4c48-8468-4f9a5b1a42b3"
+        },
+        {
+          "name": "SAKURA_ACCESS_SECRET",
+          "type": "secret_text"
+        },
+        {
+          "name": "SAKURA_ACCESS_TOKEN",
+          "type": "secret_text"
+        },
+        {
+          "name": "WATCHDOG_CRON",
+          "type": "plain_text",
+          "text": "47 18 * * *"
+        }
+      ]
+    },
+    "schedules": [
+      "17 18 * * *",
+      "47 18 * * *",
+      "*/5 18-23 * * *"
+    ]
+  },
+  "private_db": {
+    "uuid": "f9239883-9929-4137-8079-5a03d9a8beb2",
+    "name": "ai-investment-private",
+    "created_at": "2026-09-28T11:52:02.851Z",
+    "version": "production",
+    "num_tables": 29,
+    "file_size": 33529856,
+    "running_in_region": "APAC",
+    "read_replication": {
+      "mode": "disabled"
+    },
+    "jurisdiction": null
+  },
+  "migration_journal": [
+    {
+      "id": 1,
+      "name": "0001_initial.sql",
+      "applied_at": "2026-09-28 13:25:39"
+    },
+    {
+      "id": 2,
+      "name": "0002_gpu.sql",
+      "applied_at": "2026-09-28 13:25:39"
+    },
+    {
+      "id": 3,
+      "name": "0003_models_catalog.sql",
+      "applied_at": "2026-10-01 01:28:59"
+    },
+    {
+      "id": 4,
+      "name": "0005_admin_release_ledger.sql",
+      "applied_at": "2026-10-04 04:01:54"
+    },
+    {
+      "id": 5,
+      "name": "0006_notification_incidents.sql",
+      "applied_at": "2026-10-05 12:30:25"
+    }
+  ],
+  "research_tables": [],
+  "select_receipts": [
+    {
+      "rows_read": 5,
+      "rows_written": 0,
+      "changed_db": false
+    },
+    {
+      "rows_read": 100,
+      "rows_written": 0,
+      "changed_db": false
+    }
+  ],
+  "bucket_inventory": {
+    "filter": "name_contains=ai-investment; per_page=1000; returned_count=1",
+    "names": [
+      "ai-investment-evidence-private"
+    ],
+    "limitation": "Filtered listing; not proof of all account buckets"
+  },
+  "origin": {
+    "name": "ai-investment-evidence-private",
+    "r2_dev_enabled": false,
+    "custom_domains": [],
+    "lifecycle": [
+      {
+        "id": "Default Multipart Abort Rule",
+        "enabled": true,
+        "conditions": {
+          "prefix": ""
+        },
+        "abortMultipartUploadsTransition": {
+          "condition": {
+            "type": "Age",
+            "maxAge": 604800
+          }
+        }
+      },
+      {
+        "id": "archive-365d",
+        "enabled": true,
+        "conditions": {
+          "prefix": "archive/"
+        },
+        "deleteObjectsTransition": {
+          "condition": {
+            "type": "Age",
+            "maxAge": 31536000
+          }
+        }
+      },
+      {
+        "id": "archive-price-of-compute-7d",
+        "enabled": true,
+        "conditions": {
+          "prefix": "archive/price_of_compute/"
+        },
+        "deleteObjectsTransition": {
+          "condition": {
+            "type": "Age",
+            "maxAge": 604800
+          }
+        }
+      },
+      {
+        "id": "evidence-ecb-365d",
+        "enabled": true,
+        "conditions": {
+          "prefix": "evidence/ecb/"
+        },
+        "deleteObjectsTransition": {
+          "condition": {
+            "type": "Age",
+            "maxAge": 31536000
+          }
+        }
+      },
+      {
+        "id": "evidence-models-dev-90d",
+        "enabled": true,
+        "conditions": {
+          "prefix": "evidence/models_dev/"
+        },
+        "deleteObjectsTransition": {
+          "condition": {
+            "type": "Age",
+            "maxAge": 7776000
+          }
+        }
+      },
+      {
+        "id": "evidence-price-of-compute-7d",
+        "enabled": true,
+        "conditions": {
+          "prefix": "evidence/price_of_compute/"
+        },
+        "deleteObjectsTransition": {
+          "condition": {
+            "type": "Age",
+            "maxAge": 604800
+          }
+        }
+      }
+    ]
+  },
+  "time_travel": {
+    "current_bookmark_get_succeeded": true,
+    "checked_at": "2026-10-18T13:54:44.556Z",
+    "bookmark_for_future_migration": null,
+    "configured_days": 30,
+    "actual_window_verified": false,
+    "subscription_api": "unavailable_with_current_MCP_permission",
+    "note": "Refresh bookmark immediately before separately approved migration. Current bookmark does not prove 30-day retention or successful restore."
+  },
+  "prohibitions": {
+    "provider_requests_performed": false,
+    "observations_read": false,
+    "object_bodies_read": false,
+    "secret_values_read": false,
+    "remote_writes_performed": false,
+    "nas_contacted": false
+  }
+}

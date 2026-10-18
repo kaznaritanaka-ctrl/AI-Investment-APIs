@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+初回Cloud実行の最新準備は[所有者承認票](docs/first-cloud-approval-20261018.md)を参照。実在resourceを照合した非実行contract案、取得窓、TOS 7/NAS、8本のprivate migration、Collector段階反映を分離しています。実収集・本番変更は未実施です。
+
 2026-10-18 PR #19レビュー: [既存3sourceへの影響・初回Cloud実行の残件](docs/pr19-review-20261018.md)。保存済み初回証拠を取得OFFでもHTTPなしで復旧する経路と、個人研究binding/pin/flagのoffline検査を追加しました。未有効化のままで、実行承認や実IAM/NASの確認を代替するものではありません。
 
 2026-10-18 本番基点のローカル統合: 本番CollectorのGit記録 `0abf2b6` にPR #18 `2f32cf9`（#16を含む）を隔離branchで統合しました。[統合内容・synthetic検証](docs/collector-integration-validation-20261018.md)と[直前の本番read-only監査](docs/collector-production-integration-20261018.md)を参照してください。ECB・Models.dev・private PoC、既存Cron、source grant、Public APIを維持し、個人研究の新flags/bindingsは未設定です。以下のmain由来branchに関する注意は統合前の履歴です。本番deploy・remote migration・実収集は行っていません。
