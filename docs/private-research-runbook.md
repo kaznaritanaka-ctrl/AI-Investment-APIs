@@ -1,5 +1,7 @@
 # Private研究用収集 — 実装契約と承認手順
 
+2026-10-18追補: [purged runのR2再削除・台帳DELETE禁止・stacked migration](research-review-fixes-20261018.md)。R2単独復元時も対象runを再reconcileし、pending cleanupを完了させてから復元を受け入れる。
+
 対象はIssue #15のローカル候補。productionでは関数が `research_production_not_integrated` で停止し、既存Collectorからも呼ばれない。候補JSONはconfig/proposals/researchだけに置き、config/sourcesへコピーしない。本書は有効化計画であり実行承認ではない。
 
 ## 権利と公開境界
