@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+2026-10-18 非公開の個人研究: [現行DOM・規約適用・具体的な開始承認票](docs/public-gpu-private-start-review-20261018.md)。一回限りの構造調査は完了、価格履歴の実収集は未開始です。
+
 2026-10-18 レビュー修正: [source別受入表・parser/cohort・11/1規約版・NAS権限分離のrelease blocker](docs/public-gpu-review-acceptance-20261018.md)。PR #16の再削除/台帳保護を取り込み、Highresoの見出しスコープと明示cohort、Rebroの重複事例を修正しました。実市場観測0件、未有効化。既存private evidence全体を読めるcredentialをNASへ渡す構成ではreleaseしません。
 
 2026-10-18 日次拡張: [日次取得・複数run履歴export・NAS監視連携](docs/personal-daily-cloud-nas-20261018.md)を未有効化で実装しました。正規化履歴に年齢TTLを設けず、日次の取得・暗号化backup・整合性/復元検査・監視を自動継続する構成です。[synthetic検証記録](docs/personal-daily-validation-20261018.md)と未承認の初期設定案を参照してください。実収集・実鍵・実NAS・本番変更はありません。以下の初回一runのみという説明は追加前の記録です。

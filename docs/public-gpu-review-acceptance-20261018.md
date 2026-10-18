@@ -1,5 +1,7 @@
 # PR #18 レビュー受入: parser・cohort・規約版・資格情報境界
 
+後続の所有者依頼により[2026-10-18 06:47 UTCの現行DOM構造調査と開始承認票](public-gpu-private-start-review-20261018.md)を追加した。以下の「今回の価格ページGETなし」は4df13cfまでのレビュー記録。後続調査では各1 GETの構造metadataのみを確認し、実価格・観測履歴は保存していない。
+
 対象は[追記6246268133](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/18#issuecomment-6246268133)、旧HEAD `4eb9b62`。PR #16修正 `abd676633a0e591e1f65996a8d4860192f992292` をmergeで取り込んだ。両PRともDraft・未マージ。**実市場観測0件、Highreso/Rebro日次本番稼働0日、新grant0件、本番変更0件。** NAS機能の増築はしない。
 
 ## source別の受入状態

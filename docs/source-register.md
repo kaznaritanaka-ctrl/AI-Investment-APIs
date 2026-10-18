@@ -1,5 +1,7 @@
 # ソース台帳 — Phase 0
 
+最新の[Private開始審査](public-gpu-private-start-review-20261018.md): 非公開の本人研究という用途を再確認。2026-10-18 06:47 UTCの一回限りDOM調査ではHighreso 24対象行/48枠、Rebro 4対象行。これは構造metadataで実価格観測ではありません。公開/商用再配布権をPrivate開始の前提にせず、source別の適用根拠・所有者例外・Cloud実行承認を分けています。
+
 2026-10-18 PR #18レビュー後の状態は[Highreso/Rebro受入表](public-gpu-review-acceptance-20261018.md)を参照。disabled proposalは明示cohort/掲載事例キーのmethod v2へ更新したが、権利grant・source有効化は変更していない。実観測は両社0件。Highreso改定後の固定規約候補と未承認審査票、Rebroの未解決条件、NAS専用export隔離のrelease blockerを分けて記録した。
 
 2026-10-15追加: [全分野の実査台帳](source-expansion-20261015.md)へ、国内GPU/電力/メモリ/DC/水/ラボ/Physical AIと既存ソースの優先判断を分離しました。稼働用sourceは増やしていません。EIA/JEPXの承認待ちproposalはconfig/proposals/researchに置き、Private合成検証のみです。以下の過去台帳と10/15の配信版には差分があるため、最新のmetadata確認は追加台帳を参照してください。

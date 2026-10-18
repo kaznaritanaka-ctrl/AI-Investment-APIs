@@ -1,0 +1,355 @@
+{
+  "purpose": "one_time_structure_review_not_collection",
+  "review_state": "unapproved_for_collection",
+  "mode": "--inspect-structure",
+  "raw_html_persisted": false,
+  "price_values_persisted": false,
+  "observation_rows_written": 0,
+  "source_data_gets": 2,
+  "results": [
+    {
+      "source_id": "highreso_public",
+      "url": "https://soroban.highreso.jp/compute/instances",
+      "structure_sha256": "2b9784dba12c82a560e3f69ef008ed5e2190c7b24e58291fbfb348a6965295b9",
+      "outline": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 3,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "gpu_spec",
+          "model": null,
+          "explicit_single_gpu": true,
+          "heading_model_consistent": true
+        },
+        {
+          "kind": "table",
+          "index": 0
+        },
+        {
+          "kind": "heading",
+          "level": 3,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "gpu_spec",
+          "model": "A100",
+          "explicit_single_gpu": true,
+          "heading_model_consistent": true
+        },
+        {
+          "kind": "table",
+          "index": 1
+        },
+        {
+          "kind": "heading",
+          "level": 3,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "gpu_spec",
+          "model": "A100",
+          "explicit_single_gpu": true,
+          "heading_model_consistent": true
+        },
+        {
+          "kind": "table",
+          "index": 2
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        }
+      ],
+      "tables": [
+        {
+          "index": 0,
+          "kind": "rental",
+          "model": null,
+          "explicit_single_gpu": true,
+          "execution_heading": null,
+          "columns": 8,
+          "header": [
+            "インスタンス",
+            "従量課金[1h・台]",
+            "月額課金[月・台]",
+            "ストレージ",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column"
+          ],
+          "input_rows": 4,
+          "selected_rows": 0,
+          "row_column_counts": [
+            8
+          ],
+          "joined_cells": false,
+          "explicit_closing_tags": true,
+          "price_cell_format_counts": {
+            "decimal_yen": 0,
+            "missing": 0,
+            "unexpected": 0
+          },
+          "row_html_id_count": 0,
+          "row_link_count": 0
+        },
+        {
+          "index": 1,
+          "kind": "rental",
+          "model": "A100",
+          "explicit_single_gpu": true,
+          "execution_heading": null,
+          "columns": 8,
+          "header": [
+            "インスタンス",
+            "従量課金[1h・台]",
+            "月額課金[月・台]",
+            "ストレージ",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column"
+          ],
+          "input_rows": 12,
+          "selected_rows": 12,
+          "row_column_counts": [
+            8
+          ],
+          "joined_cells": false,
+          "explicit_closing_tags": true,
+          "price_cell_format_counts": {
+            "decimal_yen": 24,
+            "missing": 0,
+            "unexpected": 0
+          },
+          "row_html_id_count": 0,
+          "row_link_count": 0
+        },
+        {
+          "index": 2,
+          "kind": "rental",
+          "model": "A100",
+          "explicit_single_gpu": true,
+          "execution_heading": null,
+          "columns": 12,
+          "header": [
+            "インスタンス",
+            "従量課金[1h・台]",
+            "月額課金[月・台]",
+            "ストレージ",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column",
+            "uninspected_column"
+          ],
+          "input_rows": 12,
+          "selected_rows": 12,
+          "row_column_counts": [
+            12
+          ],
+          "joined_cells": false,
+          "explicit_closing_tags": true,
+          "price_cell_format_counts": {
+            "decimal_yen": 24,
+            "missing": 0,
+            "unexpected": 0
+          },
+          "row_html_id_count": 0,
+          "row_link_count": 0
+        }
+      ],
+      "cohort": {
+        "models": [
+          "A100",
+          "H100"
+        ],
+        "gpu_counts": [
+          1
+        ],
+        "input_rows": 28,
+        "selected_rows": 24,
+        "price_slots": 48,
+        "within_100_input_48_observation_cap": true,
+        "unexpected_price_format_cells": 0,
+        "same_period_product_duplicate_groups": 0,
+        "identical_case_extra_rows": 0,
+        "unrecognized_or_outside_review_model_tables": 1
+      },
+      "legal_links": [
+        "https://soroban.highreso.jp/privacy",
+        "https://soroban.highreso.jp/terms"
+      ],
+      "status": 200,
+      "checked_at": "2026-10-18T06:47:07.245Z"
+    },
+    {
+      "source_id": "rebro_public",
+      "url": "https://gpu-kaitori.com/reason/",
+      "structure_sha256": "cd4adf86d014bd9495a0fe81a2b9ddc0e4dab3ed5b4e346db72643cf871d9adc",
+      "outline": [
+        {
+          "kind": "heading",
+          "level": 1,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "買取実績",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "table",
+          "index": 0
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        },
+        {
+          "kind": "heading",
+          "level": 2,
+          "classification": "other",
+          "model": null,
+          "parser_subordinate_candidate": false
+        }
+      ],
+      "tables": [
+        {
+          "index": 0,
+          "kind": "selected_cases",
+          "model": null,
+          "explicit_single_gpu": null,
+          "execution_heading": true,
+          "columns": 5,
+          "header": [
+            "買取時期",
+            "商品",
+            "数量",
+            "買取単価",
+            "お取引"
+          ],
+          "input_rows": 20,
+          "selected_rows": 4,
+          "row_column_counts": [
+            5
+          ],
+          "joined_cells": false,
+          "explicit_closing_tags": true,
+          "price_cell_format_counts": {
+            "decimal_yen": 4,
+            "missing": 0,
+            "unexpected": 0
+          },
+          "row_html_id_count": 0,
+          "row_link_count": 0
+        }
+      ],
+      "cohort": {
+        "models": [
+          "A100",
+          "H100"
+        ],
+        "gpu_counts": null,
+        "input_rows": 20,
+        "selected_rows": 4,
+        "price_slots": 4,
+        "within_100_input_48_observation_cap": true,
+        "unexpected_price_format_cells": 0,
+        "same_period_product_duplicate_groups": 0,
+        "identical_case_extra_rows": 0,
+        "unrecognized_or_outside_review_model_tables": 0
+      },
+      "legal_links": [
+        "https://gpu-kaitori.com/privacy/",
+        "https://gpu-kaitori.com/rules/",
+        "https://gpu-kaitori.com/sitemap/"
+      ],
+      "status": 200,
+      "checked_at": "2026-10-18T06:47:07.642Z"
+    }
+  ],
+  "limitations": [
+    "No production parser or acquisition pipeline was run against live HTML.",
+    "No instance identifier uniqueness or per-record normalization acceptance was performed.",
+    "Null structural model means outside the inspection model allowlist; not missing source GPU specification.",
+    "Counts are one-page structural metadata, not inventory, completed acquisitions or market coverage."
+  ]
+}
