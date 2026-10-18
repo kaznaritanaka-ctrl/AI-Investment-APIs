@@ -543,8 +543,8 @@ export async function purgeResearchRun(
     throw new Error('historical_backup_review_required');
   const r = await env.PRIVATE_DB.prepare('SELECT * FROM research_runs WHERE run_id=?')
     .bind(runId)
-    .first<RetainedRun>();
-  if (!r || r.state === 'purged') return;
+    .first<RetainedRun & { backup_residual_until: string | null }>();
+  if (!r) return;
   standardAuthorityOnly(r);
   const version = await env.PRIVATE_DB.prepare(
     'SELECT config_json FROM research_config_versions WHERE config_hash=?',
@@ -576,6 +576,30 @@ export async function purgeResearchRun(
     marked = await deletionObligation(env, r);
     if (!marked) throw new Error('research_deletion_marker_missing');
   }
+  if (r.state === 'purged') {
+    // R2 can be restored independently of D1. A completed row is not proof that
+    // its evidence is still absent. Keep the original D1 deletion/backup dates.
+    await env.PRIVATE_DB.prepare(
+      "UPDATE research_runs SET last_error='research_evidence_cleanup_pending' WHERE run_id=?",
+    )
+      .bind(runId)
+      .run();
+    await eraseResearchEvidenceObjects(env, r.source_id, runId);
+    await env.PRIVATE_DB.prepare(
+      "UPDATE research_runs SET last_error='retention_purged',evidence_purged_at=? WHERE run_id=?",
+    )
+      .bind(now, runId)
+      .run();
+    return {
+      remaining: 0,
+      backup_residual_until: r.backup_residual_until,
+      backup_deadline_missed:
+        !r.retention_snapshot_json ||
+        !deadline ||
+        !r.backup_residual_until ||
+        r.backup_residual_until > deadline,
+    };
+  }
   const lock = await env.PRIVATE_DB.prepare(
     "UPDATE research_runs SET state='purging',next_page=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND (lease_until IS NULL OR lease_until<=?)",
   )
@@ -583,8 +607,7 @@ export async function purgeResearchRun(
     .run();
   if (!lock.meta.changes) throw new Error('research_retention_leased');
   // Include a captured page that never reached its D1 checkpoint.
-  for (let page = 0; page < 4; page++)
-    await env.EVIDENCE.delete('research/' + r.source_id + '/' + runId + '/' + page + '.json');
+  await eraseResearchEvidenceObjects(env, r.source_id, runId);
   await env.PRIVATE_DB.prepare(
     `DELETE FROM ${table} WHERE observation_id IN (SELECT observation_id FROM ${table} WHERE run_id=? LIMIT 20)`,
   )
@@ -631,7 +654,7 @@ export async function reconcileResearchRun(
   )
     .bind(config.source.source_id, runId)
     .first<RetainedRun>();
-  if (!run || run.state === 'purged') return;
+  if (!run) return;
   standardAuthorityOnly(run);
   if (config.retention.time_travel_days === null)
     throw new Error('historical_backup_review_required');
@@ -701,10 +724,18 @@ export async function reconcileResearchRun(
   return { remaining: null, backup_residual_until: null, backup_deadline_missed: false, decision };
 }
 
-async function eraseRunEvidence(env: ResearchEnv, sourceId: string, runId: string, now: string) {
-  // Idempotent even when an R2 restore reintroduced a page after its D1 deletion checkpoint.
+async function eraseResearchEvidenceObjects(env: ResearchEnv, sourceId: string, runId: string) {
+  // Validate scope before forming keys. Never list/delete the control prefix or
+  // trust restored evidence bodies to select another source/run. Four fixed keys
+  // also cover writes that failed before a page checkpoint was committed.
+  runDeletionKey(sourceId, runId);
   for (let page = 0; page < 4; page++)
     await env.EVIDENCE.delete('research/' + sourceId + '/' + runId + '/' + page + '.json');
+}
+
+async function eraseRunEvidence(env: ResearchEnv, sourceId: string, runId: string, now: string) {
+  // Idempotent even when an R2 restore reintroduced a page after its D1 deletion checkpoint.
+  await eraseResearchEvidenceObjects(env, sourceId, runId);
   await env.PRIVATE_DB.batch([
     env.PRIVATE_DB.prepare('UPDATE research_pages SET evidence_deleted_at=? WHERE run_id=?').bind(
       now,

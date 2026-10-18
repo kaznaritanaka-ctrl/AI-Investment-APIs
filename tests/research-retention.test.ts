@@ -573,6 +573,148 @@ describe('long research retention and restore (synthetic only)', () => {
     // Failure is visible and must hold the release/restore gate closed; it is not a successful revocation.
   });
 
+  it('re-erases R2-only restores of a purged run, preserves other scopes and retries failed deletes', async () => {
+    const c = longSource('r2_restore');
+    const run = await collectResearchPage(
+      local.env,
+      c,
+      eiaQuery,
+      researchTime,
+      options(c, researchTime, body),
+    );
+    const other = await collectResearchPage(
+      local.env,
+      c,
+      eiaQuery,
+      atDay(1),
+      options(c, atDay(1), body),
+    );
+    const unrelated = longSource('r2_unrelated');
+    const otherSource = await collectResearchPage(
+      local.env,
+      unrelated,
+      eiaQuery,
+      researchTime,
+      options(unrelated, researchTime, body),
+    );
+    const key = 'research/' + c.source.source_id + '/' + run.run_id + '/0.json';
+    const saved = await (await local.env.EVIDENCE.get(key))!.text();
+    await reconcileResearchRun(local.env, c, run.run_id, atDay(1095), c.terms.version);
+    const before = await local.env.PRIVATE_DB.prepare(
+      'SELECT deleted_at,backup_residual_until,normalized_expires_at FROM research_runs WHERE run_id=?',
+    )
+      .bind(run.run_id)
+      .first();
+    await local.env.EVIDENCE.put(key, saved);
+    // Also cover an uncheckpointed page restored independently of D1.
+    await local.env.EVIDENCE.put(key.replace('/0.json', '/3.json'), saved);
+    const failing = new Proxy(local.env.EVIDENCE, {
+      get(target, prop) {
+        if (prop === 'delete')
+          return async () => {
+            throw new Error('synthetic_delete_failure');
+          };
+        const value = Reflect.get(target, prop);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    await expect(
+      reconcileResearchRun(
+        { ...local.env, EVIDENCE: failing },
+        c,
+        run.run_id,
+        atDay(1096),
+        c.terms.version,
+      ),
+    ).rejects.toThrow('synthetic_delete_failure');
+    expect(await local.env.EVIDENCE.head(key)).not.toBeNull();
+    expect(
+      await local.env.PRIVATE_DB.prepare(
+        'SELECT state,last_error FROM research_runs WHERE run_id=?',
+      )
+        .bind(run.run_id)
+        .first(),
+    ).toEqual({ state: 'purged', last_error: 'research_evidence_cleanup_pending' });
+    for (let i = 0; i < 2; i++) {
+      expect(
+        await reconcileResearchRun(local.env, c, run.run_id, atDay(1096), c.terms.version),
+      ).toMatchObject({ remaining: 0 });
+      expect(
+        (
+          await local.env.EVIDENCE.list({
+            prefix: 'research/' + c.source.source_id + '/' + run.run_id + '/',
+          })
+        ).objects,
+      ).toHaveLength(0);
+    }
+    expect(
+      await local.env.PRIVATE_DB.prepare(
+        'SELECT deleted_at,backup_residual_until,normalized_expires_at FROM research_runs WHERE run_id=?',
+      )
+        .bind(run.run_id)
+        .first(),
+    ).toEqual(before);
+    expect(
+      await local.env.EVIDENCE.head(runDeletionKey(c.source.source_id, run.run_id)),
+    ).not.toBeNull();
+    expect(
+      await local.env.EVIDENCE.head(
+        'research/' + c.source.source_id + '/' + other.run_id + '/0.json',
+      ),
+    ).not.toBeNull();
+    expect(
+      await local.env.EVIDENCE.head(
+        'research/' + unrelated.source.source_id + '/' + otherSource.run_id + '/0.json',
+      ),
+    ).not.toBeNull();
+    expect((await local.env.PRIVATE_DB.prepare('PRAGMA foreign_key_check').all()).results).toEqual(
+      [],
+    );
+  });
+
+  it('forward-protects populated 0009 assessments from UPDATE and DELETE without changing history', async () => {
+    const old = await localEnv('test', undefined, 9);
+    try {
+      const c = longSource('audit_delete');
+      const run = await collectResearchPage(
+        old.env,
+        c,
+        eiaQuery,
+        researchTime,
+        options(c, researchTime, body),
+      );
+      await reconcileResearchRun(old.env, c, run.run_id, atDay(1), c.terms.version);
+      const tables = [
+        'research_runs',
+        'research_pages',
+        'research_observations',
+        'research_retention_assessments',
+      ];
+      const before = await Promise.all(
+        tables.map((t) => old.env.PRIVATE_DB.prepare('SELECT * FROM ' + t).all()),
+      );
+      await applyMigrations(old.env.PRIVATE_DB, 'private');
+      await applyMigrations(old.env.PRIVATE_DB, 'private');
+      for (const [i, table] of tables.entries())
+        expect((await old.env.PRIVATE_DB.prepare('SELECT * FROM ' + table).all()).results).toEqual(
+          before[i].results,
+        );
+      await expect(
+        old.env.PRIVATE_DB.prepare(
+          "UPDATE research_retention_assessments SET state='active'",
+        ).run(),
+      ).rejects.toThrow('immutable_research_assessment');
+      await expect(
+        old.env.PRIVATE_DB.prepare('DELETE FROM research_retention_assessments').run(),
+      ).rejects.toThrow('immutable_research_assessment');
+      expect((await old.env.PRIVATE_DB.prepare('PRAGMA foreign_key_check').all()).results).toEqual(
+        [],
+      );
+    } finally {
+      await old.mf.dispose();
+    }
+  });
+
   it('keeps legacy 0007 expiry unchanged and requires review instead of assigning a five-year grant during migration', async () => {
     const legacy = await localEnv('test', undefined, 7);
     try {
