@@ -10,9 +10,11 @@
 | pnpm build | Collector/APIのWrangler dry-run成功。deployなし |
 | offline preflight | 既存設定に対しerrors/blockersなし、network=false。Highreso/Rebroの実行ready判定ではない |
 | generated/diff | source/research schema・OpenAPIの生成差分なし、diff check成功 |
-| NAS CLI plan/daily-plan | enabled=false、network=false、NAS/timer変更なし。専用transport pinと専用bucket-only credentialを必須項目に表示 |
+| NAS CLI plan/daily-plan | enabled=false、network=false、NAS/timer変更なし。専用transport pinと専用bucket-only credentialを必須項目に表示。初回・日次とも5分poll案 |
 
 全件検証に加え、最終コードの重点7件を再実行した。記録はignored `work/nas-export-full.json`、`work/nas-export-final-protocol.json`、`work/nas-export-final-daily.json`。GitHub CIは公開したcommitのchecksを別に確認する。
+
+全件検証後、初回NAS planの1時間間隔がCloud制御走査と毎回重なる可能性を確認し、初回も5分poll案へ修正した。停止状態のplan表示・準備資料だけの変更で、実機timerやCollector周期は変更していない。check、plan/daily-plan、diff checkで確認し、この最終commitの全件はCIでも再確認する。
 
 全件コマンドは `pnpm test --pool=threads --maxWorkers=2 --fileParallelism=true --testTimeout=120000 --hookTimeout=120000 --reporter=json --outputFile=work/nas-export-full.json`。pnpmの事前自動installをprocess限定で抑制し、Git safe.directoryも当該checkoutだけをテスト子processへ指定した。依存版/lockfile、global設定は変更なし。今回のWindows全件検証は約20分39秒で終了した。JSON reporterは終了まで結果を出力しないため、無出力だけで停止とは判断できない。個別runtime検証も成功しており、全件が完了しない状態は再現していない。
 

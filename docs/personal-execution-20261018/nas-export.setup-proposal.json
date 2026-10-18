@@ -59,7 +59,7 @@
   },
   "automation": {
     "cloud_slots": "existing Wrangler slots; unchanged",
-    "nas_initial_poll_minutes": 60,
+    "nas_initial_poll_minutes": 5,
     "nas_daily_history_poll_minutes": 5,
     "restore_check_hours": 24,
     "inventory_max_days": 2,

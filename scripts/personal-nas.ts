@@ -521,7 +521,7 @@ export async function personalNasSources(
   return results;
 }
 
-// Owner-directed recovery to a NEW local staging DB. Normal hourly maintenance uses
+// Owner-directed recovery to a NEW local staging DB. Normal scheduled maintenance uses
 // ephemeral verification only. Never overwrite a primary DB or restore authority from a copy.
 export async function restoreNasGeneration(
   reader: NasReader,

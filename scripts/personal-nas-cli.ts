@@ -49,7 +49,7 @@ export async function nasMain(args: string[]) {
           'dedicated export bucket Object Read credentials',
           'personal-nas-export-v1 transport pin and live IAM isolation review',
         ],
-        poll_hours: 1,
+        poll_minutes: 5,
         restore_check_hours: 24,
         history_ttl_days: null,
         backup_generation_days: 90,
