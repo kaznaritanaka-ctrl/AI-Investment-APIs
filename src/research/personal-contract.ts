@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { hash, isoTime, stable } from '../util';
 import { ResearchConfigSchema } from './schema';
-import { isPublicGpu, publicGpuEndpoints } from './public-gpu-contract';
+import {
+  isPublicGpu,
+  publicGpuEndpoints,
+  HIGHRESO_POST_TERMS_URL,
+  HIGHRESO_DOMESTIC_TERMS_BOUNDARY,
+} from './public-gpu-contract';
 
 const ref = z.string().trim().min(1).max(500);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -39,8 +44,23 @@ const PersonalV1Base = z
             robots_sha256: digest,
             robots_decision: z.literal('allowed'),
             access_review_ref: ref,
-            // The current fixed Highreso monitor is the old domestic version only.
-            applicability: z.enum(['highreso_domestic_pre_20261101', 'rebro_public_scope_review']),
+            applicability: z.enum([
+              'highreso_domestic_pre_20261101',
+              'highreso_domestic_post_20261101',
+              'rebro_public_scope_review',
+            ]),
+            // Mandatory only for a separately reviewed post-change contract. Never
+            // reinterpret the old fingerprint or extend a pre-change contract.
+            transition: z
+              .object({
+                effective_from: z.literal(HIGHRESO_DOMESTIC_TERMS_BOUNDARY),
+                previous_terms_sha256: digest,
+                new_document_review_ref: ref,
+                public_page_applicability_ref: ref,
+                private_acquisition_storage_analysis_basis_ref: ref,
+              })
+              .strict()
+              .optional(),
           })
           .strict(),
         retention: z
@@ -169,15 +189,22 @@ function common(
     )
   )
     ctx.addIssue({ code: 'custom', message: 'personal_source_scope_invalid' });
-  if (
-    isPublicGpu(c.adapter) &&
-    (t.monitored_url !== publicGpuEndpoints[c.adapter].terms ||
+  const post =
+    c.adapter === 'highreso_public' && t.applicability === 'highreso_domestic_post_20261101';
+  const validTerms = post
+    ? t.monitored_url === HIGHRESO_POST_TERMS_URL &&
+      !!t.transition &&
+      t.transition.previous_terms_sha256 !== t.terms_sha256 &&
+      d.acquisition_from >= HIGHRESO_DOMESTIC_TERMS_BOUNDARY &&
+      t.review_after > HIGHRESO_DOMESTIC_TERMS_BOUNDARY
+    : isPublicGpu(c.adapter) &&
+      !t.transition &&
+      t.monitored_url === publicGpuEndpoints[c.adapter].terms &&
       (c.adapter === 'highreso_public'
-        ? t.applicability !== 'highreso_domestic_pre_20261101' ||
-          t.review_after > '2026-10-31T15:00:00.000Z'
-        : t.applicability !== 'rebro_public_scope_review'))
-  )
-    ctx.addIssue({ code: 'custom', message: 'personal_terms_scope_invalid' });
+        ? t.applicability === 'highreso_domestic_pre_20261101' &&
+          t.review_after <= HIGHRESO_DOMESTIC_TERMS_BOUNDARY
+        : t.applicability === 'rebro_public_scope_review');
+  if (!validTerms) ctx.addIssue({ code: 'custom', message: 'personal_terms_scope_invalid' });
   if (
     d.approved_at > d.acquisition_from ||
     d.acquisition_from >= d.acquisition_until ||

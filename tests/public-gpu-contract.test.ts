@@ -125,7 +125,6 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
     'price',
     'quantity',
     'month',
-    'duplicate',
     'challenge',
     'subsection',
     'span',
@@ -137,11 +136,6 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
     if (variant === 'price') html = html.replace('234,567円', '234,567円から');
     if (variant === 'quantity') html = html.replace('3枚', '約3枚');
     if (variant === 'month') html = html.replace('2025年2月', '2025年13月');
-    if (variant === 'duplicate')
-      html = html.replace(
-        '</tbody>',
-        '<tr><td>2025年2月</td><td>NVIDIA A100 40GB PCIe</td><td>3枚</td><td>234,567円</td><td>unused</td></tr></tbody>',
-      );
     if (variant === 'challenge') html = '<html>Verify you are human</html>';
     if (variant === 'subsection') html = html.replace('<table>', '<h3>査定提示価格</h3><table>');
     if (variant === 'span') html = html.replace('<td>3枚', '<td colspan="2">3枚');

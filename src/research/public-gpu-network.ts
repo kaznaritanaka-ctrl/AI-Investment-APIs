@@ -1,6 +1,11 @@
 import { fetchBounded, FetchFailure, type NetworkOptions } from '../network';
 import { assertResearchAllowed, type ResearchConfig } from './schema';
-import { isPublicGpu, publicGpuEndpoints, PUBLIC_GPU_UA } from './public-gpu-contract';
+import {
+  isPublicGpu,
+  publicGpuEndpoints,
+  PUBLIC_GPU_UA,
+  HIGHRESO_POST_TERMS_URL,
+} from './public-gpu-contract';
 import { robotsFingerprint, termsFingerprint } from './public-gpu-html';
 
 export async function fetchPublicGpuPage(config: ResearchConfig, opt: NetworkOptions) {
@@ -18,11 +23,17 @@ export async function fetchPublicGpuPage(config: ResearchConfig, opt: NetworkOpt
 // before entry and before each fetch. It never accepts arbitrary URLs or rights overrides.
 export async function readReviewedPublicGpu(
   config: ResearchConfig,
-  review: { robots_sha256: string | null; terms_sha256: string | null },
+  review: { robots_sha256: string | null; terms_sha256: string | null; monitored_url?: string },
   opt: NetworkOptions,
 ) {
   if (!isPublicGpu(config.adapter)) throw new Error('public_gpu_scope_invalid');
   const endpoints = publicGpuEndpoints[config.adapter];
+  const termsUrl = review.monitored_url ?? endpoints.terms;
+  if (
+    termsUrl !== endpoints.terms &&
+    !(config.adapter === 'highreso_public' && termsUrl === HIGHRESO_POST_TERMS_URL)
+  )
+    throw new Error('public_gpu_terms_monitor_invalid');
   const read = (url: string, format: 'html' | 'csv', maxBytes: number) =>
     fetchBounded(
       { ...config.source, max_bytes: maxBytes },
@@ -39,7 +50,7 @@ export async function readReviewedPublicGpu(
   const robots = await read(endpoints.robots, 'csv', 16384);
   if (robots.status !== 200 || (await robotsFingerprint(robots.text)) !== review.robots_sha256)
     throw new FetchFailure('public_gpu_robots_review_required');
-  const terms = await read(endpoints.terms, 'html', 1000000);
+  const terms = await read(termsUrl, 'html', 1000000);
   if (terms.status !== 200 || (await termsFingerprint(terms.text)) !== review.terms_sha256)
     throw new FetchFailure('public_gpu_terms_review_required');
   return read(endpoints.page, 'html', config.source.max_bytes);

@@ -34,6 +34,8 @@ CREATE TRIGGER research_observations_retention BEFORE DELETE ON research_observa
 CREATE TRIGGER research_run_contract_immutable BEFORE UPDATE OF source_id,config_hash,policy_version,terms_version,recorded_at,scheduled_for,synthetic,evidence_expires_at,normalized_expires_at,normalized_mode,retention_snapshot_json,all_copies_expires_at ON research_runs BEGIN SELECT RAISE(ABORT,'immutable_research_retention'); END;
 CREATE INDEX research_retention_assessment_run ON research_retention_assessments(run_id,assessed_at);
 CREATE TRIGGER research_retention_assessments_immutable BEFORE UPDATE ON research_retention_assessments BEGIN SELECT RAISE(ABORT,'immutable_research_assessment'); END;
+-- Preserve 0014 protection when this stacked migration follows an already-journaled 0014.
+CREATE TRIGGER research_retention_assessments_no_delete BEFORE DELETE ON research_retention_assessments BEGIN SELECT RAISE(ABORT,'immutable_research_assessment'); END;
 CREATE INDEX research_gpu_records_key ON research_gpu_observations(record_key,observed_at);
 CREATE INDEX research_gpu_records_run ON research_gpu_observations(run_id,record_key);
 CREATE TRIGGER research_gpu_observations_immutable BEFORE UPDATE ON research_gpu_observations BEGIN SELECT RAISE(ABORT,'immutable_research_observation'); END;

@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+// Reviewed document candidate, never a grant or an automatic rollover from /terms.
+export const HIGHRESO_POST_TERMS_URL = 'https://soroban.highreso.jp/5401872';
+export const HIGHRESO_DOMESTIC_TERMS_BOUNDARY = '2026-10-31T15:00:00.000Z';
+
 export const publicGpuEndpoints = {
   highreso_public: {
     page: 'https://soroban.highreso.jp/compute/instances',

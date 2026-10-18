@@ -11,6 +11,7 @@ export async function personalFixture(adapter: PublicGpuAdapter = 'highreso_publ
   const config = ResearchConfigSchema.parse(
     structuredClone(adapter === 'highreso_public' ? highreso : rebro),
   );
+  if (config.scope.kind === 'highreso_public') config.scope.gpu_counts = [1, 2];
   return PersonalV1Schema.parse({
     version: 'personal-gpu-v1',
     authority_kind: 'owner_personal_research_exception',

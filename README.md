@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+2026-10-18 レビュー修正: [source別受入表・parser/cohort・11/1規約版・NAS権限分離のrelease blocker](docs/public-gpu-review-acceptance-20261018.md)。PR #16の再削除/台帳保護を取り込み、Highresoの見出しスコープと明示cohort、Rebroの重複事例を修正しました。実市場観測0件、未有効化。既存private evidence全体を読めるcredentialをNASへ渡す構成ではreleaseしません。
+
 2026-10-18 日次拡張: [日次取得・複数run履歴export・NAS監視連携](docs/personal-daily-cloud-nas-20261018.md)を未有効化で実装しました。正規化履歴に年齢TTLを設けず、日次の取得・暗号化backup・整合性/復元検査・監視を自動継続する構成です。[synthetic検証記録](docs/personal-daily-validation-20261018.md)と未承認の初期設定案を参照してください。実収集・実鍵・実NAS・本番変更はありません。以下の初回一runのみという説明は追加前の記録です。
 
 2026-10-18 Cloudflare→NAS実装: [実装・synthetic受入・未有効化設定・承認事項](docs/personal-cloud-nas-implementation-20261018.md)を追加しました。専用Cloud契約、private分割export、最新control、NAS固定read、age暗号化、自動保守、空のローカルD1への復元検査に対応します。実収集・実鍵・NAS実機・本番変更は未実施。日次新規取得は別スコープです。

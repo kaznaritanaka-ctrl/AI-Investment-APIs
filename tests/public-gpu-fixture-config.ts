@@ -10,6 +10,8 @@ export async function publicGpuSource(adapter: PublicGpuAdapter = 'highreso_publ
   const c = ResearchConfigSchema.parse(
     structuredClone(adapter === 'highreso_public' ? highreso : rebro),
   );
+  // Synthetic regression covers both counts; the unapproved real proposal selects one GPU only.
+  if (c.scope.kind === 'highreso_public') c.scope.gpu_counts = [1, 2];
   c.source.enabled = true;
   for (const right of ['automated_collection', 'private_storage', 'internal_analysis'] as const)
     c.source.policy.rights[right] = 'allowed';

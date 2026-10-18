@@ -19,7 +19,11 @@ export const ResearchConfigSchema = z
     source: SourceSchema,
     adapter: z.enum(['eia_retail', 'jepx_spot', 'highreso_public', 'rebro_public']),
     visibility: z.literal('private_only'),
-    method_version: z.enum(['electricity-research-v1', 'domestic-gpu-html-v1']),
+    method_version: z.enum([
+      'electricity-research-v1',
+      'domestic-gpu-html-v1',
+      'domestic-gpu-html-v2',
+    ]),
     public_access: PublicAccessReviewSchema.optional(),
     owner_approval_ref: z.string().min(1).nullable(),
     wire_contract_review_ref: z.string().min(1).nullable(),
@@ -50,6 +54,7 @@ export const ResearchConfigSchema = z
       z
         .object({
           kind: z.literal('highreso_public'),
+          gpu_counts: z.array(z.number().int().min(1).max(8)).min(1).max(8).optional(),
           models: z
             .array(z.enum(['A100', 'H100']))
             .min(1)
@@ -113,8 +118,9 @@ export const ResearchConfigSchema = z
           : v.adapter === 'rebro_public'
             ? 'gpu_secondary'
             : 'electricity') ||
-      v.method_version !==
-        (isPublicGpu(v.adapter) ? 'domestic-gpu-html-v1' : 'electricity-research-v1') ||
+      (isPublicGpu(v.adapter)
+        ? !['domestic-gpu-html-v1', 'domestic-gpu-html-v2'].includes(v.method_version)
+        : v.method_version !== 'electricity-research-v1') ||
       v.source.adapter !== 'candidate' ||
       v.scope.kind !== v.adapter ||
       v.source.gpu ||
@@ -124,6 +130,12 @@ export const ResearchConfigSchema = z
     )
       c.addIssue({ code: 'custom', message: 'research_scope_invalid' });
     if (isPublicGpu(v.adapter)) {
+      if (
+        v.scope.kind === 'highreso_public' &&
+        ((v.method_version === 'domestic-gpu-html-v2') !== (v.scope.gpu_counts !== undefined) ||
+          (v.scope.gpu_counts && new Set(v.scope.gpu_counts).size !== v.scope.gpu_counts.length))
+      )
+        c.addIssue({ code: 'custom', message: 'public_gpu_cohort_review_required' });
       if ('models' in v.scope && new Set(v.scope.models).size !== v.scope.models.length)
         c.addIssue({ code: 'custom', message: 'duplicate_gpu_scope' });
       const urls = publicGpuEndpoints[v.adapter];

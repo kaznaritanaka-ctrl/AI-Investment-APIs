@@ -23,6 +23,40 @@ describe('private GPU acquisition and history (synthetic local D1/R2)', () => {
     await local?.mf.dispose();
   });
   const query = { kind: 'highreso_public' } as const;
+  it('persists duplicate public cases, reobserves unchanged content, and never calls disappearance a sale', async () => {
+    const c = await publicGpuSource('rebro_public');
+    const duplicate =
+      '<tr><td>2025年2月</td><td>NVIDIA A100 40GB PCIe</td><td>3枚</td><td>234,567円</td><td>unused</td></tr>';
+    const html = gpuHtml('rebro_public').replace('</tbody>', duplicate + '</tbody>');
+    for (const day of ['18', '19']) {
+      const at = `2026-10-${day}T01:00:00.000Z`;
+      const run = await collectResearchPage(
+        local.env,
+        c,
+        { kind: 'rebro_public' },
+        at,
+        gpuOptions(c, at, html),
+      );
+      const rows = (await readResearchRun(local.env, c, run.run_id, gpuOptions(c, at))).results;
+      expect(rows).toHaveLength(3);
+      if (day === '19') expect(rows.every((r) => r.change_kind === 'reobserved')).toBe(true);
+    }
+    const at = '2026-10-20T01:00:00.000Z';
+    const run = await collectResearchPage(
+      local.env,
+      c,
+      { kind: 'rebro_public' },
+      at,
+      gpuOptions(c, at, gpuHtml('rebro_public')),
+    );
+    const absent = (
+      await readResearchRun(local.env, c, run.run_id, gpuOptions(c, at))
+    ).results.filter((r) => r.change_kind === 'not_seen');
+    expect(absent).toHaveLength(1);
+    expect(String(absent[0].domain_json)).not.toMatch(
+      /execution_report|transaction_at|amount_decimal/,
+    );
+  });
   it('fails closed before any HTTP/storage and keeps production unintegrated', async () => {
     const c = await publicGpuSource();
     c.source.policy.rights.automated_collection = 'review_required';
@@ -64,7 +98,7 @@ describe('private GPU acquisition and history (synthetic local D1/R2)', () => {
     expect(result.state).toBe('complete');
     const rows = (await readResearchRun(local.env, c, result.run_id, gpuOptions(c))).results;
     expect(rows).toHaveLength(4);
-    expect(rows[0]).toMatchObject({ observed_at: gpuTime, method_version: 'domestic-gpu-html-v1' });
+    expect(rows[0]).toMatchObject({ observed_at: gpuTime, method_version: 'domestic-gpu-html-v2' });
     expect(
       await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM research_observations').first(),
     ).toEqual({ n: 0 });

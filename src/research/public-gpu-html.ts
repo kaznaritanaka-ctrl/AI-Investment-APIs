@@ -50,6 +50,7 @@ export const PublicGpuRecordSchema = z
       .regex(/^\d+(?:\.\d+)?$/)
       .nullable(),
     included_components: z.array(z.enum(['instance', 'storage', 'data_transfer'])),
+    case_identity_basis: z.literal('public_content_occurrence_not_transaction').optional(),
   })
   .strict();
 export type PublicGpuRecord = z.infer<typeof PublicGpuRecordSchema>;
@@ -61,6 +62,16 @@ export const PublicGpuPageSchema = z
     next_page: z.null(),
     coverage: z.literal('complete'),
     reasons: z.array(z.string()),
+    selection: z
+      .object({
+        method_version: z.literal('domestic-gpu-html-v2'),
+        input_rows: z.number().int().nonnegative(),
+        cohort_rows: z.number().int().nonnegative(),
+        excluded_rows: z.number().int().nonnegative(),
+        price_slots_per_row: z.union([z.literal(1), z.literal(2)]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -177,7 +188,9 @@ export async function parsePublicGpu(
     );
   };
   let matchedTables = 0,
-    inputRows = 0;
+    inputRows = 0,
+    cohortRows = 0;
+  const v2 = c.method_version === 'domestic-gpu-html-v2';
   if (c.adapter === 'highreso_public') {
     // Traverse document order, associating each table with only its preceding GPU spec block.
     const ordered: Node[] = [],
@@ -191,21 +204,43 @@ export async function parsePublicGpu(
       };
     walk(doc);
     let product: string | null = null,
-      count: number | null = null;
+      count: number | null = null,
+      anchorLevel: number | null = null,
+      headingLevel = 0,
+      headingModel: string | null = null;
+    const modelToken = (s: string) =>
+      /\b(?:[ABHV]\d{2,3}|L\d{1,2}S?|RTX\s*\d{3,4})\b/i.exec(s)?.[0].toUpperCase() ?? null;
+    // Only recognized subordinate headings keep the current GPU block. A peer,
+    // a new GPU (even nested), or an unknown subsection must not inherit its SKU.
+    const subordinate =
+      /^(?:GPU仕様|仕様|ストレージサイズ|ストレージ|料金表?|インスタンス|OS|Linux|Ubuntu|Windows)(?:\s|$|[:：(（])/i;
     const pageText = clean(text(doc));
     const included = /料金には消費税、インスタンス、ストレージ、データ転送料が含まれます/.test(
       pageText.replace(/ /g, ''),
     );
     for (const n of ordered) {
       if (/^h[1-6]$/.test(tag(n))) {
-        product = null;
-        count = null;
+        const label = clean(text(n)),
+          level = Number(tag(n).slice(1)),
+          model = modelToken(label);
+        headingLevel = level;
+        if (model || anchorLevel === null || level <= anchorLevel || !subordinate.test(label)) {
+          product = null;
+          count = null;
+          anchorLevel = model ? level : null;
+          headingModel = model;
+        }
       }
       if (tag(n) === 'p') {
         const spec = /GPU[:：]\s*([^:：]+?)\s*[x×]\s*(\d+)\s*枚/i.exec(clean(text(n)));
         if (spec) {
+          if (headingModel && modelToken(spec[1]) !== headingModel)
+            throw new Error('public_gpu_table_schema_changed');
           product = spec[1].trim();
           count = Number(spec[2]);
+          if (!headingLevel || !Number.isSafeInteger(count) || count < 1 || count > 10000)
+            throw new Error('public_gpu_table_schema_changed');
+          anchorLevel ??= headingLevel;
         }
       }
       if (tag(n) !== 'table') continue;
@@ -228,6 +263,13 @@ export async function parsePublicGpu(
         if (cells.length !== header.length || !/^[a-z0-9][a-z0-9_-]+$/.test(cells[0]))
           throw new Error('public_gpu_table_schema_changed');
         if (!selected(product)) continue;
+        if (
+          c.scope.kind === 'highreso_public' &&
+          c.scope.gpu_counts &&
+          (count === null || !c.scope.gpu_counts.includes(count))
+        )
+          continue;
+        cohortRows++;
         const storage = /^(\d+(?:\.\d+)?)GB$/i.exec(cells[3].replace(/ /g, ''));
         if (!storage && cells[3] !== '-' && cells[3] !== '')
           throw new Error('public_gpu_storage_schema_changed');
@@ -277,6 +319,7 @@ export async function parsePublicGpu(
           inputRows++;
           if (cells.length !== 5) throw new Error('public_gpu_table_schema_changed');
           if (!selected(cells[1])) continue;
+          cohortRows++;
           const month = /^(\d{4})年(\d{1,2})月$/.exec(cells[0]);
           if (!month || +month[2] < 1 || +month[2] > 12)
             throw new Error('public_gpu_period_schema_changed');
@@ -314,6 +357,26 @@ export async function parsePublicGpu(
         children(n).forEach(walk);
     };
     walk(doc);
+    if (v2) {
+      // No stable case ID is supplied. Preserve the public multiset, including
+      // identical rows; never infer transaction identity from order or price.
+      const occurrences = new Map<string, number>();
+      for (const record of records) {
+        const content = await hash(
+          stable([
+            record.offer.source_period,
+            clean(record.offer.reported_product).toLowerCase(),
+            record.reported_quantity,
+            record.offer.amount_decimal,
+          ]),
+        );
+        const occurrence = (occurrences.get(content) ?? 0) + 1;
+        occurrences.set(content, occurrence);
+        record.record_key = 'public-case:' + content + ':' + occurrence;
+        record.offer.record_key = record.record_key;
+        record.case_identity_basis = 'public_content_occurrence_not_transaction';
+      }
+    }
   }
   if (!matchedTables || (c.adapter === 'rebro_public' && matchedTables !== 1))
     throw new Error('public_gpu_table_missing');
@@ -328,6 +391,17 @@ export async function parsePublicGpu(
     next_page: null,
     coverage: 'complete',
     reasons: records.some((r) => r.offer.amount_decimal === null) ? ['price_not_reported'] : [],
+    ...(v2
+      ? {
+          selection: {
+            method_version: 'domestic-gpu-html-v2',
+            input_rows: inputRows,
+            cohort_rows: cohortRows,
+            excluded_rows: inputRows - cohortRows,
+            price_slots_per_row: c.adapter === 'highreso_public' ? 2 : 1,
+          },
+        }
+      : {}),
   });
 }
 function publicCaseKey(period: string, product: string) {

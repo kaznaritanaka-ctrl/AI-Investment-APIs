@@ -30,7 +30,7 @@
     "max_bytes": 1000000,
     "max_records": 48,
     "policy": {
-      "version": "highreso_public-20261018-proposal-v1",
+      "version": "highreso_public-20261018-proposal-v2",
       "rights": {
         "automated_collection": "review_required",
         "private_storage": "review_required",
@@ -64,7 +64,7 @@
   },
   "adapter": "highreso_public",
   "visibility": "private_only",
-  "method_version": "domestic-gpu-html-v1",
+  "method_version": "domestic-gpu-html-v2",
   "owner_approval_ref": null,
   "wire_contract_review_ref": null,
   "history_access": [],
@@ -79,6 +79,7 @@
   },
   "scope": {
     "kind": "highreso_public",
+    "gpu_counts": [1],
     "models": [
       "A100",
       "H100"
