@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+2026-10-18 PR #19レビュー: [既存3sourceへの影響・初回Cloud実行の残件](docs/pr19-review-20261018.md)。保存済み初回証拠を取得OFFでもHTTPなしで復旧する経路と、個人研究binding/pin/flagのoffline検査を追加しました。未有効化のままで、実行承認や実IAM/NASの確認を代替するものではありません。
+
 2026-10-18 本番基点のローカル統合: 本番CollectorのGit記録 `0abf2b6` にPR #18 `2f32cf9`（#16を含む）を隔離branchで統合しました。[統合内容・synthetic検証](docs/collector-integration-validation-20261018.md)と[直前の本番read-only監査](docs/collector-production-integration-20261018.md)を参照してください。ECB・Models.dev・private PoC、既存Cron、source grant、Public APIを維持し、個人研究の新flags/bindingsは未設定です。以下のmain由来branchに関する注意は統合前の履歴です。本番deploy・remote migration・実収集は行っていません。
 
 2026-10-18 最新の承認・実装: 所有者はHighreso/Rebroの非公開・個人研究限定の例外と長期保存を承認済みです。NAS専用exportの分離と停止状態の初回Cloud準備は [専用資料](docs/nas-export-isolation-20261018.md) を参照してください。提供者許諾はunconfirmed、実収集・権利grant変更・本番deploy・実鍵・NAS実機変更は未実施です。以下の旧段階の「例外承認待ち」「分離は設計のみ」は履歴で、現在の実行承認待ちとは区別します。

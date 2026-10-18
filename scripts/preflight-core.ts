@@ -9,6 +9,9 @@ export function inspectPreflight(
   const errors: string[] = [],
     blockers: string[] = [],
     pending: string[] = [];
+  const personal = inspectPersonalDeployment(deployment, collector, api);
+  errors.push(...personal.errors);
+  pending.push(...personal.pending);
   const require = (v: unknown, code: string) => {
     if (!v) blockers.push(code);
   };
@@ -198,4 +201,107 @@ export function inspectPreflight(
     deployed: false,
     cron_enabled: false,
   };
+}
+
+// Static configuration only: no contract/object reads, credentials or remote changes.
+function inspectPersonalDeployment(deployment: Config, collector: Config, api: Config) {
+  const errors: string[] = [],
+    pending: string[] = [];
+  const vars = collector.vars ?? {},
+    buckets: Config[] = collector.r2_buckets ?? [];
+  const modes = [
+    ['PERSONAL_MAINTENANCE_ENABLED', 'PERSONAL_INITIAL_COLLECTION_ENABLED', 'PERSONAL_CLOUD_PINS'],
+    [
+      'PERSONAL_DAILY_MAINTENANCE_ENABLED',
+      'PERSONAL_DAILY_COLLECTION_ENABLED',
+      'PERSONAL_DAILY_PINS',
+    ],
+  ];
+  if (Object.keys(api.vars ?? {}).some((k) => /^(PERSONAL_|NAS_)/.test(k)))
+    errors.push('personal_public_variables_forbidden');
+  for (const [maintenance, acquisition] of modes) {
+    for (const key of [maintenance, acquisition])
+      if (vars[key] !== undefined && !['true', 'false'].includes(vars[key]))
+        errors.push('personal_flags_invalid');
+    if (vars[acquisition] === 'true' && vars[maintenance] !== 'true')
+      errors.push('personal_collection_requires_maintenance');
+    if (vars[maintenance] === 'true' && vars.COLLECTION_ENABLED !== 'true')
+      errors.push('personal_maintenance_requires_collector');
+  }
+  const configured =
+    modes.some(([m, a, p]) => vars[m] === 'true' || vars[a] === 'true' || vars[p] !== undefined) ||
+    vars.PERSONAL_EXPORT_PINS !== undefined ||
+    buckets.some((b) => /^NAS_/.test(b.binding));
+  if (!configured) return { errors, pending };
+  const read = (value: unknown): Config | null => {
+    try {
+      if (typeof value !== 'string' || value.length > 65536) return null;
+      const result = JSON.parse(value);
+      return result && typeof result === 'object' && !Array.isArray(result) ? result : null;
+    } catch {
+      return null;
+    }
+  };
+  const bound = (binding: string) => {
+    const matches = buckets.filter((b) => b.binding === binding);
+    return matches.length === 1 ? matches[0].bucket_name : undefined;
+  };
+  const origin = bound('EVIDENCE'),
+    exported = bound('NAS_EXPORT'),
+    health = bound('NAS_HEALTH');
+  const bucketNames = [origin, exported, ...(health ? [health] : [])];
+  if (
+    bucketNames.some(
+      (name) => typeof name !== 'string' || !/^[a-z0-9][a-z0-9-]{2,62}$/.test(name),
+    ) ||
+    new Set(bucketNames).size !== bucketNames.length ||
+    buckets.filter((b) => b.binding === 'NAS_HEALTH').length > 1
+  )
+    errors.push('personal_export_bucket_isolation_invalid');
+  const privateID = collector.d1_databases?.find(
+    (b: Config) => b.binding === 'PRIVATE_DB',
+  )?.database_id;
+  const transport = read(vars.PERSONAL_EXPORT_PINS);
+  if (
+    !transport ||
+    transport.version !== 'personal-nas-export-v1' ||
+    transport.account_id !== deployment.account_id ||
+    transport.private_database_id !== privateID ||
+    transport.origin_bucket !== origin ||
+    transport.export_bucket !== exported ||
+    transport.health_bucket !== (health ?? null) ||
+    typeof transport.isolation_review_ref !== 'string' ||
+    !transport.isolation_review_ref.trim()
+  )
+    errors.push('personal_export_pins_invalid');
+  for (const [maintenance, , key] of modes) {
+    if (vars[maintenance] !== 'true' && vars[key] === undefined) continue;
+    const pins = read(vars[key]);
+    if (
+      !pins ||
+      pins.account_id !== deployment.account_id ||
+      pins.private_database_id !== privateID ||
+      pins.bucket !== origin ||
+      !Array.isArray(pins.contracts) ||
+      pins.contracts.length < 1 ||
+      pins.contracts.length > 2 ||
+      pins.contracts.some(
+        (p: Config) =>
+          !p ||
+          !['highreso_public', 'rebro_public'].includes(p.source_id) ||
+          typeof p.contract_hash !== 'string' ||
+          !/^[a-f0-9]{64}$/.test(p.contract_hash),
+      ) ||
+      new Set(pins.contracts.map((p: Config) => p.source_id)).size !== pins.contracts.length
+    )
+      errors.push(
+        key === 'PERSONAL_CLOUD_PINS'
+          ? 'personal_initial_pins_invalid'
+          : 'personal_daily_pins_invalid',
+      );
+  }
+  if (vars.PERSONAL_DAILY_MAINTENANCE_ENABLED === 'true' && !health)
+    errors.push('personal_daily_health_binding_missing');
+  pending.push('personal_contracts_resources_iam_and_execution_window_not_verified');
+  return { errors, pending };
 }

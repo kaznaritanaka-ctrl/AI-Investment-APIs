@@ -191,12 +191,49 @@ export function verifyPersonalRun(c: PersonalContract, digest: string, r: Person
     throw new Error('personal_captured_contract_mismatch');
 }
 
-// Dedicated local entrypoint. The ordinary ResearchConfig/rights gates are never bypassed.
+// The ordinary ResearchConfig/rights gates are never bypassed by either entrypoint.
 export async function collectPersonalGpu(
   env: PersonalEnv,
   input: unknown,
   opt: PersonalOptions = {},
 ) {
+  return processPersonalGpu(env, input, opt, false);
+}
+
+// Cloud maintenance may finish an existing capture after acquisition is switched
+// off/closed. This path cannot create a run, reserve an attempt or fall back to HTTP.
+export async function resumePersonalCloudCapture(
+  env: PersonalEnv,
+  input: unknown,
+  opt: PersonalOptions = {},
+) {
+  return processPersonalGpu(env, input, opt, true);
+}
+
+type PersonalCollectionResult = {
+  run_id: string;
+  state: 'complete' | 'leased';
+  observation_count: number;
+  reused: boolean;
+};
+function processPersonalGpu(
+  env: PersonalEnv,
+  input: unknown,
+  opt: PersonalOptions,
+  resumeOnly: false,
+): Promise<PersonalCollectionResult>;
+function processPersonalGpu(
+  env: PersonalEnv,
+  input: unknown,
+  opt: PersonalOptions,
+  resumeOnly: true,
+): Promise<PersonalCollectionResult | { state: 'no_run' | 'not_partial' }>;
+async function processPersonalGpu(
+  env: PersonalEnv,
+  input: unknown,
+  opt: PersonalOptions,
+  resumeOnly: boolean,
+): Promise<PersonalCollectionResult | { state: 'no_run' | 'not_partial' }> {
   const now = clock(env, opt),
     at = now();
   await validatePersonalState(env, input, at, 'maintain');
@@ -205,22 +242,34 @@ export async function collectPersonalGpu(
     env,
     input,
     at,
-    'collect',
+    resumeOnly ? 'maintain' : 'collect',
   );
-  if (!opt.allow_network) throw new Error('personal_network_opt_in_required');
-  if (env.ENVIRONMENT === 'test' && !opt.fetcher)
+  if (resumeOnly && (c.version !== 'personal-gpu-cloud-v1' || !env.PERSONAL_CLOUD))
+    throw new Error('personal_cloud_resume_required');
+  if (!resumeOnly && !opt.allow_network) throw new Error('personal_network_opt_in_required');
+  if (!resumeOnly && env.ENVIRONMENT === 'test' && !opt.fetcher)
     throw new Error('personal_fixture_fetcher_required');
   const sourceId = c.config.source.source_id,
     runId = await runIdFor(c);
+  const existing = await runRow(env, runId);
+  if (resumeOnly) {
+    if (!existing) return { state: 'no_run' };
+    verifyPersonalRun(c, digest, existing);
+    if (!['collecting', 'partial'].includes(existing.state)) return { state: 'not_partial' };
+    await current(env, c, digest, runId, at, 'read');
+  }
   await assertNotRevoked(env, sourceId, runId);
-  if (await env.EVIDENCE.head(collectionStopKey(c))) throw new Error('personal_collection_stopped');
+  if (!resumeOnly && (await env.EVIDENCE.head(collectionStopKey(c))))
+    throw new Error('personal_collection_stopped');
   const priorAttempt = await attempt(env, c, digest, runId);
+  if (resumeOnly && !priorAttempt) throw new Error('personal_attempt_missing');
   if (c.version === 'personal-gpu-cloud-v1') {
     // Independent of DB restoration and exception IDs. A new contract cannot reset the budget.
     const key = 'research-control/personal-cloud-first/' + sourceId + '.json';
-    await env.EVIDENCE.put(key, stable({ contract_hash: digest }), {
-      onlyIf: { etagDoesNotMatch: '*' },
-    });
+    if (!resumeOnly)
+      await env.EVIDENCE.put(key, stable({ contract_hash: digest }), {
+        onlyIf: { etagDoesNotMatch: '*' },
+      });
     const anchor = await env.EVIDENCE.get(key);
     if (
       !anchor ||
@@ -229,7 +278,6 @@ export async function collectPersonalGpu(
     )
       throw new Error('personal_cloud_initial_attempt_locked');
   }
-  const existing = await runRow(env, runId);
   const capturedAt = priorAttempt?.started_at ?? existing?.recorded_at ?? at;
   if (
     capturedAt < c.decision.acquisition_from ||
@@ -242,50 +290,52 @@ export async function collectPersonalGpu(
     throw new Error('personal_storage_expired');
   if (!existing && !priorAttempt) await initializePersonalReview(env, c);
   else await personalReviewHead(env, c, true);
-  await env.PRIVATE_DB.batch([
-    env.PRIVATE_DB.prepare(
-      'INSERT OR IGNORE INTO research_sources(source_id,policy_version,config_hash) VALUES (?,?,?)',
-    ).bind(sourceId, c.config.source.policy.version, digest),
-    env.PRIVATE_DB.prepare(
-      'INSERT OR IGNORE INTO research_personal_contracts(contract_hash,source_id,exception_id,config_hash,contract_json) VALUES (?,?,?,?,?)',
-    ).bind(digest, sourceId, c.decision.exception_id, c.config_sha256, stable(c)),
-  ]);
-  await current(env, c, digest, runId, now(), 'collect');
+  if (!resumeOnly)
+    await env.PRIVATE_DB.batch([
+      env.PRIVATE_DB.prepare(
+        'INSERT OR IGNORE INTO research_sources(source_id,policy_version,config_hash) VALUES (?,?,?)',
+      ).bind(sourceId, c.config.source.policy.version, digest),
+      env.PRIVATE_DB.prepare(
+        'INSERT OR IGNORE INTO research_personal_contracts(contract_hash,source_id,exception_id,config_hash,contract_json) VALUES (?,?,?,?,?)',
+      ).bind(digest, sourceId, c.decision.exception_id, c.config_sha256, stable(c)),
+    ]);
+  await current(env, c, digest, runId, now(), resumeOnly ? 'read' : 'collect');
   const registered = await env.PRIVATE_DB.prepare(
     'SELECT contract_hash FROM research_personal_contracts WHERE source_id=? AND exception_id=?',
   )
     .bind(sourceId, c.decision.exception_id)
     .first<{ contract_hash: string }>();
   if (registered?.contract_hash !== digest) throw new Error('personal_contract_reused');
-  await env.PRIVATE_DB.batch([
-    env.PRIVATE_DB.prepare(
-      "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at,all_copies_expires_at,retention_snapshot_json,normalized_mode) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?,?,?,?)",
-    ).bind(
-      runId,
-      sourceId,
-      digest,
-      await hash(stable(c.config.scope)),
-      c.config.source.policy.version,
-      c.decision.terms.version,
-      capturedAt,
-      capturedAt,
-      Number(c.data_origin === 'synthetic'),
-      deadlines.evidence,
-      deadlines.normalized,
-      deadlines.all_copies,
-      stable({
-        version:
-          c.version === 'personal-gpu-v1' ? 'personal-retention-v1' : 'personal-retention-v2',
-        authority_kind: authority,
-        contract_hash: digest,
-        ...c.decision.retention,
-      }),
-      c.version !== 'personal-gpu-v1' ? 'owner_continuing' : 'fixed_days',
-    ),
-    env.PRIVATE_DB.prepare(
-      'INSERT OR IGNORE INTO research_personal_runs(run_id,contract_hash) VALUES (?,?)',
-    ).bind(runId, digest),
-  ]);
+  if (!resumeOnly)
+    await env.PRIVATE_DB.batch([
+      env.PRIVATE_DB.prepare(
+        "INSERT OR IGNORE INTO research_runs(run_id,source_id,config_hash,query_hash,policy_version,terms_version,scheduled_for,recorded_at,synthetic,state,next_page,evidence_expires_at,normalized_expires_at,all_copies_expires_at,retention_snapshot_json,normalized_mode) VALUES (?,?,?,?,?,?,?,?,?,'collecting',0,?,?,?,?,?)",
+      ).bind(
+        runId,
+        sourceId,
+        digest,
+        await hash(stable(c.config.scope)),
+        c.config.source.policy.version,
+        c.decision.terms.version,
+        capturedAt,
+        capturedAt,
+        Number(c.data_origin === 'synthetic'),
+        deadlines.evidence,
+        deadlines.normalized,
+        deadlines.all_copies,
+        stable({
+          version:
+            c.version === 'personal-gpu-v1' ? 'personal-retention-v1' : 'personal-retention-v2',
+          authority_kind: authority,
+          contract_hash: digest,
+          ...c.decision.retention,
+        }),
+        c.version !== 'personal-gpu-v1' ? 'owner_continuing' : 'fixed_days',
+      ),
+      env.PRIVATE_DB.prepare(
+        'INSERT OR IGNORE INTO research_personal_runs(run_id,contract_hash) VALUES (?,?)',
+      ).bind(runId, digest),
+    ]);
   const r = await runRow(env, runId);
   if (!r) throw new Error('personal_daily_limit');
   verifyPersonalRun(c, digest, r);
@@ -299,7 +349,7 @@ export async function collectPersonalGpu(
     };
   }
   if (r.state === 'purged' || r.state === 'purging') throw new Error('personal_history_deleted');
-  if (Date.parse(at) - Date.parse(capturedAt) > 21600000 || at < capturedAt)
+  if ((!resumeOnly && Date.parse(at) - Date.parse(capturedAt) > 21600000) || at < capturedAt)
     throw new Error('personal_capture_window_expired');
   const lease = crypto.randomUUID();
   const locked = await env.PRIVATE_DB.prepare(
@@ -310,7 +360,7 @@ export async function collectPersonalGpu(
   if (!locked.meta.changes)
     return { run_id: runId, state: 'leased', observation_count: 0, reused: true };
   const guard = async () => {
-    await current(env, c, digest, runId, now(), 'collect');
+    await current(env, c, digest, runId, now(), resumeOnly ? 'read' : 'collect');
     if (
       !(await env.PRIVATE_DB.prepare(
         'SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>?',
@@ -330,6 +380,7 @@ export async function collectPersonalGpu(
       if (stored.size > 131072) throw new Error('research_evidence_too_large');
       encoded = await stored.text();
     } else {
+      if (resumeOnly) throw new Error('personal_saved_evidence_missing');
       if (priorAttempt || r.http_page_attempts > 0) throw new Error('personal_attempt_consumed');
       const reserved = await env.EVIDENCE.put(
         personalAttemptKey(c),
@@ -407,6 +458,7 @@ export async function collectPersonalGpu(
       e.method_version !== c.config.method_version ||
       e.synthetic !== (c.data_origin === 'synthetic') ||
       e.observed_at < capturedAt ||
+      e.observed_at >= c.decision.acquisition_until ||
       e.observed_at > now() ||
       now() >= deadlines.evidence
     )

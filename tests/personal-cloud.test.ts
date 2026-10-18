@@ -3,7 +3,13 @@ import { it, expect, describe, beforeEach, afterEach, vi } from 'vitest';
 import { personalLocalEnv } from '../scripts/personal-local-env';
 import { cloudFixture } from './personal-cloud-fixture';
 import { continuingFixture, reviewFixture } from './personal-continuing-fixture';
-import { collectPersonalGpu, readPersonalGpu, maintainPersonalGpu } from '../src/research/personal';
+import {
+  collectPersonalGpu,
+  readPersonalGpu,
+  maintainPersonalGpu,
+  resumePersonalCloudCapture,
+  personalAttemptKey,
+} from '../src/research/personal';
 import { inspectPersonalContract, PersonalCloudSchema } from '../src/research/personal-contract';
 import { inspectPersonalAuthority } from '../src/research/personal-cloud-authority';
 import {
@@ -29,6 +35,35 @@ describe('Cloud personal projection (synthetic only)', { timeout: 120000 }, () =
   afterEach(async () => {
     await local.mf.dispose();
   });
+  async function interruptedCapture() {
+    const { contract: c, binding } = await cloudFixture();
+    const env = cloudPersonalEnv(local.env, c, binding);
+    let batches = 0;
+    const interrupted = new Proxy(env.PRIVATE_DB, {
+      get(target, key) {
+        if (key === 'batch')
+          return async (statements: D1PreparedStatement[]) => {
+            if (++batches === 3) throw new Error('synthetic_db_failure');
+            return target.batch(statements);
+          };
+        const value = Reflect.get(target, key);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const fetched = vi.fn(gpuFetcher('highreso_public'));
+    await expect(
+      collectPersonalGpu({ ...env, PRIVATE_DB: interrupted }, c, {
+        now: () => gpuTime,
+        fetcher: fetched,
+        allow_network: true,
+      }),
+    ).rejects.toThrow('synthetic_db_failure');
+    expect(fetched).toHaveBeenCalledTimes(3);
+    expect(await env.PRIVATE_DB.prepare('SELECT state FROM research_runs').first()).toEqual({
+      state: 'partial',
+    });
+    return { c, binding, env };
+  }
   it('keeps both cloud execution templates unapproved and non-executable with unchanged source hashes', async () => {
     for (const source of ['highreso_public', 'rebro_public']) {
       const draft = JSON.parse(
@@ -122,6 +157,148 @@ describe('Cloud personal projection (synthetic only)', { timeout: 120000 }, () =
     ).toBe(false);
     expect(await personalCloudScheduled({} as any)).toEqual([]);
     expect((await local.env.EVIDENCE.list()).objects).toHaveLength(0);
+  });
+  it.each(['2026-10-18T02:00:00.000Z', '2026-10-19T00:30:00.000Z'])(
+    'resumes saved initial evidence with acquisition OFF at %s without HTTP',
+    async (later) => {
+      const { c, binding, env } = await interruptedCapture();
+      await local.env.EVIDENCE.put(
+        'personal-research/control/contracts/highreso_public.json',
+        stable(c),
+      );
+      const base = {
+        ...local.env,
+        NAS_EXPORT: await local.mf.getR2Bucket('NAS_EXPORT'),
+        PERSONAL_EXPORT_PINS: JSON.stringify(exportFixture()),
+        PERSONAL_MAINTENANCE_ENABLED: 'true',
+        PERSONAL_INITIAL_COLLECTION_ENABLED: 'false',
+        PERSONAL_CLOUD_PINS: JSON.stringify({
+          ...binding,
+          contract_hash: undefined,
+          contracts: [{ source_id: 'highreso_public', contract_hash: binding.contract_hash }],
+        }),
+      } as any;
+      const noHTTP = vi.fn(async () => {
+        throw new Error('unexpected_network');
+      });
+      expect(
+        await personalCloudScheduled(base, { now: () => later, fetcher: noHTTP }),
+      ).toMatchObject([{ state: 'complete', acquisition: 'not_requested', recovery: 'complete' }]);
+      expect(noHTTP).not.toHaveBeenCalled();
+      expect(
+        await env.PRIVATE_DB.prepare(
+          'SELECT state,observation_count,http_page_attempts FROM research_runs',
+        ).first(),
+      ).toEqual({
+        state: 'complete',
+        observation_count: 4,
+        http_page_attempts: 3,
+      });
+      expect((await readPersonalGpu(env, c, { now: () => later })).results).toHaveLength(4);
+      expect(
+        await personalCloudScheduled(base, { now: () => later, fetcher: noHTTP }),
+      ).toMatchObject([
+        { state: 'complete', acquisition: 'not_requested', recovery: 'not_partial' },
+      ]);
+      expect(noHTTP).not.toHaveBeenCalled();
+    },
+  );
+  it.each(['missing', 'tampered', 'revoked', 'expired', 'review_due', 'attempt_missing', 'leased'])(
+    'does not replay %s evidence or acquire replacement data',
+    async (kind) => {
+      const { c, env } = await interruptedCapture();
+      const run = await personalRunId(c),
+        key = 'research/personal/highreso_public/' + run + '/0.json';
+      let at = '2026-10-18T02:00:00.000Z';
+      if (kind === 'missing') await env.EVIDENCE.delete(key);
+      if (kind === 'tampered') await env.EVIDENCE.put(key, '{}');
+      if (kind === 'revoked')
+        await env.EVIDENCE.put(
+          sourceRevocationKey('highreso_public'),
+          stable({ source_id: 'highreso_public', revoked_at: at }),
+        );
+      if (kind === 'expired') at = '2026-10-19T01:00:00.000Z';
+      if (kind === 'review_due') {
+        const approved = '2026-10-18T01:10:00.000Z';
+        await renewPersonalReview(
+          env,
+          c,
+          {
+            ...(await reviewFixture(env, c as any, approved)),
+            review_after: '2026-10-18T01:20:00.000Z',
+          },
+          { now: () => approved },
+        );
+      }
+      if (kind === 'attempt_missing')
+        await local.env.EVIDENCE.delete(
+          'personal-research/control/highreso_public/' + personalAttemptKey(c),
+        );
+      if (kind === 'leased')
+        await env.PRIVATE_DB.prepare(
+          'UPDATE research_runs SET lease_until=?,lease_token=? WHERE run_id=?',
+        )
+          .bind('2026-10-18T03:00:00.000Z', 'synthetic-active', run)
+          .run();
+      const noHTTP = vi.fn(async () => {
+        throw new Error('unexpected_network');
+      });
+      const result = resumePersonalCloudCapture(env, c, {
+        now: () => at,
+        fetcher: noHTTP,
+        allow_network: true,
+      });
+      if (kind === 'revoked') expect(await result).toMatchObject({ state: 'not_partial' });
+      else if (kind === 'leased') expect(await result).toMatchObject({ state: 'leased' });
+      else await expect(result).rejects.toThrow();
+      expect(noHTTP).not.toHaveBeenCalled();
+      expect(
+        await env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM research_gpu_observations').first(),
+      ).toEqual({ n: 0 });
+      expect(
+        await env.PRIVATE_DB.prepare('SELECT http_page_attempts FROM research_runs').first(),
+      ).toEqual({ http_page_attempts: 3 });
+    },
+  );
+  it('exports and restores the full synthetic 24-instance / 48-price method-v2 cohort', async () => {
+    const { contract: c } = await cloudFixture();
+    const html =
+      '<h2>A100 single</h2><p>GPU：NVIDIA A100 80GB x 1枚</p><table><tbody><tr><th>インスタンス</th><th>従量課金 [1h・台]</th><th>月額課金 [月・台]</th><th>ストレージ</th></tr>' +
+      Array.from(
+        { length: 24 },
+        (_, i) =>
+          `<tr><td>synthetic-${i}</td><td>${i + 1}円</td><td>${(i + 1) * 100}円</td><td>123GB</td></tr>`,
+      ).join('') +
+      '</tbody></table>';
+    expect(c.config.method_version).toBe('domestic-gpu-html-v2');
+    const env = cloudPersonalEnv(local.env, c, {
+      contract_hash: await hash(stable(c)),
+      ...c.cloud,
+    });
+    const fetcher = vi.fn(gpuFetcher('highreso_public', html));
+    expect(
+      await collectPersonalGpu(env, c, { now: () => gpuTime, fetcher, allow_network: true }),
+    ).toMatchObject({ state: 'complete', observation_count: 48 });
+    let state;
+    for (let i = 0; i < 4; i++) {
+      state = await exportCloudPersonal(env, local.env.EVIDENCE, c, { now: () => gpuTime });
+      if (state.state === 'complete') break;
+    }
+    expect(state?.state).toBe('complete');
+    const control = await (await local.env.EVIDENCE.get(
+      cloudControlKey('highreso_public'),
+    ))!.json<any>();
+    const manifest = await (await local.env.EVIDENCE.get(control.latest_manifest))!.json<any>();
+    const chunks = await Promise.all(
+      manifest.chunks.map(
+        async (p: { key: string }) =>
+          new Uint8Array(await (await local.env.EVIDENCE.get(p.key))!.arrayBuffer()),
+      ),
+    );
+    expect(
+      await verifyNasRestore(JSON.parse(Buffer.concat(chunks).toString()), control, gpuTime),
+    ).toMatchObject({ state: 'verified', observation_count: 48 });
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
   it('exports only complete private projection, resumes interrupted manifest, restores current authority and preserves attempts', async () => {
     const { contract: c, binding } = await cloudFixture();

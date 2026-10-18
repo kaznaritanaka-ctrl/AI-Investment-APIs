@@ -8,7 +8,7 @@ import {
 } from './personal-cloud';
 import type { CollectorEnv } from '../schema';
 import { hash, stable } from '../util';
-import { collectPersonalGpu, type PersonalOptions } from './personal';
+import { collectPersonalGpu, resumePersonalCloudCapture, type PersonalOptions } from './personal';
 import { nasExportBinding, syncNasExport } from './nas-export';
 
 const Pins = z
@@ -50,6 +50,12 @@ export async function personalCloudScheduled(base: CollectorEnv, opt: PersonalOp
         throw new Error('personal_contract_mismatch');
       const env = cloudPersonalEnv(base, contract, { ...pins, contract_hash: pin.contract_hash });
       const at = (opt.now ?? (() => new Date().toISOString()))();
+      let recovery = 'blocked_or_failed';
+      try {
+        recovery = (await resumePersonalCloudCapture(env, contract, opt)).state;
+      } catch {
+        /* no HTTP fallback; export/retention still run under their own authority */
+      }
       let acquisition = 'not_requested';
       if (
         base.PERSONAL_INITIAL_COLLECTION_ENABLED === 'true' &&
@@ -70,6 +76,7 @@ export async function personalCloudScheduled(base: CollectorEnv, opt: PersonalOp
         source_id: pin.source_id,
         state: state.state,
         acquisition,
+        recovery,
         nas_export: exported.state,
       });
     } catch {
