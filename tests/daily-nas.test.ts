@@ -91,7 +91,8 @@ describe(
       await mkdir('work/nas-synthetic', { recursive: true });
       root = await mkdtemp(resolve('work/nas-synthetic/daily-'));
       const binary = resolve(
-          'work/tools/age-v1.3.2/age/age' + (process.platform === 'win32' ? '.exe' : ''),
+          process.env.AGE_BINARY ??
+            'work/tools/age-v1.3.2/age/age' + (process.platform === 'win32' ? '.exe' : ''),
         ),
         identity = join(root, 'synthetic.key');
       const generated = spawnSync(

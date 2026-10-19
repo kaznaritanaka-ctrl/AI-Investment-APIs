@@ -24,7 +24,6 @@ jobs:
       - run: node scripts/setup-test-age.mjs --allow-download
       - run: pnpm check
       - run: node scripts/preflight.mjs --allow-unconfigured
-      - run: pnpm test
       - name: Verify synthetic backup roundtrip and expiry with pinned age
         run: |
           mkdir "$RUNNER_TEMP/backup-age"
@@ -49,6 +48,7 @@ jobs:
           NAS_BACKUP_AGE_SHA256: eb7dd1b518f0a307c99cd97782623c5321da049154b04acd2d98d21aa7bc9b2c
           NAS_BACKUP_AGE_KEYGEN_SHA256: 0a0009db842259d6717f7eeb30acb6b90d2a2eb924c6acd0a0db0ca1f1537899
         run: docker compose -f deploy/personal-nas/compose.verify.yaml run --build --rm verify
+      - run: pnpm test
       - run: pnpm test:runtime
       - run: pnpm build
         env:
