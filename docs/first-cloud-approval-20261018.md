@@ -1,5 +1,7 @@
 # 初回Cloud実行の準備・所有者承認票
 
+2026-10-19レビュー追記: [最新レビュー・残る承認事項](pr19-review-20261019.md)を参照。NASのcontainer再作成に対応するLinux排他、CLI同時起動の修正、[personal専用image/CI](../deploy/personal-nas/README.md)を追加した。以下の「専用image未実装/未検証」は10/18の履歴であり、最新のsynthetic検証結果はレビュー記録とPRを正本とする。実NAS受入・本番操作の承認は未実施。
+
 2026-10-19追記: 所有者はこの準備資料・停止状態の設定ひな形のcommit/push、PR #19更新、CI確認を承認した。本番操作の承認ではない。当該コミットのCI結果は[PR #19](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/19)に記録する。以下の監査時刻・検証記録は2026-10-18時点の事実として維持する。
 
 2026-10-18。PR #19のコード候補は `8cb6b8bd50f25696eaacdb433a062f22b41453b1`。この資料は**非実行のレビュー用**であり、承認・日時・鍵を代入して本番へ自動反映するものではない。承認不要のmetadata照会、契約draft、停止状態の設定案、dry-runを準備した。main、Worker、D1 schema、R2、通常source grant、実鍵、NASには書込みを行っていない。

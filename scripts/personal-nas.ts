@@ -18,6 +18,7 @@ import { checkedLocalPath } from './personal-vault';
 import { sealNas, openNas } from './personal-nas-crypto';
 import { verifyNasRestore } from './personal-nas-restore';
 import { NasReadError, type NasReader } from './personal-nas-transport';
+import { linuxNasLock } from './personal-nas-lock';
 
 const sha = (bytes: Uint8Array | string) => createHash('sha256').update(bytes).digest('hex');
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -103,6 +104,7 @@ export async function atomic(path: string, body: string) {
   }
 }
 export async function sourceLock(root: string) {
+  if (process.platform === 'linux') return linuxNasLock(root);
   const path = join(root, 'cycle.lock');
   const acquire = () => open(path, 'wx', 0o600);
   let lock;
@@ -303,7 +305,7 @@ async function cleanup(dir: string, at: string, denied: boolean) {
   };
 }
 
-// Hourly invocation is sufficient: bounded work, persisted backoff, source-local leases,
+// Five-minute polling fits the export read window: bounded work, persisted backoff, source-local leases,
 // daily full-history generation + daily real decryption/SQLite restore verification.
 export async function personalNasCycle(reader: NasReader, input: unknown, opt: NasOptions) {
   const c = NasSourceSchema.parse(input),

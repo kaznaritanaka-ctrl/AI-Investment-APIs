@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+PR #19の初回Cloud準備に対する[2026-10-19レビューと残る承認事項](docs/pr19-review-20261019.md)、[personal NAS専用runtimeのsynthetic受入](deploy/personal-nas/README.md)を参照。実NAS・本番への反映は未実施です。
+
 初回Cloud実行の最新準備は[所有者承認票](docs/first-cloud-approval-20261018.md)を参照。実在resourceを照合した非実行contract案、取得窓、TOS 7/NAS、8本のprivate migration、Collector段階反映を分離しています。実収集・本番変更は未実施です。
 
 2026-10-18 PR #19レビュー: [既存3sourceへの影響・初回Cloud実行の残件](docs/pr19-review-20261018.md)。保存済み初回証拠を取得OFFでもHTTPなしで復旧する経路と、個人研究binding/pin/flagのoffline検査を追加しました。未有効化のままで、実行承認や実IAM/NASの確認を代替するものではありません。

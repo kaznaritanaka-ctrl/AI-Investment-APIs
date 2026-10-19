@@ -1,5 +1,7 @@
 # REVIEW ONLY. Not installed, enabled, or a tested TOS deployment.
 # This is the personal projection client, NOT deploy/nas-backup's whole-DB backup image.
+# Candidate build/isolated CI: deploy/personal-nas; real TOS admission is still required.
+# Use NAS-internal local storage supporting flock, not a re-mounted SMB/NFS root.
 # Supply a separately built/tested personal runtime image digest and real nonzero UID/GID.
 # Do not use TANAKA UID 0, default 1000, a privileged container, host network or Docker socket.
 services:
@@ -12,7 +14,7 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    pids_limit: 64
+    pids_limit: 128
     mem_limit: 1g
     memswap_limit: 1g
     restart: 'no'
@@ -38,7 +40,7 @@ services:
         bind: { create_host_path: false }
     # tmpfs ownership must match the reviewed service identity. No persistent plaintext staging.
     tmpfs:
-      - /app/work:rw,nosuid,nodev,size=536870912,uid=${PERSONAL_NAS_UID},gid=${PERSONAL_NAS_GID},mode=0700
+      - /app/work:rw,noexec,nosuid,nodev,size=536870912,uid=${PERSONAL_NAS_UID},gid=${PERSONAL_NAS_GID},mode=0700
       - /tmp:rw,nosuid,nodev,noexec,size=16777216,uid=${PERSONAL_NAS_UID},gid=${PERSONAL_NAS_GID},mode=0700
 # No ports. Default outbound network is needed for fixed R2 HTTPS; it is not an egress allowlist.
 # The image must contain Node 24, locked runtime dependencies and the verified age binary.

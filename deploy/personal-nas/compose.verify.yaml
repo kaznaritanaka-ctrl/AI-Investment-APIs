@@ -1,0 +1,25 @@
+# Synthetic-only local image. No production bindings, credentials, host paths or registry push.
+services:
+  verify:
+    image: ai-investment-personal-nas:synthetic-local
+    build:
+      context: ../..
+      dockerfile: deploy/personal-nas/Dockerfile
+      target: verify
+      network: none
+      args:
+        NODE_IMAGE: ${NAS_BACKUP_NODE_IMAGE:?Pinned Linux amd64 Node 24 image required}
+        AGE_SHA256: ${NAS_BACKUP_AGE_SHA256:?Verified age checksum required}
+        AGE_KEYGEN_SHA256: ${NAS_BACKUP_AGE_KEYGEN_SHA256:?Verified keygen checksum required}
+    network_mode: none
+    read_only: true
+    user: '10001:10001'
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    memswap_limit: 1g
+    tmpfs:
+      - /app/work:rw,noexec,nosuid,nodev,size=536870912,uid=10001,gid=10001,mode=0700
+      - /tmp:rw,noexec,nosuid,nodev,size=16777216,uid=10001,gid=10001,mode=0700
+    restart: 'no'
