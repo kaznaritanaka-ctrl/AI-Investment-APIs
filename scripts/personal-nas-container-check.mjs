@@ -13,6 +13,11 @@ const env = {
   TEMP: resolve('work/tmp'),
   TMP: resolve('work/tmp'),
   TMPDIR: resolve('work/tmp'),
+  // Vitest's local API token/cache are disposable test tooling, not NAS keys.
+  // Do not grant write access to the image or retain them in the backup root.
+  XDG_DATA_HOME: resolve('work/xdg-data'),
+  XDG_CACHE_HOME: resolve('work/xdg-cache'),
+  XDG_CONFIG_HOME: resolve('work/xdg-config'),
 };
 const run = (args) => spawnSync(process.execPath, args, { env, encoding: 'utf8', timeout: 600000 });
 const plan = run(['scripts/personal-nas-runner.mjs', 'plan']);
