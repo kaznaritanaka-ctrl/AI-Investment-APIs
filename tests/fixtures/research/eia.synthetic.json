@@ -1,0 +1,12 @@
+{
+  "synthetic_fixture": true,
+  "response": {
+    "total": "2",
+    "frequency": "monthly",
+    "data": [
+      { "period": "2026-07", "stateid": "CO", "sectorid": "IND", "price": "12.3456", "price-units": "cents per kilowatthour" },
+      { "period": "2026-08", "stateid": "CO", "sectorid": "IND", "price": null, "price-units": "cents per kilowatthour" }
+    ]
+  },
+  "request": { "ignored_metadata": "SYNTHETIC_DO_NOT_PERSIST" }
+}

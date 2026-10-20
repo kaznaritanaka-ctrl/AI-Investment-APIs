@@ -52,7 +52,12 @@ export async function fetchSource(
   if (source.authentication_required) throw new FetchFailure('authentication_not_configured');
   return fetchBounded(source, { url: source.endpoint, method: 'GET', headers: {} }, opt);
 }
-async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptions = {}) {
+export async function fetchBounded(
+  source: Source,
+  plan: RequestPlan,
+  opt: NetworkOptions = {},
+  format: 'json' | 'xml' | 'csv' = source.adapter === 'ecb' ? 'xml' : 'json',
+) {
   const now = opt.now ?? (() => new Date().toISOString());
   const fetcher = opt.fetcher ?? fetch,
     sleep = opt.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
@@ -72,7 +77,12 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
       retryDelay = 0;
     try {
       const headers = new Headers({
-        accept: source.adapter === 'ecb' ? 'application/xml' : 'application/json',
+        accept:
+          format === 'xml'
+            ? 'application/xml'
+            : format === 'csv'
+              ? 'text/csv, text/plain'
+              : 'application/json',
       });
       for (const [key, value] of Object.entries(plan.headers)) headers.set(key, value);
       if (opt.validators?.etag) headers.set('If-None-Match', opt.validators.etag);
@@ -129,7 +139,15 @@ async function fetchBounded(source: Source, plan: RequestPlan, opt: NetworkOptio
         throw new FetchFailure('response_too_large');
       }
       const contentType = response.headers.get('content-type') ?? '';
-      if (!(source.adapter === 'ecb' ? /xml/ : /json/).test(contentType)) {
+      if (
+        !(
+          format === 'xml'
+            ? /xml/
+            : format === 'csv'
+              ? /^(?:text\/(?:csv|plain)|application\/csv)(?:;|$)/i
+              : /json/
+        ).test(contentType)
+      ) {
         await response.body?.cancel();
         throw new FetchFailure('unexpected_content_type');
       }

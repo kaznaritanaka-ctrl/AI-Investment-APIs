@@ -29,6 +29,6 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: 'false'
       - run: node scripts/generate.mjs
-      - run: git diff --exit-code -- config/source.schema.json openapi.json
+      - run: git diff --exit-code -- config/source.schema.json config/proposals/research.schema.json openapi.json
       - run: git diff --check
 # No live-source requests, deployment or private artifacts in CI.

@@ -1,5 +1,9 @@
 # ソース台帳 — Phase 0
 
+2026-10-15追加: [全分野の実査台帳](source-expansion-20261015.md)へ、国内GPU/電力/メモリ/DC/水/ラボ/Physical AIと既存ソースの優先判断を分離しました。稼働用sourceは増やしていません。EIA/JEPXの承認待ちproposalはconfig/proposals/researchに置き、Private合成検証のみです。以下の過去台帳と10/15の配信版には差分があるため、最新のmetadata確認は追加台帳を参照してください。
+
+10/18最終指示の反映: 次の有効化候補は[Highreso/GPUSOROBANとRebroの2件だけ](research-long-retention-20261016.md#次の有効化候補は2つだけ)。所有者が公式feed・自動取得/保存/分析・契約終了後の継続保存・認証/費用を確認します。有限holdは提供者が認める場合の任意例外で、通常取得の追加条件ではありません。許諾済みならuntil_revokedを検討し、3〜5年を自動廃棄期限にしません。内部review_dueは取得/read停止と再レビューへ進め、保存許諾内の履歴を保持します。新sourceの実観測数=0、新allowed/source enable/商用許諾=0。EIA/JEPXはblockedでcritical path外。5年容量/80%は参考でありソース獲得の停止条件ではありません。
+
 調査日時: 2026-09-26 18:23 UTC以降（2026-09-27 JST）。権限の判断と価格の取得日時は別。機械可読の全項目・9権限・対象範囲・有効期間・保持日数は config/sources/*.json、検証スキーマは src/schema.ts / config/source.schema.json。
 
 | source_id | 投資上の用途・取得方法 | 初期判定 |

@@ -1,0 +1,104 @@
+{
+  "source": {
+    "source_id": "eia_retail_co_ind",
+    "dataset_type": "electricity",
+    "operator": "U.S. Energy Information Administration",
+    "source_url": "https://www.eia.gov/electricity/data.php",
+    "documentation_url": "https://www.eia.gov/opendata/documentation.php",
+    "terms_url": "https://www.eia.gov/opendata/terms-of-service.php",
+    "license_url": null,
+    "endpoint": "https://api.eia.gov/v2/electricity/retail-sales/data/",
+    "acquisition_method": "API v2 parser; transport blocked: credential URL prohibited",
+    "authentication_required": true,
+    "native_currency": "USD",
+    "native_unit": "cents per kilowatthour",
+    "geography": [
+      "US/CO"
+    ],
+    "native_frequency": "monthly",
+    "expected_update_calendar": "Monthly publication; proposed daily revision check",
+    "expected_lag": "unknown",
+    "rights_checked_at": "2026-10-15T00:00:00.000Z",
+    "rights_evidence_ref": "docs/source-expansion-20261015.md",
+    "attribution_text": "Source: U.S. Energy Information Administration; preserve publication date when available",
+    "known_limitations": [
+      "Retail industrial average is not wholesale or a DC tariff",
+      "API requires a key in the URL; no key or network path implemented",
+      "Publication timestamp and last revision date are unknown"
+    ],
+    "enabled": false,
+    "adapter": "candidate",
+    "selection": [],
+    "max_bytes": 1000000,
+    "max_records": 6,
+    "policy": {
+      "version": "eia_retail_co_ind-20261016-proposal-v2",
+      "rights": {
+        "automated_collection": "review_required",
+        "private_storage": "review_required",
+        "internal_analysis": "review_required",
+        "external_llm_processing": "denied",
+        "public_display": "review_required",
+        "raw_redistribution": "denied",
+        "normalized_redistribution": "review_required",
+        "derived_redistribution": "review_required",
+        "commercial_redistribution": "review_required"
+      },
+      "fields": [
+        "electricity_projection_v1"
+      ],
+      "conditions": [
+        "Private research proposal only; no active grant",
+        "No raw response archive, no public projection, no external LLM"
+      ],
+      "valid_from": "2026-10-15T00:00:00.000Z",
+      "valid_until": "2027-01-13T00:00:00.000Z",
+      "retention_days": 7,
+      "retention_limit_days": null,
+      "decision_actor": "pending_owner_review",
+      "evidence_version": "eia_retail_co_ind-terms-review-20261015",
+      "evidence_refs": [
+        "https://www.eia.gov/opendata/terms-of-service.php",
+        "https://www.eia.gov/about/copyrights_reuse.php"
+      ]
+    }
+  },
+  "adapter": "eia_retail",
+  "visibility": "private_only",
+  "method_version": "electricity-research-v1",
+  "owner_approval_ref": null,
+  "wire_contract_review_ref": null,
+  "history_access": [],
+  "terms": {
+    "version": "eia_retail_co_ind-terms-review-20261015",
+    "checked_at": "2026-10-15T00:00:00.000Z",
+    "review_after": "2027-01-13T00:00:00.000Z",
+    "evidence_refs": [
+      "docs/source-expansion-20261015.md"
+    ]
+  },
+  "scope": {
+    "kind": "eia_retail",
+    "state": "CO",
+    "sector": "IND"
+  },
+  "limits": {
+    "page_size": 6,
+    "max_pages": 2,
+    "max_input_rows": 12
+  },
+  "retention": {
+    "strategy": "d1_history",
+    "target_days": 1095,
+    "evidence_days": 7,
+    "archive_days": 0,
+    "normalized_days": null,
+    "normalized_mode": "unapproved",
+    "ongoing_storage": null,
+    "storage_review_hold": null,
+    "backup_days": 30,
+    "time_travel_days": null,
+    "lifecycle_review_ref": null,
+    "reviewed_ref": null
+  }
+}

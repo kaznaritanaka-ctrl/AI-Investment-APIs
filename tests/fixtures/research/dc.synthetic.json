@@ -1,0 +1,139 @@
+{
+  "series_id": "meti_dc_infrastructure_decisions",
+  "source_id": "synthetic_meti",
+  "source_url": "https://example.invalid/synthetic-dc",
+  "source_published_at": null,
+  "source_date": null,
+  "observed_at": "2026-10-15T01:00:00.000Z",
+  "recorded_at": "2026-10-15T01:00:00.000Z",
+  "policy_version": "synthetic-policy-v1",
+  "terms_version": "synthetic-terms-v1",
+  "evidence_ref": "synthetic:grant-001",
+  "method_version": "dc-disclosure-history-v1",
+  "event_kind": "grant_decision",
+  "disclosure_id": "synthetic-grant-001",
+  "portfolio": {
+    "schema_version": "dc-research-v1",
+    "projects": [
+      {
+        "project_id": "p",
+        "name": "Synthetic project, not a real company",
+        "operator_entity_id": null,
+        "country": null,
+        "evidence": {
+          "source_id": "synthetic_meti",
+          "source_url": "https://example.invalid/synthetic-dc",
+          "source_policy_version": "synthetic-policy-v1",
+          "observed_at": "2026-10-15T01:00:00.000Z",
+          "published_at": null,
+          "source_date": null,
+          "evidence_ref": "synthetic:grant-001",
+          "basis": "announced",
+          "confidence": "documented"
+        }
+      }
+    ],
+    "sites": [
+      {
+        "site_id": "s",
+        "project_id": "p",
+        "name": "Synthetic site",
+        "region": null,
+        "location_evidence_ref": null,
+        "evidence": {
+          "source_id": "synthetic_meti",
+          "source_url": "https://example.invalid/synthetic-dc",
+          "source_policy_version": "synthetic-policy-v1",
+          "observed_at": "2026-10-15T01:00:00.000Z",
+          "published_at": null,
+          "source_date": null,
+          "evidence_ref": "synthetic:grant-001",
+          "basis": "announced",
+          "confidence": "documented"
+        }
+      }
+    ],
+    "phases": [
+      {
+        "phase_id": "phase",
+        "site_id": "s",
+        "phase_label": "Synthetic planned phase",
+        "status": "proposed",
+        "planned_service_date": null,
+        "actual_service_date": null,
+        "evidence": {
+          "source_id": "synthetic_meti",
+          "source_url": "https://example.invalid/synthetic-dc",
+          "source_policy_version": "synthetic-policy-v1",
+          "observed_at": "2026-10-15T01:00:00.000Z",
+          "published_at": null,
+          "source_date": null,
+          "evidence_ref": "synthetic:grant-001",
+          "basis": "announced",
+          "confidence": "documented"
+        }
+      }
+    ],
+    "capacity_observations": [
+      {
+        "measure_id": "m",
+        "mw": "12.345",
+        "measure_kind": "planned_mw",
+        "scope": "phase",
+        "scope_id": "phase",
+        "as_of_date": null,
+        "evidence": {
+          "source_id": "synthetic_meti",
+          "source_url": "https://example.invalid/synthetic-dc",
+          "source_policy_version": "synthetic-policy-v1",
+          "observed_at": "2026-10-15T01:00:00.000Z",
+          "published_at": null,
+          "source_date": null,
+          "evidence_ref": "synthetic:grant-001",
+          "basis": "announced",
+          "confidence": "documented"
+        }
+      }
+    ],
+    "relationships": []
+  },
+  "water": [
+    {
+      "scope": "site",
+      "scope_id": "s",
+      "measure_kind": "withdrawal",
+      "amount_decimal": null,
+      "missing_reason": "not_disclosed",
+      "original_unit": "m3/year",
+      "period_from": null,
+      "period_to": null,
+      "basis": "planned",
+      "evidence_ref": "synthetic:grant-001"
+    },
+    {
+      "scope": "site",
+      "scope_id": "s",
+      "measure_kind": "consumption",
+      "amount_decimal": null,
+      "missing_reason": "not_disclosed",
+      "original_unit": "m3/year",
+      "period_from": null,
+      "period_to": null,
+      "basis": "planned",
+      "evidence_ref": "synthetic:grant-001"
+    },
+    {
+      "scope": "site",
+      "scope_id": "s",
+      "measure_kind": "discharge",
+      "amount_decimal": null,
+      "missing_reason": "not_disclosed",
+      "original_unit": "m3/year",
+      "period_from": null,
+      "period_to": null,
+      "basis": "planned",
+      "evidence_ref": "synthetic:grant-001"
+    }
+  ],
+  "synthetic": true
+}

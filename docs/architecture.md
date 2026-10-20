@@ -1,5 +1,7 @@
 # Phase 0 — 構成と判断
 
+2026-10-18更新: [Private研究用経路](private-research-runbook.md)は既存Collector未接続。0009は0007/0008の期限を維持し、明示的なuntil_revokedモードと状態評価台帳を追加します。review_due/collection_stopped/rights_unknownを削除義務から分離し、D1正規化履歴と短期R2証拠を独立管理。[外部取消し/削除記録と現行権利](research-long-retention-20261016.md)で復元後のreadを守ります。Public API/migration、稼働source、Cronは変更せず、archive/新DB/分割も追加しません。[mainと本番の差分](source-expansion-20261015.md)をdeploy前に再確認してください。
+
 調査日: 2026-09-27 JST (2026-09-26 UTC)。開始時のmainは `c64950ec0612f03a3556457583e17906ec9d2e78`、README一行のみ。既存実装・AGENTS.mdなし。開発ブランチ `codex/phase-0-1-foundation`。本番リソースは作成しない。
 
 Cloudflare Cron → collector Worker → 取得/保存の独立policy gate → 決定的HTTP → private R2証拠 → private D1の追記履歴 → 品質/公開gate → public D1。

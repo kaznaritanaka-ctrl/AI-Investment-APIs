@@ -2,6 +2,12 @@
 
 AI投資研究向けの出典・時刻・単位・比較条件・権利付き観測履歴APIです。投資判断や「AIバブル指数」を出すサービスではありません。
 
+2026-10-18: PR #16の追加指示に従い、[研究履歴のレビュー待ち・収集停止・削除義務と保持モード](docs/research-long-retention-20261016.md)を分離しました。review_dueでは許諾内の履歴を保持し、明示された継続保管根拠とowner承認があるsourceだけuntil_revokedを選べます。0007/0008/0009はローカルのみ、旧期限は不変です。[運用手順](docs/private-research-runbook.md)と[検証結果](docs/source-expansion-validation-20261015.md)を参照してください。新sourceの実観測数0、本番変更0。次の候補はHighreso/GPUSOROBANとRebroの公式feed・権利確認待ちで、EIA/JEPXはcritical path外です。容量試算は参考に留め、新archive/DB分割は実装しません。Cloudflare配信版はmainと異なり、このbranchを古い設定のままdeployしないでください。[調査台帳](docs/source-expansion-20261015.md)に差分を記録しています。
+
+10/18最終修正: 通常のfixed_days/until_revoked収集では `storage_review_hold` を一律必須にしません。実際の保存権が不明でholdもない場合は取得/readを止め、保存可否と削除期限を即時人間レビューへ上げます。無期限保管の許可は付与しません。
+
+以下の本番対応の記録は2026-10-04〜05時点です。10/15のread-only確認との差分は上記台帳へ分離しています。
+
 現在の本番はWorkers Paid・stage=enabledで、ECBとModels.devの5 provider/17 fieldを既存の日次Cronで収集・公開しています。2026-10-04にCollector a534ff0、Admin 97277deとprivate 0005/配信台帳を反映済みです。public APIは24768e9です。GPU実ソースはdisabledのままです。[本番対応・継続運用の受け入れ](docs/operations-acceptance.md)に配信version/tree/artifact、履歴保全、通知・復旧・保持の確認結果と現在の残件をまとめています。通知修正/0006とschema drift recoveryは未配信・未適用です。2026-10-05の所有者によるNetlify確認でGitHub push/PR保留を解除し、最新作業branchを公開して[Draft PR #7](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/7)を作成しました。main mergeと本番変更は引き続き別承認です。
 
 - [Phase 2納品報告](docs/phase2-delivery-report.md)
