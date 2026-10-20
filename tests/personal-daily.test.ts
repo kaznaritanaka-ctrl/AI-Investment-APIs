@@ -327,6 +327,8 @@ describe('daily private history and NAS health, synthetic only', { timeout: 1200
     expect(
       await env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM personal_daily_observations').first('n'),
     ).toBe(0);
+    for (const table of ['personal_daily_coverage', 'personal_daily_checkpoints'])
+      expect(await env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM ' + table).first('n')).toBe(0);
     expect(
       (await env.EVIDENCE.list({ prefix: dailyRoot('rebro_public') + 'slots/' })).objects,
     ).toHaveLength(2);

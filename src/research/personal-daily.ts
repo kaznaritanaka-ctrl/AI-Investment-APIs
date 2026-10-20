@@ -17,6 +17,14 @@ import {
 } from './daily-protocol';
 import type { PersonalOptions } from './personal';
 import type { CloudPersonalBinding } from './personal-cloud-authority';
+import { indexDailySeries } from './daily-series';
+import {
+  DailyCapture,
+  hasDailyCapture,
+  loadDailyCapture,
+  saveDailyCapture,
+  dailyPlan,
+} from './daily-checkpoint';
 
 export type DailyEnv = {
   PRIVATE_DB: D1Database;
@@ -240,6 +248,7 @@ export async function collectDaily(
     { c, h } = await registerDaily(env, input, pin, at),
     source = c.config.source.source_id,
     root = dailyRoot(source);
+  if (!(await indexDailySeries(env.PRIVATE_DB, source))) return { state: 'series_index_pending' };
   const catalog = await dailyJSON(env.EVIDENCE, root + 'catalog.json');
   const localMax = await env.PRIVATE_DB.prepare(
     'SELECT MAX(ordinal) n FROM personal_daily_runs WHERE source_id=?',
@@ -256,15 +265,23 @@ export async function collectDaily(
   const day = resumeDay ?? at.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > at.slice(0, 10))
     throw new Error('daily_slot_invalid');
+  if (
+    !resumeDay &&
+    (await env.PRIVATE_DB.prepare(
+      "SELECT 1 FROM personal_daily_runs WHERE source_id=? AND synthetic=? AND state='partial' AND day<? AND evidence_expires_at>? LIMIT 1",
+    )
+      .bind(source, Number(c.data_origin === 'synthetic'), day, at)
+      .first())
+  )
+    return { state: 'prior_partial_hold' };
   if (!resumeDay && Number(at.slice(11, 13)) < c.daily.collection_hour) return { state: 'not_due' };
   const stopped = await dailyJSON(env.EVIDENCE, root + 'stop.json', 8192);
   if (stopped && (stopped.review_required || !stopped.retry_at || stopped.retry_at > at))
     throw new Error('daily_source_stopped');
   const run = await dailyRunId(source, day, c.data_origin),
-    slot = root + 'slots/' + day + '.json',
-    evidence = root + 'evidence/' + run + '.json';
+    slot = root + 'slots/' + day + '.json';
   // Source/day reservation survives DB restoration and contract renewal. Never backfill HTTP.
-  if (resumeDay && !(await env.EVIDENCE.head(evidence)))
+  if (resumeDay && !(await hasDailyCapture(env.EVIDENCE, root, run)))
     throw new Error('daily_saved_projection_required');
   const claimed = resumeDay
     ? null
@@ -277,7 +294,7 @@ export async function collectDaily(
     .parse(await dailyJSON(env.EVIDENCE, slot, 8192));
   if (anchor.contract_hash !== h || anchor.run_id !== run) throw new Error('daily_slot_consumed');
   // A losing invocation cannot acquire a DB lease and poison the winning request.
-  if (!claimed && !(await env.EVIDENCE.head(evidence))) {
+  if (!claimed && !(await hasDailyCapture(env.EVIDENCE, root, run))) {
     const done = await env.PRIVATE_DB.prepare(
       "SELECT 1 FROM personal_daily_runs WHERE run_id=? AND state='complete'",
     )
@@ -328,7 +345,7 @@ export async function collectDaily(
       throw new Error('daily_lease_lost');
   };
   try {
-    let saved = await dailyJSON(env.EVIDENCE, evidence);
+    let saved = await loadDailyCapture(env.EVIDENCE, root, run);
     if (!saved) {
       if (!claimed) throw new Error('daily_attempt_consumed');
       let requests = 0;
@@ -347,19 +364,133 @@ export async function collectDaily(
         c.data_origin === 'synthetic',
       );
       saved = {
+        version: 'daily-projection-v2',
         contract_hash: h,
         run_id: run,
         observed_at: response.observed_at,
         payload_hash: await hash(response.text),
         page,
       };
+    }
+    if ((saved as { version?: string }).version === 'daily-projection-v2') {
+      const capture = DailyCapture.parse(saved);
+      if (
+        capture.contract_hash !== h ||
+        capture.run_id !== run ||
+        capture.observed_at < anchor.started_at ||
+        capture.observed_at > now() ||
+        now() >= expires ||
+        capture.page.records.length >
+          (c.config.limits.capture_record_limit ?? c.config.limits.page_size)
+      )
+        throw new Error('daily_capture_invalid');
+      await saveDailyCapture(env.EVIDENCE, root, run, capture, expires, guard);
+      const { plan, plan_hash } = await dailyPlan(
+        env.PRIVATE_DB,
+        env.EVIDENCE,
+        root,
+        c,
+        h,
+        row!,
+        capture,
+        now(),
+        expires,
+        guard,
+      );
       await guard();
-      const text = stable(saved);
-      if (new TextEncoder().encode(text).length > 131072) throw new Error('daily_evidence_size');
-      await env.EVIDENCE.put(evidence, text, {
-        onlyIf: { etagDoesNotMatch: '*' },
-        customMetadata: { expires_at: expires },
-      });
+      await env.PRIVATE_DB.prepare('INSERT OR IGNORE INTO personal_daily_coverage VALUES (?,?,?,?)')
+        .bind(run, plan.coverage.series_id, plan_hash, stable(plan.coverage))
+        .run();
+      const stored = await env.PRIVATE_DB.prepare(
+        'SELECT plan_hash FROM personal_daily_coverage WHERE run_id=?',
+      )
+        .bind(run)
+        .first<string>('plan_hash');
+      if (stored !== plan_hash) throw new Error('daily_plan_conflict');
+      await env.PRIVATE_DB.prepare(
+        'INSERT OR IGNORE INTO personal_daily_checkpoints VALUES (?,?,0)',
+      )
+        .bind(run, plan_hash)
+        .run();
+      const cp = await env.PRIVATE_DB.prepare(
+        'SELECT plan_hash,next_index FROM personal_daily_checkpoints WHERE run_id=?',
+      )
+        .bind(run)
+        .first<{ plan_hash: string; next_index: number }>();
+      const seen = plan.records.filter((r) => r.change_kind !== 'not_seen');
+      if (!cp || cp.plan_hash !== plan_hash || cp.next_index > seen.length)
+        throw new Error('daily_checkpoint_invalid');
+      const end = Math.min(cp.next_index + 19, seen.length),
+        statements = [];
+      for (const r of seen.slice(cp.next_index, end))
+        statements.push(
+          env.PRIVATE_DB.prepare(
+            'INSERT OR IGNORE INTO personal_daily_observations SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM personal_daily_runs WHERE run_id=? AND lease_token=? AND lease_until>?)',
+          ).bind(
+            r.observation_id,
+            r.run_id,
+            r.record_key,
+            r.record_hash,
+            r.observed_at,
+            r.recorded_at,
+            r.previous_observation_id,
+            r.change_kind,
+            r.domain_json,
+            run,
+            token,
+            now(),
+          ),
+        );
+      statements.push(
+        env.PRIVATE_DB.prepare(
+          'UPDATE personal_daily_checkpoints SET next_index=? WHERE run_id=? AND plan_hash=? AND next_index=? AND EXISTS(SELECT 1 FROM personal_daily_runs WHERE run_id=? AND lease_token=? AND lease_until>?)',
+        ).bind(end, run, plan_hash, cp.next_index, run, token, now()),
+      );
+      await guard();
+      await env.PRIVATE_DB.batch(statements);
+      if (end < seen.length) {
+        await env.PRIVATE_DB.prepare(
+          'UPDATE personal_daily_runs SET lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?',
+        )
+          .bind(run, token)
+          .run();
+        await publishDailyCatalog(env, source, run, now());
+        return { state: 'partial', checkpoint: end };
+      }
+      await guard();
+      const counts = await env.PRIVATE_DB.prepare(
+        "SELECT COUNT(*) total,SUM(CASE WHEN change_kind='not_seen' THEN 1 ELSE 0 END) missing FROM personal_daily_observations WHERE run_id=?",
+      )
+        .bind(run)
+        .first<{ total: number; missing: number | null }>();
+      if (counts?.total !== plan.coverage.seen_count || (counts.missing ?? 0) !== 0)
+        throw new Error('daily_count_mismatch');
+      // At most 128 absence events, atomically with the complete barrier. No
+      // not_seen row can survive a failed/partial acquisition or final commit.
+      const commitAt = now();
+      const committed = await env.PRIVATE_DB.batch([
+        env.PRIVATE_DB.prepare(
+          "INSERT OR IGNORE INTO personal_daily_observations SELECT json_extract(value,'$.observation_id'),json_extract(value,'$.run_id'),json_extract(value,'$.record_key'),NULL,json_extract(value,'$.observed_at'),json_extract(value,'$.recorded_at'),json_extract(value,'$.previous_observation_id'),'not_seen',NULL FROM json_each(?) WHERE EXISTS(SELECT 1 FROM personal_daily_runs WHERE run_id=? AND lease_token=? AND lease_until>?)",
+        ).bind(
+          stable(plan.records.filter((r) => r.change_kind === 'not_seen')),
+          run,
+          token,
+          commitAt,
+        ),
+        env.PRIVATE_DB.prepare(
+          "UPDATE personal_daily_runs SET state='complete',observed_at=?,record_count=?,evidence_hash=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?",
+        ).bind(
+          capture.observed_at,
+          plan.coverage.event_count,
+          capture.payload_hash,
+          run,
+          token,
+          commitAt,
+        ),
+      ]);
+      if (committed[1].meta.changes !== 1) throw new Error('daily_lease_lost');
+      await publishDailyCatalog(env, source, run, now());
+      return { state: 'complete', reused: false };
     }
     const capture = z
       .object({
@@ -367,7 +498,7 @@ export async function collectDaily(
         run_id: z.string(),
         observed_at: z.iso.datetime(),
         payload_hash: z.string(),
-        page: PublicGpuPageSchema,
+        page: PublicGpuPageSchema.extend({ records: PublicGpuPageSchema.shape.records.max(48) }),
       })
       .strict()
       .parse(saved);
@@ -442,7 +573,12 @@ export async function collectDaily(
     await env.PRIVATE_DB.prepare(
       'UPDATE personal_daily_runs SET state=?,reason=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?',
     )
-      .bind((await env.EVIDENCE.head(evidence)) ? 'partial' : 'failed', reason, run, token)
+      .bind(
+        (await hasDailyCapture(env.EVIDENCE, root, run)) ? 'partial' : 'failed',
+        reason,
+        run,
+        token,
+      )
       .run();
     await publishDailyCatalog(env, source, run, now());
     throw new Error('daily_capture_failed');
@@ -549,14 +685,22 @@ export async function exportDailyHistory(env: DailyEnv, source: string, at: stri
   try {
     let snapshot = await dailyJSON(env.EVIDENCE, key + 'snapshot.json', 524288);
     if (!snapshot) {
+      const coverage = await env.PRIVATE_DB.prepare(
+        'SELECT coverage_json,plan_hash FROM personal_daily_coverage WHERE run_id=?',
+      )
+        .bind(row.run_id)
+        .first<{ coverage_json: string; plan_hash: string }>();
       const records = await env.PRIVATE_DB.prepare(
-        'SELECT * FROM personal_daily_observations WHERE run_id=? ORDER BY record_key LIMIT 49',
+        'SELECT * FROM personal_daily_observations WHERE run_id=? ORDER BY record_key LIMIT 257',
       )
         .bind(row.run_id)
         .all();
       if (records.results.length !== row.record_count) throw new Error('daily_export_count');
       snapshot = DailySnapshot.parse({
-        version: 'daily-history-v1',
+        version: coverage ? 'daily-history-v2' : 'daily-history-v1',
+        ...(coverage
+          ? { coverage: JSON.parse(coverage.coverage_json), plan_hash: coverage.plan_hash }
+          : {}),
         contract: c,
         contract_hash: row.contract_hash,
         run_id: row.run_id,
@@ -571,6 +715,8 @@ export async function exportDailyHistory(env: DailyEnv, source: string, at: stri
         evidence_hash: row.evidence_hash,
         records: records.results,
       });
+      if (new TextEncoder().encode(stable(snapshot)).length > 524288)
+        throw new Error('daily_export_size_or_expiry');
       const saved = await env.EVIDENCE.put(key + 'snapshot.json', stable(snapshot), {
         onlyIf: { etagDoesNotMatch: '*' },
         customMetadata: { expires_at: snapshot.expires_at },
@@ -756,6 +902,10 @@ export async function maintainDaily(env: DailyEnv, source: string, at: string) {
       await env.PRIVATE_DB.prepare('DELETE FROM personal_daily_observations WHERE run_id=?')
         .bind(r.run_id)
         .run();
+      for (const table of ['personal_daily_coverage', 'personal_daily_checkpoints'])
+        await env.PRIVATE_DB.prepare('DELETE FROM ' + table + ' WHERE run_id=?')
+          .bind(r.run_id)
+          .run();
       await env.PRIVATE_DB.prepare(
         "UPDATE personal_daily_runs SET state='purged',reason='explicit_storage_end' WHERE run_id=?",
       )

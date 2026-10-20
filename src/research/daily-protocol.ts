@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { PersonalDailySchema } from './personal-contract';
-import { PublicGpuRecordSchema, gpuRecordFingerprint } from './public-gpu-html';
+import {
+  PublicGpuRecordSchema,
+  PublicGpuPageSchema,
+  gpuRecordFingerprint,
+} from './public-gpu-html';
+import { dailySeriesDefinition } from './daily-series';
 import { hash, stable } from '../util';
 
 export const dailySource = z.enum(['highreso_public', 'rebro_public']);
@@ -20,7 +25,7 @@ export const DailyControl = z
     approval_ref: z.string().min(1).max(500),
   })
   .strict();
-export const DailyRow = z
+const LegacyDailyRow = z
   .object({
     observation_id: digest,
     run_id: digest,
@@ -33,9 +38,30 @@ export const DailyRow = z
     domain_json: z.string().max(16384),
   })
   .strict();
-export const DailySnapshot = z
+export const DailyRow = z.discriminatedUnion('change_kind', [
+  LegacyDailyRow.extend({
+    change_kind: z.enum(['first_seen', 'reobserved', 'revised', 'reappeared']),
+  }),
+  LegacyDailyRow.extend({
+    change_kind: z.literal('not_seen'),
+    record_hash: z.null(),
+    domain_json: z.null(),
+    previous_observation_id: digest,
+  }),
+]);
+export const DailyCoverage = z
   .object({
-    version: z.literal('daily-history-v1'),
+    recorded_at: time,
+    series_id: digest,
+    previous_complete_run_id: digest.nullable(),
+    seen_count: z.number().int().min(0).max(128),
+    not_seen_count: z.number().int().min(0).max(128),
+    event_count: z.number().int().min(0).max(256),
+    selection: PublicGpuPageSchema.shape.selection.unwrap().nullable(),
+  })
+  .strict();
+const SnapshotBase = z
+  .object({
     contract: PersonalDailySchema,
     contract_hash: digest,
     run_id: digest,
@@ -46,9 +72,20 @@ export const DailySnapshot = z
     created_at: time,
     expires_at: time,
     evidence_hash: digest,
-    records: z.array(DailyRow).max(48),
   })
   .strict();
+export const DailySnapshot = z.discriminatedUnion('version', [
+  SnapshotBase.extend({
+    version: z.literal('daily-history-v1'),
+    records: z.array(LegacyDailyRow).max(48),
+  }),
+  SnapshotBase.extend({
+    version: z.literal('daily-history-v2'),
+    plan_hash: digest,
+    coverage: DailyCoverage,
+    records: z.array(DailyRow).max(256),
+  }),
+]);
 export const DailyManifest = z
   .object({
     version: z.literal(1),
@@ -152,7 +189,51 @@ export async function validateDailySnapshot(input: unknown) {
   )
     throw new Error('daily_snapshot_scope');
   const ids = new Set<string>();
+  if (
+    s.version === 'daily-history-v2' &&
+    s.plan_hash !==
+      (await hash(
+        stable({
+          version: 'daily-plan-v2',
+          contract_hash: s.contract_hash,
+          run_id: s.run_id,
+          payload_hash: s.evidence_hash,
+          recorded_at: s.coverage.recorded_at,
+          coverage: s.coverage,
+          records: s.records,
+        }),
+      ))
+  )
+    throw new Error('daily_snapshot_plan_hash');
+  if (
+    s.version === 'daily-history-v2' &&
+    (s.coverage.series_id !== (await hash(stable(dailySeriesDefinition(c)))) ||
+      s.coverage.event_count !== s.records.length ||
+      s.coverage.seen_count !== s.records.filter((r) => r.change_kind !== 'not_seen').length ||
+      s.coverage.not_seen_count !== s.records.filter((r) => r.change_kind === 'not_seen').length ||
+      s.coverage.seen_count + s.coverage.not_seen_count !== s.coverage.event_count ||
+      (s.coverage.selection &&
+        s.coverage.selection.cohort_rows * s.coverage.selection.price_slots_per_row !==
+          s.coverage.seen_count))
+  )
+    throw new Error('daily_snapshot_coverage');
   for (const r of s.records) {
+    if (r.change_kind === 'not_seen') {
+      if (
+        s.version !== 'daily-history-v2' ||
+        !s.coverage.previous_complete_run_id ||
+        r.run_id !== s.run_id ||
+        r.observed_at !== s.observed_at ||
+        r.recorded_at < s.observed_at ||
+        r.recorded_at > s.created_at ||
+        ids.has(r.record_key) ||
+        r.observation_id !==
+          (await hash(stable([s.run_id, r.record_key, 'not_seen', r.previous_observation_id])))
+      )
+        throw new Error('daily_snapshot_absence');
+      ids.add(r.record_key);
+      continue;
+    }
     const record = PublicGpuRecordSchema.parse(JSON.parse(r.domain_json));
     if (
       r.run_id !== s.run_id ||
@@ -168,6 +249,15 @@ export async function validateDailySnapshot(input: unknown) {
       record.offer.policy_version !== c.config.source.policy.version ||
       record.offer.terms_version !== c.config.terms.version ||
       record.offer.observed_at !== s.observed_at ||
+      (c.config.adapter === 'highreso_public'
+        ? !['node_hour', 'month'].includes(record.offer.unit) ||
+          record.offer.sale_unit !== 'instance'
+        : record.offer.unit !== 'gpu' || record.offer.sale_unit !== 'single_gpu') ||
+      ('models' in c.config.scope &&
+        !c.config.scope.models.includes(record.identity.accelerator_model as 'A100' | 'H100')) ||
+      (c.config.scope.kind === 'highreso_public' &&
+        c.config.scope.gpu_counts &&
+        !c.config.scope.gpu_counts.includes(record.offer.gpu_count ?? -1)) ||
       (r.change_kind === 'first_seen') !== (r.previous_observation_id === null) ||
       ids.has(r.record_key)
     )
