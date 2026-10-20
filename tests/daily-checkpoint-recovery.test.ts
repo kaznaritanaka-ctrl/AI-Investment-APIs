@@ -179,11 +179,14 @@ it('rolls back absence events when the final complete transaction fails; saved c
         "SELECT state FROM personal_daily_runs WHERE day='2026-10-19'",
       ).first('state'),
     ).toBe('partial');
-    await heartbeat(env, 'highreso_public', '2026-10-20T01:00:00.000Z');
+    // Fixture evidence lives 24 hours, until 20th 01:00Z. Test the next
+    // UTC day while recovery is still authorized, not at the expiry boundary.
+    const nextDay = '2026-10-20T00:00:00.000Z';
+    await heartbeat(env, 'highreso_public', nextDay);
     expect(
       (
         await collectDaily(env, f.c, f.pin, {
-          now: () => '2026-10-20T01:00:00.000Z',
+          now: () => nextDay,
           allow_network: true,
           fetcher: get,
         })
@@ -195,7 +198,7 @@ it('rolls back absence events when the final complete transaction fails; saved c
           env,
           f.c,
           f.pin,
-          { now: () => at, allow_network: true, fetcher: get },
+          { now: () => nextDay, allow_network: true, fetcher: get },
           '2026-10-19',
         )
       ).state,
