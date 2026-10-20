@@ -57,7 +57,7 @@ export type PublicGpuRecord = z.infer<typeof PublicGpuRecordSchema>;
 export const PublicGpuPageSchema = z
   .object({
     page: z.literal(0),
-    records: z.array(PublicGpuRecordSchema).max(48),
+    records: z.array(PublicGpuRecordSchema).max(128),
     reported_total: z.number().int().nonnegative(),
     next_page: z.null(),
     coverage: z.literal('complete'),
@@ -69,6 +69,15 @@ export const PublicGpuPageSchema = z
         cohort_rows: z.number().int().nonnegative(),
         excluded_rows: z.number().int().nonnegative(),
         price_slots_per_row: z.union([z.literal(1), z.literal(2)]),
+        cohort_models: z.array(z.string()).optional(),
+        cohort_gpu_counts: z.array(z.number().int().positive()).optional(),
+        excluded_by_reason: z
+          .object({
+            model: z.number().int().nonnegative(),
+            gpu_count: z.number().int().nonnegative(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -186,10 +195,14 @@ export async function parsePublicGpu(
         ...extra,
       }),
     );
+    if (records.length > (c.limits.capture_record_limit ?? c.limits.page_size))
+      throw new Error('research_page_limit');
   };
   let matchedTables = 0,
     inputRows = 0,
-    cohortRows = 0;
+    cohortRows = 0,
+    excludedModel = 0,
+    excludedCount = 0;
   const v2 = c.method_version === 'domestic-gpu-html-v2';
   if (c.adapter === 'highreso_public') {
     // Traverse document order, associating each table with only its preceding GPU spec block.
@@ -260,15 +273,21 @@ export async function parsePublicGpu(
         throw new Error('public_gpu_table_schema_changed');
       for (const cells of table.slice(1)) {
         inputRows++;
+        if (inputRows > c.limits.max_input_rows) throw new Error('research_page_limit');
         if (cells.length !== header.length || !/^[a-z0-9][a-z0-9_-]+$/.test(cells[0]))
           throw new Error('public_gpu_table_schema_changed');
-        if (!selected(product)) continue;
+        if (!selected(product)) {
+          excludedModel++;
+          continue;
+        }
         if (
           c.scope.kind === 'highreso_public' &&
           c.scope.gpu_counts &&
           (count === null || !c.scope.gpu_counts.includes(count))
-        )
+        ) {
+          excludedCount++;
           continue;
+        }
         cohortRows++;
         const storage = /^(\d+(?:\.\d+)?)GB$/i.exec(cells[3].replace(/ /g, ''));
         if (!storage && cells[3] !== '-' && cells[3] !== '')
@@ -317,8 +336,12 @@ export async function parsePublicGpu(
         matchedTables++;
         for (const cells of table.slice(1)) {
           inputRows++;
+          if (inputRows > c.limits.max_input_rows) throw new Error('research_page_limit');
           if (cells.length !== 5) throw new Error('public_gpu_table_schema_changed');
-          if (!selected(cells[1])) continue;
+          if (!selected(cells[1])) {
+            excludedModel++;
+            continue;
+          }
           cohortRows++;
           const month = /^(\d{4})年(\d{1,2})月$/.exec(cells[0]);
           if (!month || +month[2] < 1 || +month[2] > 12)
@@ -380,7 +403,10 @@ export async function parsePublicGpu(
   }
   if (!matchedTables || (c.adapter === 'rebro_public' && matchedTables !== 1))
     throw new Error('public_gpu_table_missing');
-  if (inputRows > c.limits.max_input_rows || records.length > c.limits.page_size)
+  if (
+    inputRows > c.limits.max_input_rows ||
+    records.length > (c.limits.capture_record_limit ?? c.limits.page_size)
+  )
     throw new Error('research_page_limit');
   if (new Set(records.map((r) => r.record_key)).size !== records.length)
     throw new Error('research_duplicate_record');
@@ -399,6 +425,9 @@ export async function parsePublicGpu(
             cohort_rows: cohortRows,
             excluded_rows: inputRows - cohortRows,
             price_slots_per_row: c.adapter === 'highreso_public' ? 2 : 1,
+            cohort_models: 'models' in c.scope ? c.scope.models : [],
+            ...('gpu_counts' in c.scope ? { cohort_gpu_counts: c.scope.gpu_counts } : {}),
+            excluded_by_reason: { model: excludedModel, gpu_count: excludedCount },
           },
         }
       : {}),

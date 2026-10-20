@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+2026-10-21 PR #19更新: [PR #18の最新修正を本番基点へ統合](docs/pr19-integration-20261021.md)。ECB・Models.dev・private PoCと既存運用を保持し、日次の比較/消失・128価格枠・保存復旧を取り込みました。以下の8本のmigration承認資料は履歴で、新候補は0015を含む9本の別レビューが必要です。全件検証とCIの確定結果はPR #19本文へ記録します。本番未反映・実収集0件です。
+
 PR #19の初回Cloud準備に対する[2026-10-19レビューと残る承認事項](docs/pr19-review-20261019.md)、[personal NAS専用runtimeのsynthetic受入](deploy/personal-nas/README.md)を参照。実NAS・本番への反映は未実施です。
 
 初回Cloud実行の最新準備は[所有者承認票](docs/first-cloud-approval-20261018.md)を参照。実在resourceを照合した非実行contract案、取得窓、TOS 7/NAS、8本のprivate migration、Collector段階反映を分離しています。実収集・本番変更は未実施です。
@@ -7,6 +9,10 @@ PR #19の初回Cloud準備に対する[2026-10-19レビューと残る承認事�
 2026-10-18 PR #19レビュー: [既存3sourceへの影響・初回Cloud実行の残件](docs/pr19-review-20261018.md)。保存済み初回証拠を取得OFFでもHTTPなしで復旧する経路と、個人研究binding/pin/flagのoffline検査を追加しました。未有効化のままで、実行承認や実IAM/NASの確認を代替するものではありません。
 
 2026-10-18 本番基点のローカル統合: 本番CollectorのGit記録 `0abf2b6` にPR #18 `2f32cf9`（#16を含む）を隔離branchで統合しました。[統合内容・synthetic検証](docs/collector-integration-validation-20261018.md)と[直前の本番read-only監査](docs/collector-production-integration-20261018.md)を参照してください。ECB・Models.dev・private PoC、既存Cron、source grant、Public APIを維持し、個人研究の新flags/bindingsは未設定です。以下のmain由来branchに関する注意は統合前の履歴です。本番deploy・remote migration・実収集は行っていません。
+
+2026-10-21 再レビュー: [旧応答の共通系列/消失処理への復旧と、最初のR2保存のbounded retry](docs/pr18-review-20261021.md)。旧証拠・既存行は不変、source GET増加なし。本番未反映・実市場観測0件です。最終コードでのローカル全件/CI結果はPR #18本文に記録します。
+
+2026-10-21 PR #18 P0/P1修正: [日次not_seen/再掲載・最大128価格枠のcheckpoint・契約と比較系列の分離](docs/pr18-daily-series-20261020.md)。前進0015と旧履歴互換、NAS export/復元までsynthetic検証対象です。以下の48枠上限は旧初回/通常researchの値で、新日次案は別契約です。実市場観測0件、本番未反映。PR #16はmainへmerge済みで、PR #18のbase整理は本PRのmain mergeを意味しません。
 
 2026-10-18 最新の承認・実装: 所有者はHighreso/Rebroの非公開・個人研究限定の例外と長期保存を承認済みです。NAS専用exportの分離と停止状態の初回Cloud準備は [専用資料](docs/nas-export-isolation-20261018.md) を参照してください。提供者許諾はunconfirmed、実収集・権利grant変更・本番deploy・実鍵・NAS実機変更は未実施です。以下の旧段階の「例外承認待ち」「分離は設計のみ」は履歴で、現在の実行承認待ちとは区別します。
 

@@ -151,6 +151,14 @@ const PersonalCloudBase = PersonalV2Base.extend({
 }).strict();
 const PersonalDailyBase = PersonalCloudBase.extend({
   version: z.literal('personal-gpu-cloud-daily-v1'),
+  comparison: z
+    .object({
+      normalization_version: ref,
+      unit_definition: ref,
+      review_ref: ref,
+    })
+    .strict()
+    .optional(),
   cloud: PersonalCloudBase.shape.cloud.extend({ initial_acquisition_only: z.literal(false) }),
   daily: z
     .object({
@@ -178,6 +186,8 @@ function common(
   const c = v.config,
     d = v.decision,
     t = d.terms;
+  if (c.limits.capture_record_limit && v.version !== 'personal-gpu-cloud-daily-v1')
+    ctx.addIssue({ code: 'custom', message: 'personal_initial_capture_budget' });
   if (
     !isPublicGpu(c.adapter) ||
     c.source.enabled ||

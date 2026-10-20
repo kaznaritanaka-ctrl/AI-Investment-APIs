@@ -1,0 +1,22 @@
+-- Forward-only: preserve every v1 row, contract hash, deadline and old evidence.
+DROP TRIGGER personal_daily_observation_immutable;
+DROP TRIGGER personal_daily_observation_retention;
+DROP INDEX personal_daily_record;
+ALTER TABLE personal_daily_observations RENAME TO personal_daily_observations_v1;
+CREATE TABLE personal_daily_observations (observation_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES personal_daily_runs(run_id), record_key TEXT NOT NULL, record_hash TEXT, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, previous_observation_id TEXT, change_kind TEXT NOT NULL CHECK(change_kind IN ('first_seen','reobserved','revised','reappeared','not_seen')), domain_json TEXT CHECK(domain_json IS NULL OR json_valid(domain_json)), UNIQUE(run_id,record_key), CHECK((change_kind='not_seen' AND record_hash IS NULL AND domain_json IS NULL AND previous_observation_id IS NOT NULL) OR (change_kind!='not_seen' AND record_hash IS NOT NULL AND domain_json IS NOT NULL)), CHECK((change_kind='first_seen')=(previous_observation_id IS NULL)));
+INSERT INTO personal_daily_observations SELECT * FROM personal_daily_observations_v1;
+DROP TABLE personal_daily_observations_v1;
+CREATE INDEX personal_daily_record ON personal_daily_observations(record_key,observed_at);
+CREATE TRIGGER personal_daily_observation_immutable BEFORE UPDATE ON personal_daily_observations BEGIN SELECT RAISE(ABORT,'immutable_daily_observation'); END;
+CREATE TRIGGER personal_daily_observation_retention BEFORE DELETE ON personal_daily_observations WHEN (SELECT state FROM personal_daily_runs WHERE run_id=OLD.run_id) IS NOT 'purging' BEGIN SELECT RAISE(ABORT,'daily_retention_required'); END;
+CREATE TABLE personal_daily_series_contracts (contract_hash TEXT PRIMARY KEY REFERENCES personal_daily_contracts(contract_hash), series_id TEXT NOT NULL, definition_json TEXT NOT NULL CHECK(json_valid(definition_json)));
+CREATE INDEX personal_daily_series_lookup ON personal_daily_series_contracts(series_id,contract_hash);
+CREATE TRIGGER personal_daily_series_immutable BEFORE UPDATE ON personal_daily_series_contracts BEGIN SELECT RAISE(ABORT,'immutable_daily_series'); END;
+CREATE TRIGGER personal_daily_series_delete BEFORE DELETE ON personal_daily_series_contracts BEGIN SELECT RAISE(ABORT,'immutable_daily_series'); END;
+CREATE TABLE personal_daily_coverage (run_id TEXT PRIMARY KEY REFERENCES personal_daily_runs(run_id), series_id TEXT NOT NULL, plan_hash TEXT NOT NULL, coverage_json TEXT NOT NULL CHECK(json_valid(coverage_json)));
+CREATE TRIGGER personal_daily_coverage_immutable BEFORE UPDATE ON personal_daily_coverage BEGIN SELECT RAISE(ABORT,'immutable_daily_coverage'); END;
+CREATE TRIGGER personal_daily_coverage_delete BEFORE DELETE ON personal_daily_coverage WHEN (SELECT state FROM personal_daily_runs WHERE run_id=OLD.run_id) IS NOT 'purging' BEGIN SELECT RAISE(ABORT,'daily_retention_required'); END;
+CREATE TABLE personal_daily_checkpoints (run_id TEXT PRIMARY KEY REFERENCES personal_daily_runs(run_id), plan_hash TEXT NOT NULL, next_index INTEGER NOT NULL CHECK(next_index>=0));
+CREATE TRIGGER personal_daily_checkpoint_monotonic BEFORE UPDATE ON personal_daily_checkpoints WHEN NEW.run_id!=OLD.run_id OR NEW.plan_hash!=OLD.plan_hash OR NEW.next_index<OLD.next_index BEGIN SELECT RAISE(ABORT,'daily_checkpoint_rollback'); END;
+CREATE TRIGGER personal_daily_checkpoint_delete BEFORE DELETE ON personal_daily_checkpoints WHEN (SELECT state FROM personal_daily_runs WHERE run_id=OLD.run_id) IS NOT 'purging' BEGIN SELECT RAISE(ABORT,'daily_retention_required'); END;
+CREATE TRIGGER personal_daily_complete_count BEFORE UPDATE OF state ON personal_daily_runs WHEN NEW.state='complete' AND EXISTS(SELECT 1 FROM personal_daily_coverage WHERE run_id=NEW.run_id) BEGIN SELECT CASE WHEN (SELECT COUNT(*) FROM personal_daily_observations WHERE run_id=NEW.run_id)!=(SELECT json_extract(coverage_json,'$.event_count') FROM personal_daily_coverage WHERE run_id=NEW.run_id) OR (SELECT COUNT(*) FROM personal_daily_observations WHERE run_id=NEW.run_id AND change_kind='not_seen')!=(SELECT json_extract(coverage_json,'$.not_seen_count') FROM personal_daily_coverage WHERE run_id=NEW.run_id) THEN RAISE(ABORT,'daily_completion_count') END; END;

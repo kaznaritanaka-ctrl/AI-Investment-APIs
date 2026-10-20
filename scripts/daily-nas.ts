@@ -20,6 +20,7 @@ import { smallFile, durable, atomic, sourceLock } from './personal-nas';
 import { openNas, sealNas } from './personal-nas-crypto';
 import { personalLocalEnv } from './personal-local-env';
 import { NasReadError, type NasReader } from './personal-nas-transport';
+import { indexDailySeries } from '../src/research/daily-series';
 
 export type DailyNasOptions = {
   root: string;
@@ -179,6 +180,14 @@ async function importRun(db: D1Database, s: z.infer<typeof DailySnapshot>) {
     .bind(s.run_id)
     .first<number>('n');
   if (count !== s.records.length) throw new Error('nas_restore_count');
+  if (s.version === 'daily-history-v2') {
+    if (!(await indexDailySeries(db, s.contract.config.source.source_id)))
+      throw new Error('nas_restore_series_pending');
+    await db
+      .prepare('INSERT OR IGNORE INTO personal_daily_coverage VALUES (?,?,?,?)')
+      .bind(s.run_id, s.coverage.series_id, s.plan_hash, stable(s.coverage))
+      .run();
+  }
   await db
     .prepare("UPDATE personal_daily_runs SET state='complete' WHERE run_id=?")
     .bind(s.run_id)

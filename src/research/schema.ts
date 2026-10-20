@@ -16,7 +16,9 @@ export const StorageReviewHoldSchema = z
 // Proposals are deliberately outside config/sources and the Collector dispatch.
 export const ResearchConfigSchema = z
   .object({
-    source: SourceSchema,
+    // Shared FX/AI SourceSchema keeps its <=100 record ceiling. Only this
+    // private daily GPU checkpoint contract can request 101..128.
+    source: SourceSchema.extend({ max_records: z.number().int().positive().max(128) }),
     adapter: z.enum(['eia_retail', 'jepx_spot', 'highreso_public', 'rebro_public']),
     visibility: z.literal('private_only'),
     method_version: z.enum([
@@ -74,6 +76,9 @@ export const ResearchConfigSchema = z
     limits: z
       .object({
         page_size: z.number().int().min(1).max(48),
+        // Separate immutable single-response budget for the daily checkpoint path.
+        // Legacy research/initial paths still enforce their original page budget.
+        capture_record_limit: z.number().int().min(49).max(128).optional(),
         max_pages: z.number().int().min(1).max(4),
         max_input_rows: z.number().int().min(1).max(18000),
       })
@@ -130,6 +135,8 @@ export const ResearchConfigSchema = z
     )
       c.addIssue({ code: 'custom', message: 'research_scope_invalid' });
     if (isPublicGpu(v.adapter)) {
+      if (v.limits.capture_record_limit && v.limits.capture_record_limit > v.source.max_records)
+        c.addIssue({ code: 'custom', message: 'public_gpu_capture_budget_mismatch' });
       if (
         v.scope.kind === 'highreso_public' &&
         ((v.method_version === 'domestic-gpu-html-v2') !== (v.scope.gpu_counts !== undefined) ||
@@ -147,11 +154,17 @@ export const ResearchConfigSchema = z
         v.source.authentication_required ||
         !v.public_access ||
         v.limits.max_pages !== 1 ||
-        v.limits.max_input_rows > 100 ||
+        v.limits.max_input_rows > (v.limits.capture_record_limit ? 256 : 100) ||
         v.source.max_bytes > 1000000
       )
         c.addIssue({ code: 'custom', message: 'public_gpu_scope_invalid' });
+      if (v.limits.capture_record_limit && v.method_version !== 'domestic-gpu-html-v2')
+        c.addIssue({ code: 'custom', message: 'public_gpu_cohort_review_required' });
     } else if (v.public_access) c.addIssue({ code: 'custom', message: 'unexpected_public_access' });
+    if (!isPublicGpu(v.adapter) && v.limits.capture_record_limit)
+      c.addIssue({ code: 'custom', message: 'unexpected_capture_budget' });
+    if (v.source.max_records > 100 && (!isPublicGpu(v.adapter) || !v.limits.capture_record_limit))
+      c.addIssue({ code: 'custom', message: 'research_record_limit' });
   });
 export type ResearchConfig = z.infer<typeof ResearchConfigSchema>;
 
@@ -174,6 +187,7 @@ export function validateQuery(config: ResearchConfig, input: unknown): ResearchQ
   return q;
 }
 export function assertResearchAllowed(config: ResearchConfig, now: string, currentTerms: string) {
+  if (config.limits.capture_record_limit) throw new Error('public_gpu_daily_checkpoint_required');
   assertResearchAuthority(config, now, currentTerms, true);
 }
 export function assertResearchHistoryAllowed(

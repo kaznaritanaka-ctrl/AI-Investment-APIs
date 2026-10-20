@@ -98,20 +98,29 @@ it('migrates the production 0006 schema with all three enabled sources, preservi
     const pending = JSON.parse(
       await readFile('docs/collector-integration-audit-20261018.json', 'utf8'),
     ).databases.private.pending_migrations;
+    // The audit is immutable evidence from October 18, not a live migration
+    // manifest. This integration adds 0015 without rewriting that old journal.
+    expect(pending).toHaveLength(8);
     expect(
       (
         await local.env.PRIVATE_DB.prepare(
           "SELECT name FROM d1_migrations WHERE name>='0007' ORDER BY name",
         ).all()
       ).results.map((r) => r.name),
-    ).toEqual(pending.map((m: { name: string }) => m.name));
+    ).toEqual([...pending.map((m: { name: string }) => m.name), '0015_daily_series_events.sql']);
     expect((await local.env.PRIVATE_DB.prepare('PRAGMA foreign_key_check').all()).results).toEqual(
       [],
     );
     await expect(
       local.env.PRIVATE_DB.prepare("UPDATE observations SET source_id='synthetic-overwrite'").run(),
     ).rejects.toThrow();
-    for (const table of ['research_runs', 'research_gpu_observations', 'personal_daily_runs']) {
+    for (const table of [
+      'research_runs',
+      'research_gpu_observations',
+      'personal_daily_runs',
+      'personal_daily_coverage',
+      'personal_daily_checkpoints',
+    ]) {
       expect(await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM ' + table).first('n')).toBe(
         0,
       );

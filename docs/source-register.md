@@ -1,5 +1,7 @@
 # ソース台帳 — Phase 0
 
+2026-10-21 PR #18: [日次系列・source別受入と本番ブロッカー](pr18-daily-series-20261020.md)。Highreso/Rebroのcohortを変えず、新日次checkpointのみ最大128価格枠へ対応。実市場観測は各0件。今回の新規live調査/実取得/通常grant変更はない。過去の24行/48枠・4公開事例の構造確認を最新実収集実績として扱わない。
+
 2026-10-18追記: 私的例外と長期保存は所有者承認済み。NAS専用exportの分離・未有効化のCloud準備・現在の残件は [最新資料](nas-export-isolation-20261018.md) を参照。提供者許諾と通常grantは変更せず、実行／本番反映／実鍵／NAS変更は未承認。以下の以前の承認状態・shared-bucket案は当時の記録です。
 
 最新の[Private開始審査](public-gpu-private-start-review-20261018.md): 非公開の本人研究という用途を再確認。2026-10-18 06:47 UTCの一回限りDOM調査ではHighreso 24対象行/48枠、Rebro 4対象行。これは構造metadataで実価格観測ではありません。公開/商用再配布権をPrivate開始の前提にせず、source別の適用根拠・所有者例外・Cloud実行承認を分けています。
