@@ -100,18 +100,13 @@ export async function saveDailyCapture(
     text = stable(capture),
     bytes = new TextEncoder().encode(text);
   if (bytes.length > 524288) throw new Error('daily_evidence_size');
-  await guard();
-  const stage = captureStageKey(root, run),
-    old = await boundedDailyJSON(bucket, stage);
-  if (old && stable(old) !== text) throw new Error('daily_capture_conflict');
-  if (
-    !old &&
-    !(await bucket.put(stage, text, {
-      onlyIf: { etagDoesNotMatch: '*' },
-      customMetadata: { expires_at: expires },
-    }))
-  )
-    throw new Error('daily_capture_conflict');
+  await persistDailyStage(bucket, captureStageKey(root, run), text, expires, guard);
+  const pointer = await boundedDailyJSON(bucket, root + 'evidence/' + run + '.json');
+  const legacy = pointer && (pointer as { version?: string }).version !== 'daily-capture-parts-v2';
+  if (legacy) {
+    const { version: _version, ...projection } = capture;
+    if (stable(pointer) !== stable(projection)) throw new Error('daily_capture_conflict');
+  }
   // Durable full projection is the recovery checkpoint; never retry source HTTP.
   const parts = [];
   for (let offset = 0, i = 0; offset < bytes.length; offset += 131072, i++) {
@@ -137,7 +132,11 @@ export async function saveDailyCapture(
     parts.push({ key, sha256, bytes: part.length });
   }
   await guard();
-  const key = root + 'evidence/' + run + '.json',
+  // Keep immutable pre-v2 evidence at its original key/hash. Only pending runs
+  // gain an additive v2 manifest/plan; completed v1 snapshots stay unchanged.
+  const key = legacy
+      ? root + 'evidence/' + run + '/capture.json'
+      : root + 'evidence/' + run + '.json',
     manifest = CaptureManifest.parse({
       version: 'daily-capture-parts-v2',
       sha256: await bytesHash(bytes),
@@ -152,6 +151,42 @@ export async function saveDailyCapture(
     stable(await boundedDailyJSON(bucket, key)) !== stable(manifest)
   )
     throw new Error('daily_capture_conflict');
+}
+
+async function persistDailyStage(
+  bucket: R2Bucket,
+  key: string,
+  text: string,
+  expires: string,
+  guard: () => Promise<void>,
+) {
+  // Retry only storage using the in-memory response, never source HTTP. Reads
+  // resolve ambiguous acknowledgements without overwriting the first value.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await guard();
+    try {
+      if (
+        await bucket.put(key, text, {
+          onlyIf: { etagDoesNotMatch: '*' },
+          customMetadata: { expires_at: expires },
+        })
+      )
+        return;
+    } catch {
+      /* bounded retry; authority and lease are rechecked above */
+    }
+    let previous: unknown;
+    try {
+      previous = await boundedDailyJSON(bucket, key);
+    } catch {
+      continue;
+    }
+    if (previous) {
+      if (stable(previous) !== text) throw new Error('daily_capture_conflict');
+      return;
+    }
+  }
+  throw new Error('daily_evidence_write_exhausted');
 }
 export const DailyPlan = z
   .object({
@@ -180,6 +215,17 @@ export async function dailyPlan(
   let plan = await boundedDailyJSON(bucket, key);
   const series = await hash(stable(dailySeriesDefinition(c)));
   if (!plan) {
+    const existing = await db
+      .prepare(
+        'SELECT * FROM personal_daily_observations WHERE run_id=? ORDER BY record_key LIMIT 129',
+      )
+      .bind(run.run_id)
+      .all<z.infer<typeof DailyRow>>();
+    if (
+      existing.results.length > capture.page.records.length ||
+      existing.results.some((r) => !capture.page.records.some((p) => p.record_key === r.record_key))
+    )
+      throw new Error('daily_legacy_observation_conflict');
     const previous = await db
       .prepare(
         "SELECT r.run_id FROM personal_daily_runs r JOIN personal_daily_series_contracts s ON s.contract_hash=r.contract_hash WHERE r.source_id=? AND r.synthetic=? AND r.state='complete' AND r.started_at<? AND s.series_id=? ORDER BY r.started_at DESC LIMIT 1",
@@ -207,25 +253,27 @@ export async function dailyPlan(
         )
         .first<{ observation_id: string; record_hash: string | null; change_kind: string }>();
       const fingerprint = await gpuRecordFingerprint(record);
-      records.push(
-        DailyRow.parse({
-          observation_id: await hash(stable([run.run_id, record.record_key, fingerprint])),
-          run_id: run.run_id,
-          record_key: record.record_key,
-          record_hash: fingerprint,
-          observed_at: capture.observed_at,
-          recorded_at: at,
-          previous_observation_id: prev?.observation_id ?? null,
-          change_kind: !prev
-            ? 'first_seen'
-            : prev.change_kind === 'not_seen'
-              ? 'reappeared'
-              : prev.record_hash === fingerprint
-                ? 'reobserved'
-                : 'revised',
-          domain_json: stable(record),
-        }),
-      );
+      const prior = existing.results.find((r) => r.record_key === record.record_key);
+      const observation = DailyRow.parse({
+        observation_id: await hash(stable([run.run_id, record.record_key, fingerprint])),
+        run_id: run.run_id,
+        record_key: record.record_key,
+        record_hash: fingerprint,
+        observed_at: capture.observed_at,
+        recorded_at: prior?.recorded_at ?? at,
+        previous_observation_id: prev?.observation_id ?? null,
+        change_kind: !prev
+          ? 'first_seen'
+          : prev.change_kind === 'not_seen'
+            ? 'reappeared'
+            : prev.record_hash === fingerprint
+              ? 'reobserved'
+              : 'revised',
+        domain_json: stable(record),
+      });
+      if (prior && stable(prior) !== stable(observation))
+        throw new Error('daily_legacy_observation_conflict');
+      records.push(observation);
     }
     const candidates = previous
       ? await db

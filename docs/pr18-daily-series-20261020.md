@@ -35,7 +35,7 @@ partial/failed、403/429、規約hash不一致、DOM変化、上限超過では�
 
 入力行・cohort行・除外行・model/GPU数別の除外理由・price slots/row・seen/event件数をcoverageに保存する。部分保存はcheckpoint、確定時はcoverageとrecord_countで照合する。v2のrecord_countはseen+not_seenのイベント数で、今回の価格枠数にはseen_countを使う。月額を時間単価へ換算しない。
 
-durable projectionを先にR2へ保存し、part/manifestを発行する。immutable planに前観測ID・記録時刻・coverageを固定する。plan内の消失候補は未確定で、complete前の観測履歴やNAS exportに出さない。DB checkpointとplan hashにより復旧でも同じIDを使う。最初のdurable projection PUT自体が失敗した場合は回復元がないため、その日のHTTP試行は消費済みのまま停止する。新しいGETで埋め直さない。
+durable projectionを先にR2へ保存し、part/manifestを発行する。immutable planに前観測ID・記録時刻・coverageを固定する。plan内の消失候補は未確定で、complete前の観測履歴やNAS exportに出さない。DB checkpointとplan hashにより復旧でも同じIDを使う。[2026-10-21の再レビュー修正](pr18-review-20261021.md)で、最初のdurable projectionは同じ応答を使って最大3 PUTまで試す。各回で権限/leaseを再確認し、応答喪失時は既存hashを読み戻して解決する。全PUT失敗で保存元がなければ、その日のHTTP試行は消費済みのまま停止する。新しいsource GETで埋め直さない。
 
 ## P1: 許諾契約と比較系列
 
@@ -49,7 +49,7 @@ contract_hashは許諾・期限・review・resource pinを含む元契約の識�
 
 0015_daily_series_events.sqlのみ追加。0001〜0014は不変。日次観測表の9列と旧行を保ちunionへ対応し、UPDATE/DELETE制約を再作成する。比較契約index、immutable coverage、単調checkpoint、complete件数triggerを追加する。0007〜0009/0012/0014の一般研究・assessment防護を維持する。
 
-旧snapshot v1の検証/export/NAS復元と旧保存projectionの再開形式を残す。旧hash・期限・証拠をv2へ遡及変換しない。v2 export/復元はnull消失行・前観測ID・plan hash・coverageをそのまま保持する。NAS専用export分離、現在control/取消し確認、暗号化/staging復元は既存機構を使い、新NAS機能を追加しない。
+完了済み旧snapshot v1の検証/export/NAS復元を残す。旧hash・期限・証拠を遡及変換しない。未完了の旧保存projectionは元objectを保持し、別keyのv2 checkpointから共通の比較・消失確定へ再開する。既存行の値/recorded_atは不変で、比較仕様と合わない既存lineageは改変せず明示holdする。v2 export/復元はnull消失行・前観測ID・plan hash・coverageをそのまま保持する。NAS専用export分離、現在control/取消し確認、暗号化/staging復元は既存機構を使い、新NAS機能を追加しない。
 
 正規化履歴は承認された継続保存のままで、30日/10年TTLを追加しない。証拠期限・backup世代寿命とは別。明示の保存終了/取消しでは観測と新coverage/checkpointを削除し、再取得防止slot/削除markerを維持する。Time Travelや実NASの実効削除は本番受入事項のまま。
 

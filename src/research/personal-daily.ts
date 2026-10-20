@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { PersonalDailySchema, type PersonalDailyContract } from './personal-contract';
 import { hash, stable, errorCode } from '../util';
 import { FetchFailure } from '../network';
-import { parsePublicGpu, PublicGpuPageSchema, gpuRecordFingerprint } from './public-gpu-html';
+import { parsePublicGpu, PublicGpuPageSchema } from './public-gpu-html';
 import { readReviewedPublicGpu, gpuReviewErrors } from './public-gpu-network';
 import {
   DailyControl,
@@ -372,7 +372,20 @@ export async function collectDaily(
         page,
       };
     }
-    if ((saved as { version?: string }).version === 'daily-projection-v2') {
+    if ((saved as { version?: string }).version !== 'daily-projection-v2') {
+      const legacy = z
+        .object({
+          contract_hash: z.string(),
+          run_id: z.string(),
+          observed_at: z.iso.datetime(),
+          payload_hash: z.string(),
+          page: PublicGpuPageSchema.extend({ records: PublicGpuPageSchema.shape.records.max(48) }),
+        })
+        .strict()
+        .parse(saved);
+      saved = { ...legacy, version: 'daily-projection-v2' };
+    }
+    {
       const capture = DailyCapture.parse(saved);
       if (
         capture.contract_hash !== h ||
@@ -492,69 +505,6 @@ export async function collectDaily(
       await publishDailyCatalog(env, source, run, now());
       return { state: 'complete', reused: false };
     }
-    const capture = z
-      .object({
-        contract_hash: z.string(),
-        run_id: z.string(),
-        observed_at: z.iso.datetime(),
-        payload_hash: z.string(),
-        page: PublicGpuPageSchema.extend({ records: PublicGpuPageSchema.shape.records.max(48) }),
-      })
-      .strict()
-      .parse(saved);
-    if (
-      capture.contract_hash !== h ||
-      capture.run_id !== run ||
-      capture.observed_at < anchor.started_at ||
-      capture.observed_at > now() ||
-      now() >= expires
-    )
-      throw new Error('daily_capture_invalid');
-    const statements = [];
-    for (const record of capture.page.records) {
-      const fingerprint = await gpuRecordFingerprint(record);
-      const prev = await env.PRIVATE_DB.prepare(
-        "SELECT o.observation_id,o.record_hash FROM personal_daily_observations o JOIN personal_daily_runs r ON r.run_id=o.run_id WHERE r.source_id=? AND r.state='complete' AND r.started_at<? AND o.record_key=? ORDER BY r.started_at DESC LIMIT 1",
-      )
-        .bind(source, anchor.started_at, record.record_key)
-        .first<{ observation_id: string; record_hash: string }>();
-      statements.push(
-        env.PRIVATE_DB.prepare(
-          'INSERT OR IGNORE INTO personal_daily_observations SELECT ?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM personal_daily_runs WHERE run_id=? AND lease_token=? AND lease_until>?)',
-        ).bind(
-          await hash(stable([run, record.record_key, fingerprint])),
-          run,
-          record.record_key,
-          fingerprint,
-          capture.observed_at,
-          now(),
-          prev?.observation_id ?? null,
-          prev ? (prev.record_hash === fingerprint ? 'reobserved' : 'revised') : 'first_seen',
-          stable(record),
-          run,
-          token,
-          now(),
-        ),
-      );
-    }
-    for (let i = 0; i < statements.length; i += 20) {
-      await guard();
-      await env.PRIVATE_DB.batch(statements.slice(i, i + 20));
-    }
-    await guard();
-    const count = await env.PRIVATE_DB.prepare(
-      'SELECT COUNT(*) n FROM personal_daily_observations WHERE run_id=?',
-    )
-      .bind(run)
-      .first<number>('n');
-    if (count !== capture.page.records.length) throw new Error('daily_count_mismatch');
-    await env.PRIVATE_DB.prepare(
-      "UPDATE personal_daily_runs SET state='complete',observed_at=?,record_count=?,evidence_hash=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?",
-    )
-      .bind(capture.observed_at, count, capture.payload_hash, run, token)
-      .run();
-    await publishDailyCatalog(env, source, run, now());
-    return { state: 'complete', reused: false };
   } catch (e) {
     const reason = e instanceof z.ZodError ? 'public_gpu_schema_invalid' : errorCode(e);
     if (e instanceof FetchFailure || (gpuReviewErrors as readonly string[]).includes(reason))
