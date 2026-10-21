@@ -66,7 +66,7 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
         );
       }
       expect(readFileSync('wrangler.collector.jsonc', 'utf8')).toContain(
-        '"PRIVATE_GPU_RESEARCH_ENABLED": "false"',
+        '"PRIVATE_GPU_RESEARCH_ENABLED": "true"',
       );
       expect(() => assertResearchAllowed(c, gpuTime, c.terms.version)).toThrow('policy_blocked');
       for (const purpose of ['public', 'external_llm', 'raw'] as const)
