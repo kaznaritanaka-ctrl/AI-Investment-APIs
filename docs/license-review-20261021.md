@@ -14,11 +14,13 @@
 | <a id="rebro"></a>rebro（研究候補） | GPU買取センター / Rebro | 通信買取規約 /rules/ 第10条・/reason/・robots.txt（別のサイト利用規約は公開未確認） | **見送り（deferred）・収集しない** | 原出典を保持 | 再配布不可 | Kaz 22:45 JST決定: /rules/ 第10条（査定・買取目的外の行為/当社が不適当とする行為）と未公開のサイト利用規約のリスクにより見送り。呼び出し側が2026-10-21 21:06 JST確認。/reason/保存本文も確認。/rules/は通信買取規約で、言及される別のサイト利用規約は2026-10-21の呼び出し側調査で公開先なし。第10条にscrapingの明示禁止はないが、査定・買取目的外、当社が不適当とする行為、運営妨害・迷惑行為の禁止は研究巡回への適用リスクが残る。robotsはUser-agent:* Allow:/、Content-Signal: search=yes,ai-train=no,use=reference。学習クローラは個別Disallow。再配布許諾なし、AI学習・外部LLM処理不可 | https://gpu-kaitori.com/reason/ 、https://gpu-kaitori.com/rules/ 、https://gpu-kaitori.com/robots.txt |
 | <a id="sakura_dok"></a>sakura_dok | さくらインターネット | 約款一覧 | **非公開**（記載なし） | – | 不明 | 価格APIデータの再配布許諾の記載を確認できず | https://www.sakura.ad.jp/corporate/agreement/ |
 | <a id="ccir"></a>ccir | CCIR | Data Terms | **非公開**（明示制限・書面許諾必要） | 引用時は「CCIR (ccir.io)」＋系列ID・日付 | 書面許諾が必要 | 「Systematic or bulk retrieval …, redistribution of series or series history … require written permission」 | https://ccir.io/documents/data-terms |
-| <a id="price_of_compute"></a>price_of_compute | Price of Compute | API ページ記載 | **非公開**（曖昧・要確認⚠） | 「Data: Price of Compute」リンク必須 | 記載なし | 「Free use requires a visible link」と無償利用は認めるが、再配布・商用の範囲は明記なし。上流（Runpod等）の規約とも衝突しうる | https://www.priceofcompute.com/api |
+| <a id="price_of_compute"></a>price_of_compute | Price of Compute | API ページ記載 | **承認済み非公開PoC**（2026-10-06オーナー承認、公開不可。再配布は曖昧・要確認⚠） | 「Data: Price of Compute」リンク必須 | 記載なし | 「Free use requires a visible link」と無償利用は認めるが、再配布・商用の範囲は明記なし。上流（Runpod等）の規約とも衝突しうる。既存の限定的な非公開PoC承認を維持 | https://www.priceofcompute.com/api |
 | <a id="ebay_browse"></a>ebay_browse | eBay | API License Agreement | **非公開**（要確認⚠） | – | 不明 | 規約ページがJS描画で本文を取得できず条項未確認。再配布許可の確認なし→非公開 | https://developer.ebay.com/join/api-license-agreement |
 | <a id="capex_utilization"></a><a id="electricity"></a><a id="gpu_index"></a><a id="memory"></a><a id="rates_credit"></a>capex_utilization / electricity / gpu_index / memory / rates_credit | 未選定 | 提供元未定 | **非公開**（記載なし） | – | – | 提供元未選定のためライセンス評価不能 | – |
 | <a id="eia"></a>eia（研究案） | U.S. EIA | Public domain | 公開可能な条件（ただし収集はブロック中のまま） | EIA を出典として表示（推奨） | 可 | 「U.S. government publications are in the public domain … You may use and/or distribute any of our data」 | https://www.eia.gov/about/copyrights_reuse.php |
 | <a id="jepx"></a>jepx（研究案） | JEPX | 免責事項・著作権 | **非公開**（曖昧・要確認⚠） | 出所明示 | 記載なし | 「著作権は本所にあります。利用する場合は、出所を明示した上で」— 利用は可とも読めるが再配布の明示許諾ではない | https://www.jepx.jp/disclaimer/ |
+
+price_of_computeは2026-10-06のオーナー承認に基づく非公開H100-SXM PoC（`enabled=true`）。承認済み範囲の収集・非公開保存・内部分析は`allowed`、外部LLM処理・raw再配布は`denied`。公開表示・正規化／派生／商用再配布は`review_required`で、公開不可。対象フィールドと保持期間を含む既存承認は[承認記録](price-of-compute-integration.md#private-collection-proposal-20261006)と`config/sources/price_of_compute.json`を参照。本追記は既存承認の説明訂正であり、権利・policy・enabledの値は変更しない。
 
 ## 注意
 - 公開APIやドキュメントのライセンスを、レスポンスデータの再配布権と読み替えていない（repo の rights-policy に従う）。

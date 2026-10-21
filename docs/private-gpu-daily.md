@@ -1,10 +1,10 @@
 # Highreso／Rebroの非公開日次研究（Issue #17）
 
-**10/21 22:45 JSTの更新**: KazはHighresoのみ承認。Highresoはenabled=true・正規化履歴365日のfixed_days、保存済み実HTMLで指紋とwire（24インスタンス/48観測）確認済み。Rebroは第10条と未公開サイト規約のリスクによりdeferred、enabled=false・取得/保存/分析はreview_required。WranglerのPRIVATE_GPU_RESEARCH_ENABLEDはfalseを維持する。最新の承認記録・保持の意味・実応答確認・10/22朝の配備/復旧/R2確認手順は[デプロイ前チェックリスト](private-gpu-deploy-checklist.md#approval-20261021)を参照。以下の未承認・両候補allowed等は21:05 JST時点の実装/準備の履歴であり、現在の設定はこの更新を優先する。
+**2026-10-22の現状更新（Kaz提示）**: 2026-10-22 07:53 JSTに、Kaz承認のもと、本番Collectorをmain `58f007f` + `PRIVATE_GPU_RESEARCH_ENABLED=true`でデプロイ済み。PR #27でmainの`wrangler.collector.jsonc`もtrueに一致した。対象はHighresoのみ。Highresoはenabled=true・正規化履歴365日のfixed_days、保存済み実HTMLで指紋とwire（24インスタンス/48観測）確認済み。Rebroは第10条と未公開サイト規約のリスクによりdeferred、enabled=false・取得/保存/分析はreview_required。承認記録・保持の意味・実応答確認・配備/復旧/R2確認手順は[デプロイ前チェックリスト](private-gpu-deploy-checklist.md)を参照。以下の初期フラグfalse・未承認・両候補allowed等は10/21 21:05 JST時点の実装/準備の履歴であり、現在の設定はこの更新を優先する。
 
-PR #24をマージしたmain=b30554eに、Kazの2026-10-21 21:05 JST承認に基づく本番準備を追加しました。非secretフラグ`PRIVATE_GPU_RESEARCH_ENABLED='true'`と、Highreso/Rebroに固定した研究設定の全承認検査を通った場合だけ、本番経路を開きます。初期フラグはfalseです。両候補の自動取得・非公開保存・内部分析のみallowed、公開表示・再配布・外部LLM・AI学習は禁止です。新しいsecret、binding、Cron、依存、有料サービス、migrationはありません。
+PR #24をマージしたmain=b30554eに、Kazの2026-10-21 21:05 JST承認に基づく本番準備を追加しました。非secretフラグ`PRIVATE_GPU_RESEARCH_ENABLED='true'`と、Highreso/Rebroに固定した研究設定の全承認検査を通った場合だけ、本番経路を開きます。当時の初期フラグはfalseでした。両候補の自動取得・非公開保存・内部分析のみallowed、公開表示・再配布・外部LLM・AI学習は禁止です。新しいsecret、binding、Cron、依存、有料サービス、migrationはありません。
 
-規約確認は[2026-10-21記録](license-review-20261021.md)のgpusoroban／rebroを参照します。呼び出し側が21:06 JSTに取得したwork内の本文を使い、この実装作業では外部通信も実収集も行いません。Highresoは現行と11/1適用新版を確認済み、Rebroは/reason/・/rules/・robotsのContent-Signalまで記録しました。robots指紋は保存本文から計算済みです。規約は抽出テキストなので既存HTML指紋との一致を保証できず、terms_sha256=nullを維持します。source.enabled=false、wire未確認、保持unapproved、Time Travel/lifecycle未確認も維持しており、フラグだけを切り替えても取得しません。権利承認と未確認の技術ゲートを混同しません。
+当時の規約確認は[2026-10-21記録](license-review-20261021.md)のgpusoroban／rebroを参照します。呼び出し側が21:06 JSTに取得したwork内の本文を使い、この実装作業では外部通信も実収集も行いませんでした。Highresoは現行と11/1適用新版を確認済み、Rebroは/reason/・/rules/・robotsのContent-Signalまで記録しました。robots指紋は保存本文から計算済みでした。規約は抽出テキストなので既存HTML指紋との一致を保証できず、terms_sha256=null、source.enabled=false、wire未確認、保持unapproved、Time Travel/lifecycle未確認だった準備段階の記録です。フラグだけを切り替えても取得しない検査は維持します。権利承認と未確認の技術ゲートを混同しません。
 
 ## 収集と保存
 
@@ -12,7 +12,7 @@ PR #24をマージしたmain=b30554eに、Kazの2026-10-21 21:05 JST承認に基
 
 HighresoはA100/H100の候補scope、実候補ではGPU 1枚のインスタンスを選び、時間／月額を別の原単位で保存します。最大24インスタンス×2価格＝48観測で、超過を切り捨てず停止します。Rebroは選別公開事例の1 GPUあたり買取単価・掲載年月・掲載数量を保持し、実取引日時や全市場を補完しません。同内容の重複事例も別の出現として保持し、安定した取引IDとは見なしません。金額はdecimal文字列、未掲載はnull、0は0のままです。
 
-HTML解析はPR #18の解析規則を移植し、追加依存を避けて既存のfast-xml-parserを使用しています。明示的に閉じた表を要求する厳格なHTML部分集合で、HTML5による省略タグの補修はしません。対応外のHTML、入れ子の表、colspan／rowspan、途中で切れた表、検証画面は停止します。実ページ適合性・robots・規約の指紋は有効化前の確認事項です。Highresoは2026-11-01適用の新版（最終改定2026-08-27、国外は同日適用）まで内容確認済みとして、再確認期限を2027-01-15に置きました。11/1を一律停止境界にはしません。11/1 00:00 JST以降も`/terms`を優先し、確認済み新版の`next_terms_sha256`を照合します。それ以前は`terms_sha256`です。新版が通知ページにしかない場合に限り、レビューした非secret設定`public_access.highreso_terms_fallback=true`で固定URL`/5401872`を使用します。同じrunで4要求に増やさず、通常もfallbackも最大3回です。404後の切替・再取得は新policyの明示登録と日次予算の確認後です。両指紋は未設定で、デプロイ前に既存HTML指紋形式で照合する必要があります。実応答が承認済み指紋と違う場合は従来どおり取得前に停止します。
+HTML解析はPR #18の解析規則を移植し、追加依存を避けて既存のfast-xml-parserを使用しています。明示的に閉じた表を要求する厳格なHTML部分集合で、HTML5による省略タグの補修はしません。対応外のHTML、入れ子の表、colspan／rowspan、途中で切れた表、検証画面は停止します。実ページ適合性・robots・規約の指紋は有効化前の確認事項です。Highresoは2026-11-01適用の新版（最終改定2026-08-27、国外は同日適用）まで内容確認済みとして、再確認期限を2027-01-15に置きました。11/1を一律停止境界にはしません。11/1 00:00 JST以降も`/terms`を優先し、確認済み新版の`next_terms_sha256`を照合します。それ以前は`terms_sha256`です。新版が通知ページにしかない場合に限り、レビューした非secret設定`public_access.highreso_terms_fallback=true`で固定URL`/5401872`を使用します。同じrunで4要求に増やさず、通常もfallbackも最大3回です。404後の切替・再取得は新policyの明示登録と日次予算の確認後です。両指紋は当初未設定でしたが、10/21の保存済み実HTMLで既存の指紋関数による確認を完了しました（[wire確認記録](private-gpu-deploy-checklist.md#wire-20261021)）。実応答が承認済み指紋と違う場合は従来どおり取得前に停止します。
 
 private R2には生HTMLではなく許可した最小投影とhashだけ、private D1には `research_gpu_observations` を保存します。既存のresearch_sources／runs／pages／config_versionsと保持評価台帳を再利用します。PR #24のmigrationは **private/0015_private_gpu_daily.sql** で、今回の追加migrationはありません。GPU観測テーブル、索引2本、UPDATE禁止・保持削除制限triggerだけを追加し、既存テーブルを再構築しません。0001〜0009・0014の期限、FK、保持台帳のDELETE禁止を維持します。Public API／PUBLIC_DB／公開migrationは変更しません。
 
