@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { fetchBounded, FetchFailure, type NetworkOptions } from '../network';
 import { errorCode, hash, isoTime, stable } from '../util';
 import { parseElectricity, researchRequest } from './electricity';
+import { isPublicGpu, researchTable } from './public-gpu-contract';
+import { PublicGpuPageSchema, parsePublicGpu, gpuRecordFingerprint } from './public-gpu-html';
+import { fetchPublicGpuPage, gpuReviewErrors } from './public-gpu-network';
 import {
   assertResearchAllowed,
   assertResearchHistoryAllowed,
@@ -40,7 +43,7 @@ type Options = Omit<NetworkOptions, 'onBody' | 'validators'> & {
 };
 const envelopeSchema = z
   .object({
-    version: z.literal('electricity-projection-v1'),
+    version: z.enum(['electricity-projection-v1', 'domestic-gpu-projection-v1']),
     config_hash: z.string(),
     query_hash: z.string(),
     source_id: z.string(),
@@ -50,7 +53,7 @@ const envelopeSchema = z
     observed_at: z.iso.datetime(),
     synthetic: z.boolean(),
     payload_hash: z.string(),
-    page: ResearchPageSchema,
+    page: z.union([ResearchPageSchema, PublicGpuPageSchema]),
   })
   .strict();
 function localOnly(env: ResearchEnv) {
@@ -77,6 +80,16 @@ async function checkCurrent(
   if (!row || row.config_hash !== digest || row.suspended)
     throw new Error('research_policy_changed');
   await assertNotRevoked(env, config.source.source_id);
+  if (acquisition && isPublicGpu(config.adapter)) {
+    const blocked = await env.PRIVATE_DB.prepare(
+      'SELECT last_error FROM research_runs WHERE source_id=? AND config_hash=? AND last_error IN (' +
+        gpuReviewErrors.map(() => '?').join(',') +
+        ') LIMIT 1',
+    )
+      .bind(config.source.source_id, digest, ...gpuReviewErrors)
+      .first();
+    if (blocked) throw new Error('public_gpu_source_review_required');
+  }
 }
 export async function collectResearchPage(
   env: ResearchEnv,
@@ -89,6 +102,8 @@ export async function collectResearchPage(
   const now = opt.now ?? (() => new Date().toISOString()),
     at = now();
   assertResearchAllowed(config, at, opt.current_terms_version);
+  const table = researchTable(config.adapter),
+    gpu = isPublicGpu(config.adapter);
   if (
     !isoTime(scheduled) ||
     !isoTime(at) ||
@@ -115,6 +130,14 @@ export async function collectResearchPage(
     .bind(source.source_id, source.policy.version, configHash)
     .run();
   await checkCurrent(env, config, configHash, opt);
+  if (gpu) {
+    const cooldown = await env.PRIVATE_DB.prepare(
+      'SELECT MAX(retry_at) retry_at FROM research_runs WHERE source_id=?',
+    )
+      .bind(source.source_id)
+      .first<{ retry_at: string | null }>();
+    if (cooldown?.retry_at && cooldown.retry_at > at) return { run_id: runId, state: 'deferred' };
+  }
   await saveResearchConfigVersion(env, config, configHash, at);
   const retention = retentionSnapshot(config);
   await env.PRIVATE_DB.prepare(
@@ -178,7 +201,7 @@ export async function collectResearchPage(
         observed = now();
       } else {
         if (!opt.allow_network) throw new Error('research_network_opt_in_required');
-        const plan = researchRequest(config, query, pageNumber);
+        const plan = gpu ? null : researchRequest(config, query, pageNumber);
         const boundedFetcher: typeof fetch = async (url, init) => {
           await checkCurrent(env, config, configHash, opt);
           const budget = await env.PRIVATE_DB.prepare(
@@ -189,21 +212,31 @@ export async function collectResearchPage(
           if (!budget.meta.changes) throw new FetchFailure('research_request_budget_exhausted');
           return (opt.fetcher ?? fetch)(url, init);
         };
-        const r = await fetchBounded(
-          source,
-          plan,
-          { ...opt, fetcher: boundedFetcher, onBody: undefined, validators: undefined },
-          config.adapter === 'jepx_spot' ? 'csv' : 'json',
-        );
+        const network = {
+          ...opt,
+          fetcher: boundedFetcher,
+          onBody: undefined,
+          validators: undefined,
+        };
+        const r = gpu
+          ? await fetchPublicGpuPage(config, network)
+          : await fetchBounded(
+              source,
+              plan!,
+              network,
+              config.adapter === 'jepx_spot' ? 'csv' : 'json',
+            );
         if (r.status !== 200) throw new Error('research_unexpected_status');
         text = r.text;
         observed = r.observed_at;
       }
-      const page = parseElectricity(config, query, text, pageNumber);
+      const page = gpu
+        ? await parsePublicGpu(config, text, observed, synthetic)
+        : parseElectricity(config, query, text, pageNumber);
       if (page.records.length > config.limits.page_size) throw new Error('research_page_limit');
       encoded = stable(
         envelopeSchema.parse({
-          version: 'electricity-projection-v1',
+          version: gpu ? 'domestic-gpu-projection-v1' : 'electricity-projection-v1',
           config_hash: configHash,
           query_hash: queryHash,
           source_id: source.source_id,
@@ -233,6 +266,7 @@ export async function collectResearchPage(
       page = e.page;
     if (
       e.config_hash !== configHash ||
+      e.version !== (gpu ? 'domestic-gpu-projection-v1' : 'electricity-projection-v1') ||
       e.query_hash !== queryHash ||
       page.page !== pageNumber ||
       e.source_id !== source.source_id ||
@@ -244,6 +278,7 @@ export async function collectResearchPage(
       e.observed_at > now()
     )
       throw new Error('research_evidence_mismatch');
+    (gpu ? PublicGpuPageSchema : ResearchPageSchema).parse(page);
     if (plusDays(e.observed_at, config.retention.evidence_days) <= now())
       throw new Error('research_evidence_expired');
     const previousPages = await env.PRIVATE_DB.prepare(
@@ -257,7 +292,7 @@ export async function collectResearchPage(
     )
       throw new Error('research_coverage_changed');
     const previousKeys = await env.PRIVATE_DB.prepare(
-      'SELECT record_key FROM research_observations WHERE run_id=? AND page_number<>?',
+      `SELECT record_key FROM ${table} WHERE run_id=? AND page_number<>?`,
     )
       .bind(runId, pageNumber)
       .all<{ record_key: string }>();
@@ -281,7 +316,7 @@ export async function collectResearchPage(
           );
     const priorRecords = page.records.length
       ? await env.PRIVATE_DB.prepare(
-          "SELECT * FROM (SELECT o.observation_id,o.record_hash,o.record_key,r.*,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM research_observations o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND (r.normalized_expires_at IS NULL OR r.normalized_expires_at>?) AND (? IS NULL OR r.recorded_at>?) AND r.retention_snapshot_json IS NOT NULL AND json_extract(r.retention_snapshot_json,'$.backup_days')>=? AND (r.all_copies_expires_at IS NULL OR r.all_copies_expires_at>?) AND r.config_hash IN (SELECT value FROM json_each(?)) AND o.observed_at<? AND o.record_key IN (" +
+          `SELECT * FROM (SELECT o.observation_id,o.record_hash,o.record_key,o.change_kind,r.*,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM ${table} o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND (r.normalized_expires_at IS NULL OR r.normalized_expires_at>?) AND (? IS NULL OR r.recorded_at>?) AND r.retention_snapshot_json IS NOT NULL AND json_extract(r.retention_snapshot_json,'$.backup_days')>=? AND (r.all_copies_expires_at IS NULL OR r.all_copies_expires_at>?) AND r.config_hash IN (SELECT value FROM json_each(?)) AND o.observed_at<? AND o.record_key IN (` +
             page.records.map(() => '?').join(',') +
             ')) WHERE position=1',
         )
@@ -302,6 +337,7 @@ export async function collectResearchPage(
               observation_id: string;
               record_hash: string;
               record_key: string;
+              change_kind: string;
               run_id: string;
             }
           >()
@@ -321,13 +357,14 @@ export async function collectResearchPage(
       }
     }
     for (const record of page.records) {
-      const fingerprint = await hash(stable(record));
+      const fingerprint =
+        'offer' in record ? await gpuRecordFingerprint(record) : await hash(stable(record));
       const prior = priorRecords.results.find(
         (r) => r.record_key === record.record_key && !deletedPrior.has(r.run_id),
       );
       statements.push(
         env.PRIVATE_DB.prepare(
-          'INSERT OR IGNORE INTO research_observations(observation_id,run_id,page_number,record_key,source_url,method_version,observed_at,recorded_at,record_hash,previous_observation_id,change_kind,domain_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>?)',
+          `INSERT OR IGNORE INTO ${table}(observation_id,run_id,page_number,record_key,source_url,method_version,observed_at,recorded_at,record_hash,previous_observation_id,change_kind,domain_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>?)`,
         ).bind(
           await hash(stable([runId, record.record_key, fingerprint])),
           runId,
@@ -339,7 +376,13 @@ export async function collectResearchPage(
           now(),
           fingerprint,
           prior?.observation_id ?? null,
-          !prior ? 'first_seen' : prior.record_hash === fingerprint ? 'reobserved' : 'revised',
+          !prior
+            ? 'first_seen'
+            : prior.change_kind === 'not_seen'
+              ? 'reappeared'
+              : prior.record_hash === fingerprint
+                ? 'reobserved'
+                : 'revised',
           stable(record),
           runId,
           lease,
@@ -347,17 +390,64 @@ export async function collectResearchPage(
         ),
       );
     }
+    if (gpu && page.coverage === 'complete') {
+      // Absence is relative to the last complete, same-scope snapshot, never a sale or stock zero.
+      const previous = await env.PRIVATE_DB.prepare(
+        "SELECT run_id FROM research_runs WHERE source_id=? AND query_hash=? AND synthetic=? AND state='complete' AND recorded_at<? AND config_hash IN (SELECT value FROM json_each(?)) ORDER BY recorded_at DESC LIMIT 1",
+      )
+        .bind(
+          source.source_id,
+          queryHash,
+          Number(synthetic),
+          e.observed_at,
+          JSON.stringify([configHash, ...config.history_access.map((h) => h.config_hash)]),
+        )
+        .first<{ run_id: string }>();
+      if (previous) {
+        const rows = (await readResearchRun(env, config, previous.run_id, opt)).results;
+        const currentKeys = new Set(page.records.map((r) => r.record_key));
+        for (const old of rows) {
+          if (old.change_kind === 'not_seen' || currentKeys.has(String(old.record_key))) continue;
+          const tombstone = stable({
+            record_key: old.record_key,
+            listing_state: 'not_seen',
+            absence_basis: 'same_scope_complete_page',
+            previous_observation_id: old.observation_id,
+          });
+          statements.push(
+            env.PRIVATE_DB.prepare(
+              `INSERT OR IGNORE INTO ${table}(observation_id,run_id,page_number,record_key,source_url,method_version,observed_at,recorded_at,record_hash,previous_observation_id,change_kind,domain_json) SELECT ?,?,?,?,?,?,?,?,?,?,'not_seen',? WHERE EXISTS(SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>?)`,
+            ).bind(
+              await hash(stable([runId, old.record_key, 'not_seen'])),
+              runId,
+              0,
+              old.record_key,
+              source.source_url,
+              config.method_version,
+              e.observed_at,
+              now(),
+              await hash(tombstone),
+              old.observation_id,
+              tombstone,
+              runId,
+              lease,
+              now(),
+            ),
+          );
+        }
+      }
+    }
     // Bounded, resumable record batches. An interrupted page remains hidden until completed.
     for (let i = 0; i < statements.length; i += 20) {
       await checkCurrent(env, config, configHash, opt);
       await env.PRIVATE_DB.batch(statements.slice(i, i + 20));
     }
     const count = await env.PRIVATE_DB.prepare(
-      'SELECT COUNT(*) n FROM research_observations WHERE run_id=? AND page_number=?',
+      `SELECT COUNT(*) n FROM ${table} WHERE run_id=? AND page_number=?`,
     )
       .bind(runId, pageNumber)
       .first<{ n: number }>();
-    if (count?.n !== page.records.length) throw new Error('research_checkpoint_mismatch');
+    if (count?.n !== statements.length) throw new Error('research_checkpoint_mismatch');
     await checkCurrent(env, config, configHash, opt);
     const state = page.coverage === 'complete' && page.next_page === null ? 'complete' : 'partial';
     await env.PRIVATE_DB.batch([
@@ -378,7 +468,7 @@ export async function collectResearchPage(
         now(),
       ),
       env.PRIVATE_DB.prepare(
-        'UPDATE research_runs SET state=?,next_page=?,http_page_attempts=0,observation_count=(SELECT COUNT(*) FROM research_observations WHERE run_id=?),last_error=?,retry_at=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?',
+        `UPDATE research_runs SET state=?,next_page=?,http_page_attempts=${gpu ? 'http_page_attempts' : '0'},observation_count=(SELECT COUNT(*) FROM ${table} WHERE run_id=?),last_error=?,retry_at=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?`,
       ).bind(state, page.next_page, runId, page.reasons.join(',') || null, runId, lease, now()),
     ]);
     const result = await env.PRIVATE_DB.prepare(
@@ -390,12 +480,22 @@ export async function collectResearchPage(
       throw new Error('research_lease_lost');
     return { run_id: runId, state };
   } catch (e) {
+    const code = gpu && e instanceof z.ZodError ? 'public_gpu_schema_invalid' : errorCode(e);
+    const retryAt =
+      gpu && (e instanceof FetchFailure || (gpuReviewErrors as readonly string[]).includes(code))
+        ? [plusDays(at, 1), e instanceof FetchFailure ? e.retry_at : null]
+            .filter((v): v is string => v !== null)
+            .sort()
+            .at(-1)!
+        : e instanceof FetchFailure
+          ? e.retry_at
+          : null;
     await env.PRIVATE_DB.prepare(
       "UPDATE research_runs SET state='partial',last_error=?,retry_at=?,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=?",
     )
-      .bind(errorCode(e), e instanceof FetchFailure ? e.retry_at : null, runId, lease)
+      .bind(code, retryAt, runId, lease)
       .run();
-    throw new Error(errorCode(e));
+    throw new Error(code);
   }
 }
 
@@ -425,7 +525,7 @@ export async function readResearchRun(
   const expiry = historyExpiry(config, run);
   if (expiry !== null && expiry <= now) return { results: [] };
   return env.PRIVATE_DB.prepare(
-    'SELECT * FROM research_observations WHERE run_id=? ORDER BY record_key LIMIT 192',
+    `SELECT * FROM ${researchTable(config.adapter)} WHERE run_id=? ORDER BY record_key LIMIT 192`,
   )
     .bind(runId)
     .all();
@@ -448,6 +548,8 @@ export async function purgeResearchRun(
     .bind(runId)
     .first<RetainedRun & { backup_residual_until: string | null }>();
   if (!r) return;
+  // GPU config validation fixes source_id to its adapter; legacy IDs stay electricity.
+  const table = researchTable(r.source_id);
   if (cleanup.revoke) await revokeResearchSource(env, r.source_id, now);
   if (r.lease_until && r.lease_until > now) throw new Error('research_retention_leased');
   const revoked = await sourceRevocation(env, r.source_id);
@@ -505,13 +607,11 @@ export async function purgeResearchRun(
   // Include a captured page that never reached its D1 checkpoint.
   await eraseResearchEvidenceObjects(env, r.source_id, runId);
   await env.PRIVATE_DB.prepare(
-    'DELETE FROM research_observations WHERE observation_id IN (SELECT observation_id FROM research_observations WHERE run_id=? LIMIT 20)',
+    `DELETE FROM ${table} WHERE observation_id IN (SELECT observation_id FROM ${table} WHERE run_id=? LIMIT 20)`,
   )
     .bind(runId)
     .run();
-  const remaining = await env.PRIVATE_DB.prepare(
-    'SELECT COUNT(*) n FROM research_observations WHERE run_id=?',
-  )
+  const remaining = await env.PRIVATE_DB.prepare(`SELECT COUNT(*) n FROM ${table} WHERE run_id=?`)
     .bind(runId)
     .first<{ n: number }>();
   if (!remaining?.n)

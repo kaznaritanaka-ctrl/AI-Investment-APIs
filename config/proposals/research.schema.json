@@ -703,7 +703,9 @@
       "type": "string",
       "enum": [
         "eia_retail",
-        "jepx_spot"
+        "jepx_spot",
+        "highreso_public",
+        "rebro_public"
       ]
     },
     "visibility": {
@@ -712,7 +714,63 @@
     },
     "method_version": {
       "type": "string",
-      "const": "electricity-research-v1"
+      "enum": [
+        "electricity-research-v1",
+        "domestic-gpu-html-v1",
+        "domestic-gpu-html-v2"
+      ]
+    },
+    "public_access": {
+      "type": "object",
+      "properties": {
+        "robots_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "terms_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "robots_decision": {
+          "type": "string",
+          "enum": [
+            "unreviewed",
+            "allowed"
+          ]
+        },
+        "reviewed_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "robots_sha256",
+        "terms_sha256",
+        "robots_decision",
+        "reviewed_ref"
+      ],
+      "additionalProperties": false
     },
     "owner_approval_ref": {
       "anyOf": [
@@ -832,6 +890,68 @@
           "required": [
             "kind",
             "area"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "highreso_public"
+            },
+            "gpu_counts": {
+              "minItems": 1,
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              }
+            },
+            "models": {
+              "minItems": 1,
+              "maxItems": 2,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "A100",
+                  "H100"
+                ]
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "models"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "rebro_public"
+            },
+            "models": {
+              "minItems": 1,
+              "maxItems": 2,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "A100",
+                  "H100"
+                ]
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "models"
           ],
           "additionalProperties": false
         }

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { SourceSchema } from '../schema';
-import { canCollect } from '../policy';
+import { canCollect, validPolicy } from '../policy';
 import { D, isoDate, isoTime } from '../util';
+import { isPublicGpu, publicGpuEndpoints, PublicAccessReviewSchema } from './public-gpu-contract';
 
 export const StorageReviewHoldSchema = z
   .object({
@@ -16,9 +17,14 @@ export const StorageReviewHoldSchema = z
 export const ResearchConfigSchema = z
   .object({
     source: SourceSchema,
-    adapter: z.enum(['eia_retail', 'jepx_spot']),
+    adapter: z.enum(['eia_retail', 'jepx_spot', 'highreso_public', 'rebro_public']),
     visibility: z.literal('private_only'),
-    method_version: z.literal('electricity-research-v1'),
+    method_version: z.enum([
+      'electricity-research-v1',
+      'domestic-gpu-html-v1',
+      'domestic-gpu-html-v2',
+    ]),
+    public_access: PublicAccessReviewSchema.optional(),
     owner_approval_ref: z.string().min(1).nullable(),
     wire_contract_review_ref: z.string().min(1).nullable(),
     // Explicit review of an acquired config, never a retroactive grant or expiry extension.
@@ -45,6 +51,25 @@ export const ResearchConfigSchema = z
         .object({ kind: z.literal('eia_retail'), state: z.literal('CO'), sector: z.literal('IND') })
         .strict(),
       z.object({ kind: z.literal('jepx_spot'), area: z.literal('Tokyo') }).strict(),
+      z
+        .object({
+          kind: z.literal('highreso_public'),
+          gpu_counts: z.array(z.number().int().min(1).max(8)).min(1).max(8).optional(),
+          models: z
+            .array(z.enum(['A100', 'H100']))
+            .min(1)
+            .max(2),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('rebro_public'),
+          models: z
+            .array(z.enum(['A100', 'H100']))
+            .min(1)
+            .max(2),
+        })
+        .strict(),
     ]),
     limits: z
       .object({
@@ -87,7 +112,15 @@ export const ResearchConfigSchema = z
     if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash)
       c.addIssue({ code: 'custom', message: 'unsafe_source_url' });
     if (
-      v.source.dataset_type !== 'electricity' ||
+      v.source.dataset_type !==
+        (v.adapter === 'highreso_public'
+          ? 'gpu_rental'
+          : v.adapter === 'rebro_public'
+            ? 'gpu_secondary'
+            : 'electricity') ||
+      (isPublicGpu(v.adapter)
+        ? !['domestic-gpu-html-v1', 'domestic-gpu-html-v2'].includes(v.method_version)
+        : v.method_version !== 'electricity-research-v1') ||
       v.source.adapter !== 'candidate' ||
       v.scope.kind !== v.adapter ||
       v.source.gpu ||
@@ -96,6 +129,29 @@ export const ResearchConfigSchema = z
       (v.adapter === 'jepx_spot' && (v.limits.page_size !== 48 || v.limits.max_pages !== 1))
     )
       c.addIssue({ code: 'custom', message: 'research_scope_invalid' });
+    if (isPublicGpu(v.adapter)) {
+      if (
+        v.scope.kind === 'highreso_public' &&
+        ((v.method_version === 'domestic-gpu-html-v2') !== (v.scope.gpu_counts !== undefined) ||
+          (v.scope.gpu_counts && new Set(v.scope.gpu_counts).size !== v.scope.gpu_counts.length))
+      )
+        c.addIssue({ code: 'custom', message: 'public_gpu_cohort_review_required' });
+      if ('models' in v.scope && new Set(v.scope.models).size !== v.scope.models.length)
+        c.addIssue({ code: 'custom', message: 'duplicate_gpu_scope' });
+      const urls = publicGpuEndpoints[v.adapter];
+      if (
+        v.source.source_id !== v.adapter ||
+        v.source.source_url !== urls.page ||
+        v.source.endpoint !== urls.page ||
+        v.source.terms_url !== urls.terms ||
+        v.source.authentication_required ||
+        !v.public_access ||
+        v.limits.max_pages !== 1 ||
+        v.limits.max_input_rows > 100 ||
+        v.source.max_bytes > 1000000
+      )
+        c.addIssue({ code: 'custom', message: 'public_gpu_scope_invalid' });
+    } else if (v.public_access) c.addIssue({ code: 'custom', message: 'unexpected_public_access' });
   });
 export type ResearchConfig = z.infer<typeof ResearchConfigSchema>;
 
@@ -103,6 +159,8 @@ const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 export const ResearchQuerySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('eia_retail'), from: month, to: month }).strict(),
   z.object({ kind: z.literal('jepx_spot'), delivery_date: z.string().refine(isoDate) }).strict(),
+  z.object({ kind: z.literal('highreso_public') }).strict(),
+  z.object({ kind: z.literal('rebro_public') }).strict(),
 ]);
 export type ResearchQuery = z.infer<typeof ResearchQuerySchema>;
 export function validateQuery(config: ResearchConfig, input: unknown): ResearchQuery {
@@ -138,7 +196,12 @@ function assertResearchAuthority(
   // A missing license URL is neither a grant nor a veto; reuse the nine-rights policy.
   if (
     acquisition
-      ? !canCollect(s, now)
+      ? !(isPublicGpu(config.adapter)
+          ? validPolicy(s, now) &&
+            ['automated_collection', 'private_storage', 'internal_analysis'].every(
+              (k) => s.policy.rights[k as keyof typeof s.policy.rights] === 'allowed',
+            )
+          : canCollect(s, now))
       : now < s.policy.valid_from ||
         (s.policy.valid_until !== null && now >= s.policy.valid_until) ||
         s.policy.rights.private_storage !== 'allowed' ||
@@ -149,10 +212,20 @@ function assertResearchAuthority(
     !config.owner_approval_ref ||
     !config.wire_contract_review_ref ||
     !r.reviewed_ref ||
-    !s.policy.fields.includes('electricity_projection_v1')
+    !s.policy.fields.includes(
+      isPublicGpu(config.adapter) ? 'domestic_gpu_projection_v1' : 'electricity_projection_v1',
+    )
   )
     throw new Error('research_review_required');
   assertResearchRetentionReviewed(config);
+  if (
+    isPublicGpu(config.adapter) &&
+    (!config.public_access?.reviewed_ref ||
+      !config.public_access.robots_sha256 ||
+      !config.public_access.terms_sha256 ||
+      config.public_access.robots_decision !== 'allowed')
+  )
+    throw new Error('public_access_review_required');
   if (
     config.terms.version !== currentTerms ||
     s.policy.evidence_version !== currentTerms ||

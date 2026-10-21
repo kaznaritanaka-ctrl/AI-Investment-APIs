@@ -35,6 +35,7 @@ export const DomesticGPUIntakeSchema = z
     currency: z.enum(['JPY', 'USD']).nullable(),
     unit: z.enum([
       'gpu_hour',
+      'node_hour',
       'gpu_minute',
       'second',
       'month',
@@ -42,7 +43,7 @@ export const DomesticGPUIntakeSchema = z
       'gpu',
       'points_per_gpu_minute',
     ]),
-    sale_unit: z.enum(['single_gpu', 'multi_gpu_lot', 'server', 'rack', 'unknown']),
+    sale_unit: z.enum(['single_gpu', 'multi_gpu_lot', 'instance', 'server', 'rack', 'unknown']),
     gpu_count: z.number().int().positive().nullable(),
     condition: z.enum(['new', 'used', 'refurbished', 'for_parts', 'unknown']),
     country: z
