@@ -109,6 +109,7 @@ export async function handle(
       status: 405,
       headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store' },
     });
+  if (request.url.length > 8192) return error('invalid_query', 400);
   const url = new URL(request.url),
     path = url.pathname;
   try {
@@ -119,8 +120,11 @@ export async function handle(
           key: request.headers.get('CF-Connecting-IP') ?? 'anonymous',
         })
       ).success
-    )
-      return error('rate_limited', 429);
+    ) {
+      const response = error('rate_limited', 429);
+      response.headers.set('Retry-After', '60');
+      return response;
+    }
     if (path.startsWith('/v1/gpu/')) return await gpuAPI(url, env, now);
     if (path.startsWith('/v1/models/')) return await modelsAPI(url, env, now);
     if (path === '/openapi.json') return json(openapi);
@@ -227,12 +231,13 @@ export async function handle(
       filters.push(...gf.filters);
       values.push(...gf.values);
       // Resolve supersession before entity filtering: a corrected condition may change its series key.
+      // Build the non-null superseded-ID set once; a correlated scan is quadratic in history size.
       const rows = await env.PUBLIC_DB.prepare(
         'WITH eligible AS (SELECT o.observation_id,o.supersedes_observation_id,o.dataset,o.entity_key,o.source_id,o.snapshot_id,o.model_snapshot_id,o.gpu_sku_id,o.provider,o.country,o.region,o.contract_type,o.item_condition,o.basis,o.observed_at,o.recorded_at,o.seq,o.public_json,p.held_at' +
           visibleJoin +
           'WHERE ' +
           visibleSQL +
-          " AND o.observed_at<=? AND o.recorded_at<=? AND b.completed_at<=? AND (o.snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_coverage gc JOIN published_coverage newer ON newer.source_id=gc.source_id AND newer.scope_hash=gc.scope_hash WHERE gc.snapshot_id=o.snapshot_id AND newer.state='complete' AND newer.completed_at>gc.completed_at AND newer.completed_at<=?)) AND (o.model_snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_model_snapshots mc JOIN published_model_snapshots newer ON newer.source_id=mc.source_id AND newer.scope_hash=mc.scope_hash JOIN publication_batches nb ON nb.batch_id=newer.batch_id WHERE mc.snapshot_id=o.model_snapshot_id AND newer.state='complete' AND nb.state='complete' AND (newer.observed_at>mc.observed_at OR (newer.observed_at=mc.observed_at AND newer.completed_at>mc.completed_at)) AND newer.completed_at<=?))), current AS (SELECT e.*,ROW_NUMBER() OVER(PARTITION BY e.dataset,e.source_id,e.entity_key ORDER BY e.observed_at DESC,e.recorded_at DESC,e.seq DESC) AS rn FROM eligible e WHERE NOT EXISTS (SELECT 1 FROM eligible n WHERE n.supersedes_observation_id=e.observation_id)) SELECT public_json,held_at FROM current WHERE rn=1" +
+          " AND o.observed_at<=? AND o.recorded_at<=? AND b.completed_at<=? AND (o.snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_coverage gc JOIN published_coverage newer ON newer.source_id=gc.source_id AND newer.scope_hash=gc.scope_hash WHERE gc.snapshot_id=o.snapshot_id AND newer.state='complete' AND newer.completed_at>gc.completed_at AND newer.completed_at<=?)) AND (o.model_snapshot_id IS NULL OR NOT EXISTS(SELECT 1 FROM published_model_snapshots mc JOIN published_model_snapshots newer ON newer.source_id=mc.source_id AND newer.scope_hash=mc.scope_hash JOIN publication_batches nb ON nb.batch_id=newer.batch_id WHERE mc.snapshot_id=o.model_snapshot_id AND newer.state='complete' AND nb.state='complete' AND (newer.observed_at>mc.observed_at OR (newer.observed_at=mc.observed_at AND newer.completed_at>mc.completed_at)) AND newer.completed_at<=?))), current AS (SELECT e.*,ROW_NUMBER() OVER(PARTITION BY e.dataset,e.source_id,e.entity_key ORDER BY e.observed_at DESC,e.recorded_at DESC,e.seq DESC) AS rn FROM eligible e WHERE e.observation_id NOT IN (SELECT n.supersedes_observation_id FROM eligible n WHERE n.supersedes_observation_id IS NOT NULL)) SELECT public_json,held_at FROM current WHERE rn=1" +
           (filters.length ? ' AND ' + filters.join(' AND ') : '') +
           ' ORDER BY dataset,entity_key LIMIT 100',
       )

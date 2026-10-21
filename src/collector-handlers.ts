@@ -3,8 +3,7 @@ import { activeSources } from './sources';
 import { collectAll } from './pipeline';
 import { resumeGPURuns, queueGPURuns } from './gpu-pipeline';
 import { expireGPUData } from './gpu-retention';
-import { resumeModelRuns } from './models-pipeline';
-import { expireModels } from './models-retention';
+import { resumeCollections } from './collection-continuation';
 import { recordSummary, deliverNotifications, watchdog, expireEvidence } from './operations';
 import { recordOperationalNotifications } from './notifications';
 import { dailyCollectionSlot, minuteSlot } from './run-identity';
@@ -46,6 +45,7 @@ export default {
     emitLog({ ...context, phase: 'collector_start' });
     try {
       let results;
+      let gpuMaintenance = false;
       if (controller.cron === env.COLLECTION_CRON)
         results = [
           ...(await collectAll(
@@ -62,12 +62,10 @@ export default {
           )),
         ];
       else if (controller.cron === env.GPU_RESUME_CRON) {
-        // Retention uses a separate continuation slot from model ingestion.
-        const retired = await expireModels(env, activeSources, now);
-        results = [
-          ...(retired ? [] : await resumeModelRuns(env, activeSources, now, false, observer)),
-          ...(await resumeGPURuns(env, activeSources, now, false, observer)),
-        ];
+        const resumed = await resumeCollections(env, activeSources, now, observer);
+        results = resumed.results;
+        // A full GPU page and a full retention batch have separate SQL budgets.
+        gpuMaintenance = !resumed.models_work && resumed.results.length === 0;
       } else if (controller.cron === env.WATCHDOG_CRON) {
         results = [
           ...(await watchdog(
@@ -77,7 +75,9 @@ export default {
             now,
             observer,
           )),
-          ...(await resumeGPURuns(env, activeSources, now, true, observer)),
+          ...(activeSources.some((s) => s.enabled && s.models)
+            ? []
+            : await resumeGPURuns(env, activeSources, now, true, observer)),
         ];
       } else return;
       await recordSummary(env, slot, results, new Date().toISOString(), {
@@ -95,7 +95,7 @@ export default {
         /* No raw error, URL or payload is logged. */
       }
       await expireEvidence(env, now);
-      await expireGPUData(env, activeSources, now);
+      if (gpuMaintenance) await expireGPUData(env, activeSources, now);
       await env.PUBLIC_DB.prepare(
         'INSERT INTO public_health(singleton,last_collector_completed_at,collection_enabled,monitor_connected) VALUES (1,?,1,0) ON CONFLICT(singleton) DO UPDATE SET last_collector_completed_at=excluded.last_collector_completed_at,collection_enabled=1',
       )

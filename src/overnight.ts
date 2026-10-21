@@ -7,6 +7,7 @@ type SourceStatus = {
   run_id: string | null;
   collection: string;
   publication: string;
+  publication_required?: boolean | null;
   observation_count: number | null;
   accepted_count: number | null;
   snapshot?: string;
@@ -19,14 +20,15 @@ export function overnightSource(
   recoveryCount: number | null = null,
 ) {
   const incident = s.run_id ? incidentFromMetrics(metrics, s.run_id, s.source_id) : null;
-  const complete = s.collection === 'complete' && s.publication === 'complete';
+  const privateOnly = s.publication_required === false && s.publication === 'not_applicable';
+  const captureComplete =
+    s.collection === 'complete' &&
+    (!s.snapshot || ['complete', 'not_applicable'].includes(s.snapshot));
+  const complete = captureComplete && (s.publication === 'complete' || privateOnly);
   const disabled = s.collection === 'not_applicable';
   const pending = ['awaiting_start', 'in_progress'].includes(s.collection);
   const unknown = [s.collection, s.publication].some((v) => ['unknown', 'unavailable'].includes(v));
   const alerts = (s.signals ?? []).filter((x) => ['alert', 'unknown'].includes(x.condition));
-  const captureComplete =
-    s.collection === 'complete' &&
-    (!s.snapshot || ['complete', 'not_applicable'].includes(s.snapshot));
   const missing = disabled || captureComplete ? false : s.collection === 'missing' ? true : null;
   const human =
     disabled || (complete && !alerts.length)
@@ -57,6 +59,8 @@ export function overnightSource(
     run_id: s.run_id,
     collection_status: s.collection,
     publication_status: s.publication,
+    publication_required: s.publication_required ?? null,
+    processing_complete: complete,
     schema_drift: incident ? incident.schema_drift : disabled ? false : 'not_reported',
     detected_at: incident?.detected_at ?? null,
     evidence_hash: incident?.evidence_hash ?? null,
@@ -103,9 +107,13 @@ export function overnightSource(
     briefing: disabled
       ? '対象外'
       : complete
-        ? alerts.length
-          ? '収集・公開完了。品質・設定・権利の要確認事項あり'
-          : '収集・公開完了'
+        ? privateOnly
+          ? alerts.length
+            ? '非公開の収集完了。品質・設定・権利の要確認事項あり'
+            : '非公開の収集完了。公開は対象外'
+          : alerts.length
+            ? '収集・公開完了。品質・設定・権利の要確認事項あり'
+            : '収集・公開完了'
         : pending
           ? '収集処理中。完了未確認'
           : unknown
@@ -188,20 +196,18 @@ export function attachRepairResult(
     patch_sha256: r.patch_sha256,
     regression_result: regression,
     reparse_result: r.reparse_result,
-    remaining_human_action:
-      morning.publication_status === 'complete'
+    remaining_human_action: morning.processing_complete
+      ? morning.remaining_human_action
+      : morning.remaining_human_action === 'confirm_source_semantics'
         ? morning.remaining_human_action
-        : morning.remaining_human_action === 'confirm_source_semantics'
-          ? morning.remaining_human_action
-          : verified && gate.candidate_eligible
-            ? 'review_gate_and_approve_deploy'
-            : 'resolve_failed_or_unknown_checks',
+        : verified && gate.candidate_eligible
+          ? 'review_gate_and_approve_deploy'
+          : 'resolve_failed_or_unknown_checks',
     repair_gate: gate,
-    briefing:
-      morning.publication_status === 'complete'
-        ? morning.briefing
-        : verified
-          ? '修正候補と回帰テスト・保存Evidence再解析まで完了。公開未完了、欠測解消は未確認。gateと本番反映の審査が必要'
-          : '修正候補あり。検証または意味論判断が未完了。公開は停止中',
+    briefing: morning.processing_complete
+      ? morning.briefing
+      : verified
+        ? '修正候補と回帰テスト・保存Evidence再解析まで完了。公開未完了、欠測解消は未確認。gateと本番反映の審査が必要'
+        : '修正候補あり。検証または意味論判断が未完了。公開は停止中',
   };
 }

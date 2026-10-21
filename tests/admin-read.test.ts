@@ -44,6 +44,38 @@ async function counts(env: CollectorEnv) {
   return out;
 }
 describe('Admin read projection', () => {
+  it('preserves fetch outcomes while withholding unknown codes and inconsistent success', async () => {
+    const { env } = await setup(),
+      s = source('ecb');
+    const run = await collectSource(env, s, time, {
+      synthetic: true,
+      now: () => time,
+      network: { fetcher: fxFetch() },
+    });
+    const cases: Array<[string, number | null, string]> = [
+      ['success', 200, 'success'],
+      ['revalidated', 304, 'revalidated'],
+      ['success', 503, 'unknown'],
+      ['revalidated', 200, 'unknown'],
+      ['unexpected_content_type', 200, 'unexpected_content_type'],
+      ['timeout', null, 'timeout'],
+      ['http_401', 401, 'http_401'],
+      ['private-sentinel-token', 200, 'unknown'],
+    ];
+    for (const [index, [code, status]] of cases.entries())
+      await env.PRIVATE_DB.prepare(
+        'INSERT INTO fetch_attempts(run_id,attempt,started_at,status,code,duration_ms) VALUES(?,?,?,?,?,?)',
+      )
+        .bind(run.run_id, index + 2, time, status, code, 10)
+        .run();
+    const before = await counts(env);
+    const report = await readAdmin('runs', { run: run.run_id }, env, now, [s]);
+    expect(report.state).toBe('ready');
+    for (const [index, [, , expected]] of cases.entries())
+      expect(report.runs![0].attempts.find((a) => a.attempt === index + 2)?.code).toBe(expected);
+    expect(JSON.stringify(report)).not.toContain('private-sentinel-token');
+    expect(await counts(env)).toEqual(before);
+  });
   it('migrates populated 0003 additively and preserves rows, FKs and immutable triggers', async () => {
     const { env } = await setup(3),
       s = source('ecb');
@@ -100,6 +132,7 @@ describe('Admin read projection', () => {
       expect(AdminReport.safeParse(report).success).toBe(true);
       expect(JSON.stringify(report)).not.toContain('artifact_ref');
       if (resource === 'runs') {
+        expect(report.runs![0].attempts[0]).toMatchObject({ status: 200, code: 'success' });
         expect(report.runs![0].publication).toMatchObject({
           state: 'complete',
           original_count: 2,
