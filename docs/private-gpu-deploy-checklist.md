@@ -1,6 +1,6 @@
 # Highreso／Rebro 非公開研究のデプロイ前チェックリスト
 
-2026-10-21 22:45 JSTのKaz承認を反映。Highresoのみ設定上enabled=true、Rebroはdeferredでenabled=false。Highresoの保存済み実応答によるwire・指紋確認と365日保持の設定を完了し、WranglerのPRIVATE_GPU_RESEARCH_ENABLEDはfalseを維持する。翌朝の本番照合・R2確認・相互レビュー・CIは別途必要。本書はremote作業の実施記録ではない。運用方針はAGENTS.mdに従う。
+2026-10-21 22:45 JSTのKaz承認を反映。Highresoのみ設定上enabled=true、Rebroはdeferredでenabled=false。Highresoの保存済み実応答によるwire・指紋確認と365日保持の設定を完了し、WranglerのPRIVATE_GPU_RESEARCH_ENABLEDはfalseを維持する。翌朝の本番照合・R2確認・相互レビュー・CIは別途必要。下記の既適用migrationの事実注記を除き、本書のremote手順は未実行。運用方針はAGENTS.mdに従う。
 
 ## 配備・有効化前
 
@@ -57,14 +57,7 @@ D1 Time TravelはWorkers Paidの無料既定30日・常時有効・追加費用�
 
 価格ページは445,723 bytesでmax_bytes=1,000,000以内。parsePublicGpuに実HTMLを渡し、入力28行、対象24インスタンス、モデル除外4行、GPU枚数除外0行、時間/月額各2枠で**48観測**、coverage=complete、reasons=[]を確認した。対象はA100 40GBが12インスタンス、A100 80GBが12インスタンス、全てGPU1枚。この応答でH100は0件。未掲載のH100価格を補完しない。scopeは従来のA100/H100・GPU1枚を維持し、除外行は他モデルである。page_size/source.max_records=48ちょうど、max_input_rows=100以内で切捨てなし。次に対象が増えて48を超えたら停止する。
 
-最小投影の抽出例（ページ転載・実fixtureではなく確認に必要な少数の値のみ）:
-
-| GPU | ストレージ | 時間料金（JPY/instance hour） | 月額（JPY/instance month） |
-|---|---|---|---|
-| A100 40GB ×1 | 100 GB | `361` | `223133` |
-| A100 80GB ×1 | 100 GB | `398` | `243631` |
-
-金額はdecimal文字列、時間/月額とinstance単位を維持。掲載注記によりtax_status=included、included_components=instance/storage/data_transfer。地域・専有/共有・最低期間等は補完せずnull/unknownとする。instance ID、GPU型番/VRAM、枚数、原金額/単位、ストレージ、出典/hashを含む既存の許可投影だけを抽出し、ソフト一覧・広告・本文全体を保存しない。D1の本番観測を作った検証ではない。
+実ページ由来の価格数値は記載せず、確認結果は上記の件数・構造だけを残す。金額はdecimal文字列、時間/月額とinstance単位（JPY/instance hour、JPY/instance month）を維持する構造で、instance ID、GPU型番/VRAM、枚数、原金額/単位、ストレージ、出典/hashを含む既存の許可投影だけを抽出する。地域・専有/共有・最低期間等は補完せずnull/unknownとし、ソフト一覧・広告・本文全体を保存しない。D1の本番観測を作った検証ではない。
 
 構造差異と最小修正: 実ページと規約両版はscript内の裸の`&`（クエリ文字列）を含み、XMLValidatorが`public_gpu_table_schema_changed`で拒否した。XMLValidatorは既存stopNodesを解釈しないため、もともと投影/指紋から除外されるscript/styleの本文だけを検証前に除く4行を追加した。外側のタグを残し、未閉鎖script/style・表、入れ子、colspan/rowspan等の拒否は維持する。見出しの階層、8/12列の表、GPU仕様と料金表の対応は既存パーサのまま適合し、価格抽出・モデル選択・48件上限・指紋の可視本文正規化は変えていない。裸の`&`/`<`と壊れた構造を人工値だけで再現する回帰テストを追加した。生HTML・ヘッダ・実fixtureはwork内のみでGit/CIへ含めない。
 
@@ -84,6 +77,8 @@ D1 Time TravelはWorkers Paidの無料既定30日・常時有効・追加費用�
 
 ### (b) private D1の0015適用
 
+**既適用の事実注記（Kaz提示、今回remote再照会なし）:** 本番private D1 `ai-investment-private`（`f9239883-9929-4137-8079-5a03d9a8beb2`）には、2026-10-21 17:4x JSTに0007/0008/0009/0014を適用済みで、`d1_migrations`で確認済み。確認時のTime Travel bookmarkは `0000079c-00000000-0000510b-53013b84a03b58e14f2ecfddb3271f6f`。AGENTS.mdの「0007/0008 are additive and local-only」はこの適用より前の記述であり、ここでは適用事実だけを補足する。AGENTS.md自体の方針は変更せず、取得・保存・有効化等の各ゲートも維持する。現在の未適用は0015のみの想定だが、以下の直前確認で確定する。このbookmarkを0015適用直前の記録として流用しない。
+
 最初にTime Travel bookmarkを取得し、日時・対象DB・配備前versionとともに非公開作業記録へ保存する。Time Travel設定変更・exportはしない。
 
 ```bash
@@ -93,16 +88,49 @@ pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collect
 pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT source_id,policy_version,config_hash,suspended FROM research_sources WHERE source_id IN ('highreso_public','rebro_public')"
 ```
 
-- [ ] 0007/0008/0009/0014が既適用、未適用は0015_private_gpu_daily.sqlだけであることを確認する。0010〜0013はこのrepoにない。予想外の未適用migrationがあれば止めて確認し、applyでまとめて流さない。
+- [ ] 通常のCollector設定による上記`migrations list`で、未適用が**0015_private_gpu_daily.sqlの1件だけ**であること、および台帳上0007/0008/0009/0014が既適用であることを確認する。0010〜0013はこのrepoにない。他の未適用が1件でもあれば**停止してClaude Opusの判断を受け、理由をPRに記録する**。0015が既適用、確認失敗、その他の想定との不一致でも停止して再照合し、推測でapplyしない。
 - [ ] 0015自体の相互レビューと、既存データ相当のローカルmigration/FK/immutable trigger試験を確認する。0015は追加テーブル/索引/triggerで、既存テーブルを破壊しない。
 
+[operations-acceptance.mdの単一ファイル適用方針](operations-acceptance.md#0006とcollectorだけを通知無効で反映する手順未実施)に従い、repoルートから同じBashセッションで次を実行する。新しい一時ディレクトリに0015だけを同名で複写し、専用設定はprivate DBの1 bindingと既存の`d1_migrations`台帳だけを参照する。public binding・R2・Cron・Worker配備設定は含めない。この一時設定はmigration専用で、deployに使わない。
+
 ```bash
-pnpm exec wrangler d1 migrations apply ai-investment-private --remote -c wrangler.collector.jsonc
+set -euo pipefail
+gpu_migration_dir=$(mktemp -d /tmp/private-gpu-0015.XXXXXX)
+mkdir "$gpu_migration_dir/migrations"
+cp migrations/private/0015_private_gpu_daily.sql "$gpu_migration_dir/migrations/0015_private_gpu_daily.sql"
+cmp migrations/private/0015_private_gpu_daily.sql "$gpu_migration_dir/migrations/0015_private_gpu_daily.sql"
+cat > "$gpu_migration_dir/wrangler.json" <<'JSON'
+{
+  "name": "private-gpu-0015-migration",
+  "account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+  "d1_databases": [
+    {
+      "binding": "PRIVATE_DB",
+      "database_name": "ai-investment-private",
+      "database_id": "f9239883-9929-4137-8079-5a03d9a8beb2",
+      "migrations_dir": "./migrations",
+      "migrations_table": "d1_migrations"
+    }
+  ]
+}
+JSON
+ls -1 "$gpu_migration_dir/migrations"
+pnpm exec wrangler d1 migrations list ai-investment-private --remote --config "$gpu_migration_dir/wrangler.json"
+```
+
+- [ ] 一時migrations_dirの内容と専用設定の未適用一覧がともに`0015_private_gpu_daily.sql`の1件だけであり、account/DB ID/台帳が上記と一致することを確認する。不一致・コマンド失敗なら停止する。専用設定の一覧だけでは通常設定の未適用確認を代替しない。
+
+適用直前にbookmarkを再取得して非公開作業記録へ保存し、その後に専用設定の絶対パスを指定して1ファイルだけ適用する。通常のCollector設定での一括applyや、台帳を通さない`d1 execute --file`は使わない。
+
+```bash
+pnpm exec wrangler d1 time-travel info ai-investment-private -c wrangler.collector.jsonc --json
+pnpm exec wrangler d1 migrations apply ai-investment-private --remote --config "$gpu_migration_dir/wrangler.json"
+pnpm exec wrangler d1 time-travel info ai-investment-private -c wrangler.collector.jsonc --json
 pnpm exec wrangler d1 migrations list ai-investment-private --remote -c wrangler.collector.jsonc
 pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT name FROM d1_migrations WHERE name IN ('0007_private_research.sql','0008_research_retention.sql','0009_research_retention_states.sql','0014_research_assessments_append_only.sql','0015_private_gpu_daily.sql') ORDER BY name"
 ```
 
-5件すべて適用済みを確認する。PUBLIC_DBには研究migrationを適用しない。
+適用直後のbookmarkも日時・対象DB・適用結果とともに非公開作業記録へ保存し、通常設定の未適用が0件、台帳上5件すべて適用済みを確認する。適用失敗・確認不一致なら後続の配備を停止し、失敗時点のbookmarkと結果を記録して再レビューする。PUBLIC_DBには研究migrationを適用しない。
 
 ### (c) falseのままCollector/APIを配備・検証
 
@@ -133,7 +161,7 @@ pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collect
 pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT r.run_id,r.source_id,r.state,COUNT(o.observation_id) AS observation_rows,MIN(o.observed_at) AS first_observed_at,MAX(o.observed_at) AS last_observed_at FROM research_runs r LEFT JOIN research_gpu_observations o ON o.run_id=r.run_id WHERE r.source_id IN ('highreso_public','rebro_public') GROUP BY r.run_id ORDER BY r.recorded_at DESC LIMIT 5"
 pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT run_id,retention_snapshot_json FROM research_runs WHERE source_id='highreso_public' ORDER BY recorded_at DESC LIMIT 1"
 pnpm exec wrangler d1 execute ai-investment-public --remote -c wrangler.collector.jsonc --command "SELECT COUNT(*) AS research_public_rows FROM published_observations WHERE source_id IN ('highreso_public','rebro_public','highreso','rebro')"
-pnpm exec wrangler d1 execute ai-investment-public --remote -c wrangler.collector.jsonc --command "SELECT COUNT(*) AS research_tables FROM sqlite_master WHERE type='table' AND name LIKE 'research_%'"
+pnpm exec wrangler d1 execute ai-investment-public --remote -c wrangler.collector.jsonc --command "SELECT COUNT(*) AS research_tables FROM sqlite_master WHERE type='table' AND name LIKE 'research\_%' ESCAPE '\'"
 ```
 
 - [ ] Highresoはsynthetic=0、state=complete、next_page=null。ページ不変ならobservation_count=48かつ観測行48、http_page_attempts=3、last_error=null。件数変化はscopeとcomplete最小投影で判断し、上限超過/欠測を成功にしない。Rebroの新規runは0。
