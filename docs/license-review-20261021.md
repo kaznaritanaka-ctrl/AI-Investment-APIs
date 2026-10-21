@@ -1,7 +1,7 @@
 # データソース ライセンス／再配布可否レビュー（確認日 2026-10-21 JST）
 
 判定ルール（Kaz 指示）: 再配布を明示的に許可（CC-BY/CC0/MIT/明示許諾 等）→ 公開（出典表示付き）。自動取得・再配布禁止 → 収集しない。再配布の記載なし → 研究用・非公開（ソース別grantと保存ゲートが必要）。曖昧 → 非公開＋要確認フラグ。
-本レビュー単独では取得を許可しない。Highreso/Rebroの非公開研究準備はKazの2026-10-21T12:05Z承認に基づく。両候補の取得・保存・内部分析のみallowedとし、未確認の取得形式・保持・保存環境・規約指紋ゲートは維持する。disabledのソースはdisabledのまま。
+本レビュー単独では取得を許可しない。最新のKaz決定（2026-10-21T13:45Z）ではHighresoのみ承認し、Rebroはdeferred。Highresoの取得・非公開保存・内部分析をallowed、正規化履歴365日、公開・再配布・外部LLM・AI学習はdeniedとする。保存済み実HTMLの指紋・wire確認と翌朝の残件は[デプロイ前チェックリスト](private-gpu-deploy-checklist.md#approval-20261021)を参照。Highreso enabled=trueだがWranglerフラグはfalse。Rebroはenabled=false、取得・保存・分析はreview_required。下の21:06 JSTの記録は変更前の根拠履歴として残す。
 
 | source_id | 提供元 | ライセンス/規約 | 判定 | 出典表示 | 商用 | 主な理由 | URL |
 |---|---|---|---|---|---|---|---|
@@ -11,7 +11,7 @@
 | <a id="runpod"></a>runpod | Runpod | Terms of Service（2026-03-24版） | **非公開**（明示禁止） | – | 不可 | 「Systematically retrieve data … to create … a collection, compilation, database … without written permission」禁止、データマイニング/スクレイパー禁止 | https://www.runpod.io/legal/terms-of-service |
 | <a id="lambda"></a>lambda | Lambda | Terms of Service | **非公開**（記載なし） | – | 不明 | 価格データの再配布許諾の記載なし（クロールは負荷制限下のみ言及） | https://lambda.ai/legal/terms-of-service |
 | <a id="gpusoroban"></a>gpusoroban | ハイレゾ（GPUSOROBAN） | 現行（改定2025-09-30）＋新版（最終改定2026-08-27、適用2026-11-01、国外ユーザー2026-08-27） | **研究用・非公開**（再配布記載なし） | 原出典を保持 | 再配布不可 | 呼び出し側が2026-10-21 21:06 JST取得した保存本文を確認。両版第19条にscraping/自動収集/crawlの明示禁止なし。過度の負荷・知財侵害・リバースエンジニアリングは禁止、第13条等の知財は当社らに帰属。robotsはUser-agent:*で禁止なし。新版確認済みのため11/1はreview期限とせず、次回2027-01-15。ただし指紋の不一致は停止 | https://soroban.highreso.jp/terms 、https://soroban.highreso.jp/5401872 、https://soroban.highreso.jp/robots.txt |
-| <a id="rebro"></a>rebro（研究候補） | GPU買取センター / Rebro | 通信買取規約 /rules/ 第10条・/reason/・robots.txt（別のサイト利用規約は公開未確認） | **研究用・非公開**（再配布記載なし） | 原出典を保持 | 再配布不可 | 呼び出し側が2026-10-21 21:06 JST確認。/reason/保存本文も確認。/rules/は通信買取規約で、言及される別のサイト利用規約は2026-10-21の呼び出し側調査で公開先なし。第10条にscrapingの明示禁止はないが、査定・買取目的外、当社が不適当とする行為、運営妨害・迷惑行為の禁止は研究巡回への適用リスクが残る。robotsはUser-agent:* Allow:/、Content-Signal: search=yes,ai-train=no,use=reference。学習クローラは個別Disallow。再配布許諾なし、AI学習・外部LLM処理不可 | https://gpu-kaitori.com/reason/ 、https://gpu-kaitori.com/rules/ 、https://gpu-kaitori.com/robots.txt |
+| <a id="rebro"></a>rebro（研究候補） | GPU買取センター / Rebro | 通信買取規約 /rules/ 第10条・/reason/・robots.txt（別のサイト利用規約は公開未確認） | **見送り（deferred）・収集しない** | 原出典を保持 | 再配布不可 | Kaz 22:45 JST決定: /rules/ 第10条（査定・買取目的外の行為/当社が不適当とする行為）と未公開のサイト利用規約のリスクにより見送り。呼び出し側が2026-10-21 21:06 JST確認。/reason/保存本文も確認。/rules/は通信買取規約で、言及される別のサイト利用規約は2026-10-21の呼び出し側調査で公開先なし。第10条にscrapingの明示禁止はないが、査定・買取目的外、当社が不適当とする行為、運営妨害・迷惑行為の禁止は研究巡回への適用リスクが残る。robotsはUser-agent:* Allow:/、Content-Signal: search=yes,ai-train=no,use=reference。学習クローラは個別Disallow。再配布許諾なし、AI学習・外部LLM処理不可 | https://gpu-kaitori.com/reason/ 、https://gpu-kaitori.com/rules/ 、https://gpu-kaitori.com/robots.txt |
 | <a id="sakura_dok"></a>sakura_dok | さくらインターネット | 約款一覧 | **非公開**（記載なし） | – | 不明 | 価格APIデータの再配布許諾の記載を確認できず | https://www.sakura.ad.jp/corporate/agreement/ |
 | <a id="ccir"></a>ccir | CCIR | Data Terms | **非公開**（明示制限・書面許諾必要） | 引用時は「CCIR (ccir.io)」＋系列ID・日付 | 書面許諾が必要 | 「Systematic or bulk retrieval …, redistribution of series or series history … require written permission」 | https://ccir.io/documents/data-terms |
 | <a id="price_of_compute"></a>price_of_compute | Price of Compute | API ページ記載 | **非公開**（曖昧・要確認⚠） | 「Data: Price of Compute」リンク必須 | 記載なし | 「Free use requires a visible link」と無償利用は認めるが、再配布・商用の範囲は明記なし。上流（Runpod等）の規約とも衝突しうる | https://www.priceofcompute.com/api |
@@ -45,3 +45,7 @@ robots本文は保存されたrobots.txtを既存の`robotsFingerprint`形式で
 Rebroの生ファイルの指紋が異なるのはこの正規化による。Content-Signalと個別crawler規則もhashに含む。robots許可は再配布許諾ではない。Highresoの新版確認は取得権限の無制限更新を意味せず、将来の未確認文面・指紋変更時は取得前に停止する。
 
 Highresoは2026-10-31T15:00Z（11/1 00:00 JST）以降も`/terms`を第一候補とし、確認済み新版の`next_terms_sha256`を照合する。それより前は`terms_sha256`を使う。新版の掲載が`/5401872`にしかない場合は、レビューした非secret設定`public_access.highreso_terms_fallback=true`でこの固定URLへ切り替える。1 run最大3 HTTPを守るため、同じrunで404のあとに4要求目を追加する自動切替は行わない。404や未確認指紋は価格取得前に停止する。切替後の再取得には新policy版の明示登録と日次予算の確認が必要。両指紋は引き続きnullで、既存HTML指紋形式による実応答確認を推測で置き換えない。Rebroでは新版指紋とHighreso専用fallback設定を拒否する。
+
+## 22:45 JST承認後の更新
+
+13:45Zの最新承認を準備承認より優先する。Highresoの生HTML/robotsは呼び出し側が13:46ZにPUBLIC_GPU_UAで取得済みのwork/live内ファイルからオフライン検証した。現行/新版規約のtermsFingerprintと価格48観測のwire確認は完了し、設定へ指紋を記録した。[wire確認の詳細](private-gpu-deploy-checklist.md#wire-20261021)を現在の状態とする。以前の「terms_sha256=null」「両候補allowed」は21:06の準備時点の記録。Rebroは最新決定で見送り、再開承認はない。R2実ルールの確認は翌朝の未完了項目であり、今回Cloudflareへ接続・変更していない。

@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.mocked(resumeCollections).mockResolvedValue({ results: [], models_work: false });
   vi.mocked(purgeResearchEvidence).mockResolvedValue(undefined);
+  vi.mocked(collectPublicGpuDay).mockResolvedValue([]);
   const statement = {
     bind: vi.fn().mockReturnThis(),
     first: vi.fn().mockResolvedValue(null),
@@ -82,13 +83,16 @@ it.each([undefined, 'false', 'TRUE'])(
   },
 );
 
-it('uses one of three idle slots, alternating maintenance while bundled acquisition is stopped', async () => {
+it('uses one of three idle slots, alternating maintenance and acquiring only approved Highreso', async () => {
   env.PRIVATE_GPU_RESEARCH_ENABLED = 'true';
   for (let i = 0; i < 12; i++)
     await collector.scheduled(scheduled(start + i * 300000), env, {} as ExecutionContext);
   expect(expireGPUData).toHaveBeenCalledTimes(8);
   expect(purgeResearchEvidence).toHaveBeenCalledTimes(4);
-  expect(collectPublicGpuDay).not.toHaveBeenCalled();
+  expect(collectPublicGpuDay).toHaveBeenCalledTimes(2);
+  expect(
+    vi.mocked(collectPublicGpuDay).mock.calls.map((call) => call[1].map((c) => c.source.source_id)),
+  ).toEqual([['highreso_public'], ['highreso_public']]);
   const calls = vi.mocked(purgeResearchEvidence).mock.calls;
   expect(calls.map((c) => c[2]).sort()).toEqual([
     'highreso_public',

@@ -266,36 +266,27 @@ it('accepts Rebro production only as private research with independent source/da
   ).toBe(0);
 });
 
-// Use real bundled JSON without opening its unapproved gates. Times are after
-// valid_from/checked_at, so this cannot pass merely because the policy is future-dated.
-it('ships production flag=true with zero HTTP and zero research runs for both real configs', async () => {
+// Bundled approval is deployable, but the shipped false flag must remain closed.
+it('ships flag=false with zero HTTP/runs; Highreso is approved and Rebro remains deferred', async () => {
   const http = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected HTTP'));
-  const logs = vi.spyOn(console, 'log').mockImplementation(() => {});
   const at = '2026-10-22T18:20:00.000Z';
-  const seen = new Set();
+  const env = { ...production(), PRIVATE_GPU_RESEARCH_ENABLED: 'false' };
   for (let i = 0; i < 6; i++) {
     const scheduled = new Date(Date.parse(at) + i * 300000).toISOString();
-    const turn = privateGpuResearchTurn(production(), scheduled);
-    if (turn !== null) seen.add(turn);
-    await runPrivateGpuResearch(production(), scheduled, scheduled);
+    expect(privateGpuResearchTurn(env, scheduled)).toBeNull();
+    await runPrivateGpuResearch(env, scheduled, scheduled);
   }
-  expect(seen.size).toBe(2);
   expect(http).not.toHaveBeenCalled();
   expect(
     await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM research_runs').first('n'),
   ).toBe(0);
-  expect(
-    logs.mock.calls.filter(([s]) => JSON.parse(s).error_code === 'research_collection_stopped'),
-  ).toHaveLength(2);
-  for (const proposal of [highreso, rebro]) {
-    const config = ResearchConfigSchema.parse(proposal);
-    expect(at > config.source.policy.valid_from && at > config.terms.checked_at).toBe(true);
-    // Also show that enabling the source alone cannot bypass the independent gates.
-    config.source.enabled = true;
-    expect(() => assertResearchAllowed(config, at, config.terms.version)).toThrow(
-      'research_review_required',
-    );
-  }
+  const approved = ResearchConfigSchema.parse(highreso);
+  expect(() => assertResearchAllowed(approved, at, approved.terms.version)).not.toThrow();
+  const deferred = ResearchConfigSchema.parse(rebro);
+  expect(deferred.source.enabled).toBe(false);
+  expect(() => assertResearchAllowed(deferred, at, deferred.terms.version)).toThrow(
+    'policy_blocked',
+  );
 });
 
 it.each([
@@ -351,7 +342,9 @@ it('keeps captured finite retention running after an unapproved config change an
   const c = await publicGpuSource();
   c.retention.normalized_days = 1;
   const r = await collectResearchPage(local.env, c, query, gpuTime, gpuOptions(c));
-  const stopped = ResearchConfigSchema.parse(highreso); // time_travel=null, new hash, disabled
+  const stopped = ResearchConfigSchema.parse(structuredClone(highreso));
+  stopped.source.enabled = false;
+  stopped.retention.time_travel_days = null; // Explicit synthetic unapproved config change.
   expect(await hash(stable(stopped))).not.toBe(await hash(stable(c)));
   const at = '2026-10-20T01:00:00.000Z';
   expect(await maintainPrivateGpuResearch(production(), stopped, at)).toBe(true);

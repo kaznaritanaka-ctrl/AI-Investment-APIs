@@ -16,16 +16,24 @@ import {
 } from '../src/research/public-gpu-html';
 import { fetchPublicGpuPage } from '../src/research/public-gpu-network';
 import { publicGpuEndpoints, PUBLIC_GPU_UA } from '../src/research/public-gpu-contract';
+import {
+  assessResearchRetention,
+  plusDays,
+  retentionSnapshot,
+  type RetainedRun,
+} from '../src/research/retention';
 import { publicGpuSource, gpuHtml, gpuTime, gpuFetcher, terms } from './public-gpu-helpers';
 
 describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
   it.each([highreso, rebro])(
-    'keeps $adapter disabled and independently rights/retention gated',
+    'applies the Highreso approval and Rebro deferral with independent export gates',
     (proposal) => {
       const c = ResearchConfigSchema.parse(proposal);
-      expect(c.source.enabled).toBe(false);
+      expect(c.source.enabled).toBe(c.adapter === 'highreso_public');
       for (const right of ['automated_collection', 'private_storage', 'internal_analysis'] as const)
-        expect(c.source.policy.rights[right]).toBe('allowed');
+        expect(c.source.policy.rights[right]).toBe(
+          c.adapter === 'highreso_public' ? 'allowed' : 'review_required',
+        );
       for (const right of [
         'raw_redistribution',
         'normalized_redistribution',
@@ -35,10 +43,31 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
         'commercial_redistribution',
       ] as const)
         expect(c.source.policy.rights[right]).toBe('denied');
-      expect(c.retention.normalized_mode).toBe('unapproved');
-      expect(c.public_access?.reviewed_ref).toContain('docs/license-review-20261021.md#');
-      expect(c.public_access?.terms_sha256).toBeNull();
-      expect(c.owner_approval_ref).toContain('2026-10-21T12:05Z');
+      if (c.adapter === 'highreso_public') {
+        expect(c.retention.normalized_mode).toBe('fixed_days');
+        expect(c.retention.normalized_days).toBe(365);
+        expect(c.retention.time_travel_days).toBe(30);
+        expect(c.retention.backup_days).toBe(30);
+        expect(c.source.policy.valid_until).toBeNull();
+        expect(c.terms.review_after).toBe('2027-01-15T00:00:00.000Z');
+        expect(c.public_access?.terms_sha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(c.public_access?.next_terms_sha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(c.owner_approval_ref).toContain('2026-10-21T13:45Z');
+        for (const at of ['2026-10-22T00:00:00.000Z', '2026-11-01T00:00:00.000Z'])
+          expect(() => assertResearchAllowed(c, at, c.terms.version)).not.toThrow();
+      } else {
+        expect(c.retention.normalized_mode).toBe('unapproved');
+        expect(c.public_access?.terms_sha256).toBeNull();
+        expect(c.owner_approval_ref).toBeNull();
+        expect(c.source.known_limitations.join(' ')).toContain('見送り（deferred）');
+        c.source.enabled = true;
+        expect(() => assertResearchAllowed(c, '2026-10-22T00:00:00.000Z', c.terms.version)).toThrow(
+          'policy_blocked',
+        );
+      }
+      expect(readFileSync('wrangler.collector.jsonc', 'utf8')).toContain(
+        '"PRIVATE_GPU_RESEARCH_ENABLED": "false"',
+      );
       expect(() => assertResearchAllowed(c, gpuTime, c.terms.version)).toThrow('policy_blocked');
       for (const purpose of ['public', 'external_llm', 'raw'] as const)
         expect(() => assertResearchExport(c, purpose)).toThrow('research_export_not_supported');
@@ -50,7 +79,9 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
       const c = ResearchConfigSchema.parse(proposal);
       const anchor = c.adapter === 'highreso_public' ? 'gpusoroban' : 'rebro';
       expect(c.source.license_url).toBeNull();
-      expect(c.source.rights_checked_at).toBe('2026-10-21T12:06:00.000Z');
+      expect(c.source.rights_checked_at).toBe(
+        c.adapter === 'highreso_public' ? '2026-10-21T13:46:00.000Z' : '2026-10-21T12:06:00.000Z',
+      );
       expect(c.source.rights_evidence_ref).toBe('docs/license-review-20261021.md#' + anchor);
       expect(review).toContain('<a id="' + anchor + '"></a>');
       expect(c.source.known_limitations.join(' ')).toContain('2026-10-21 license review:');
@@ -81,6 +112,33 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
     };
     for (const root of ['src/api.ts', 'src/admin-entrypoint.ts']) visit(resolve(root));
   });
+  it('expires approved Highreso history after 365 days while keeping the 30-day backup distinction', () => {
+    const c = ResearchConfigSchema.parse(highreso);
+    const recorded = '2026-10-22T00:00:00.000Z';
+    const run: RetainedRun = {
+      run_id: 'a'.repeat(64),
+      source_id: c.source.source_id,
+      config_hash: 'b'.repeat(64),
+      recorded_at: recorded,
+      state: 'complete',
+      evidence_expires_at: plusDays(recorded, 7),
+      evidence_purged_at: null,
+      normalized_mode: 'fixed_days',
+      normalized_expires_at: plusDays(recorded, 365),
+      all_copies_expires_at: plusDays(recorded, 395),
+      retention_snapshot_json: JSON.stringify(retentionSnapshot(c)),
+      lease_until: null,
+    };
+    const reminder = assessResearchRetention(c, run, c.terms.review_after, c.terms.version, true);
+    expect(reminder.state).toBe('review_due');
+    expect(reminder.next_action).toBe('review_terms');
+    expect(reminder.normalized_deadline).toBe(plusDays(recorded, 365));
+    const expired = assessResearchRetention(c, run, plusDays(recorded, 365), c.terms.version, true);
+    expect(expired.state).toBe('retention_expired');
+    expect(expired.next_action).toBe('delete');
+    expect(expired.read_allowed).toBe(false);
+    expect(expired.all_copies_deadline).toBe(plusDays(recorded, 395));
+  });
   it('keeps the reviewed Highreso transition beyond November 1 while preserving every remaining gate', async () => {
     const c = await publicGpuSource();
     c.terms = structuredClone(highreso.terms);
@@ -93,7 +151,7 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
       expect(() => assertResearchAllowed(c, at, c.terms.version)).not.toThrow();
     expect(c.terms.evidence_refs).toContain('https://soroban.highreso.jp/5401872');
     const pending = ResearchConfigSchema.parse(highreso);
-    pending.source.enabled = true;
+    pending.wire_contract_review_ref = null;
     expect(() =>
       assertResearchAllowed(pending, '2026-11-02T00:00:00.000Z', pending.terms.version),
     ).toThrow('research_review_required');

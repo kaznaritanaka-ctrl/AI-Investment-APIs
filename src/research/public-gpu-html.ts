@@ -43,6 +43,10 @@ function document(html: string) {
   if (/<!ENTITY|<!DOCTYPE[^>]*\[/i.test(html)) throw new Error('public_gpu_table_schema_changed');
   html = html.replace(/<!doctype\s+html\s*>/gi, '');
   if (/<!doctype/i.test(html)) throw new Error('public_gpu_table_schema_changed');
+  // HTML raw-text bodies may contain bare '&' or '<'. XMLValidator does not
+  // honor stopNodes; discard these already-excluded bodies before validating.
+  // Keep their tags so unclosed elements and malformed tables still fail closed.
+  html = html.replace(/(<(script|style)\b[^>]*>)[\s\S]*?(<\/\2\s*>)/gi, '$1$3');
   const options = {
     preserveOrder: true,
     ignoreAttributes: false,
