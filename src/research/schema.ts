@@ -30,6 +30,26 @@ export const ResearchConfigSchema = z
       'domestic-gpu-html-v2',
     ]),
     public_access: PublicAccessReviewSchema.optional(),
+    // Restrictive controls only; bundled non-secret config, never a grant or HTTP input.
+    maintenance: z
+      .object({
+        collection_stopped: z.boolean(),
+        revoke_at: z.iso.datetime().nullable(),
+        delete_requests: z
+          .array(
+            z
+              .object({
+                run_id: z.string().regex(/^[a-f0-9]{64}$/),
+                requested_at: z.iso.datetime(),
+                basis_ref: z.string().trim().min(1),
+                all_copies_delete_by: z.iso.datetime(),
+              })
+              .strict(),
+          )
+          .max(5),
+      })
+      .strict()
+      .optional(),
     owner_approval_ref: z.string().min(1).nullable(),
     wire_contract_review_ref: z.string().min(1).nullable(),
     // Explicit review of an acquired config, never a retroactive grant or expiry extension.
@@ -151,7 +171,9 @@ export const ResearchConfigSchema = z
         v.source.terms_url !== urls.terms ||
         v.source.authentication_required ||
         !v.public_access ||
-        (v.adapter === 'rebro_public' && v.public_access.next_terms_sha256 != null) ||
+        (v.adapter === 'rebro_public' &&
+          (v.public_access.next_terms_sha256 != null ||
+            v.public_access.highreso_terms_fallback !== undefined)) ||
         v.limits.max_pages !== 1 ||
         v.limits.max_input_rows > 100 ||
         v.source.max_bytes > 1000000
@@ -200,6 +222,8 @@ function assertResearchAuthority(
   const s = config.source,
     r = config.retention;
   // A missing license URL is neither a grant nor a veto; reuse the nine-rights policy.
+  if (acquisition && (config.maintenance?.collection_stopped || config.maintenance?.revoke_at))
+    throw new Error('research_collection_stopped');
   if (
     acquisition
       ? !(isPublicGpu(config.adapter)

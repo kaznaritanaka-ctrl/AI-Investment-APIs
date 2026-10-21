@@ -223,26 +223,45 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
     }
     expect(new Headers(fetcher.mock.calls[2][1]?.headers).get('accept')).toBe('text/html');
   });
-  it('switches only Highreso to the reviewed fixed November terms with a separate fingerprint and three GETs', async () => {
+  it('prefers /terms after November with the reviewed new fingerprint; notice is an explicit bounded fallback', async () => {
     const c = await publicGpuSource();
     const nextTerms = terms.replace('fixture', 'November fixture');
     c.public_access!.next_terms_sha256 = await termsFingerprint(nextTerms);
     const original = gpuFetcher('highreso_public');
+    let november = false;
     const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) =>
-      String(url).endsWith('/5401872')
+      november && (String(url).endsWith('/terms') || String(url).endsWith('/5401872'))
         ? new Response(nextTerms, { headers: { 'content-type': 'text/html' } })
         : original(url, init),
     );
     await fetchPublicGpuPage(c, { fetcher, now: () => '2026-10-31T14:59:59.000Z' });
     expect(fetcher.mock.calls[1][0]).toBe(publicGpuEndpoints.highreso_public.terms);
     fetcher.mockClear();
+    november = true;
     await fetchPublicGpuPage(c, { fetcher, now: () => '2026-10-31T15:00:00.000Z' });
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      publicGpuEndpoints.highreso_public.robots,
+      publicGpuEndpoints.highreso_public.terms,
+      publicGpuEndpoints.highreso_public.page,
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    // A missing primary fails closed with no price GET. Review can select the
+    // fixed fallback on a new policy/day, without spending a fourth request.
+    const missing = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) =>
+      String(url).endsWith('/terms') ? new Response('', { status: 404 }) : fetcher(url, init),
+    );
+    await expect(
+      fetchPublicGpuPage(c, { fetcher: missing, now: () => '2026-11-02T00:00:00.000Z' }),
+    ).rejects.toThrow('http_404');
+    expect(missing).toHaveBeenCalledTimes(2);
+    c.public_access!.highreso_terms_fallback = true;
+    fetcher.mockClear();
+    await fetchPublicGpuPage(c, { fetcher, now: () => '2026-11-02T00:00:00.000Z' });
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       publicGpuEndpoints.highreso_public.robots,
       'https://soroban.highreso.jp/5401872',
       publicGpuEndpoints.highreso_public.page,
     ]);
-    expect(fetcher).toHaveBeenCalledTimes(3);
     c.public_access!.next_terms_sha256 = null;
     fetcher.mockClear();
     await expect(
@@ -250,6 +269,9 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
     ).rejects.toThrow('public_access_review_required');
     expect(fetcher).not.toHaveBeenCalled();
     const b = await publicGpuSource('rebro_public');
+    b.public_access!.highreso_terms_fallback = true;
+    expect(ResearchConfigSchema.safeParse(b).success).toBe(false);
+    b.public_access!.highreso_terms_fallback = undefined;
     b.public_access!.next_terms_sha256 = await termsFingerprint(nextTerms);
     expect(ResearchConfigSchema.safeParse(b).success).toBe(false);
   });

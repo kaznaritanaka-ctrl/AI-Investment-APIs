@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { emitLog } from '../telemetry';
 import {
   assertResearchExecution,
   assertResearchConfigExecution,
@@ -648,8 +649,9 @@ export async function reconcileResearchRun(
   )
     .bind(config.source.source_id)
     .first<{ config_hash: string; suspended: number }>();
+  // Maintenance cannot require current registration equality: disabling acquisition
+  // or deploying a new bundled policy must never stop captured deletion obligations.
   const currentHash = await hash(stable(config));
-  if (registration?.config_hash !== currentHash) throw new Error('research_policy_changed');
   const run = await env.PRIVATE_DB.prepare(
     'SELECT * FROM research_runs WHERE source_id=? AND run_id=?',
   )
@@ -685,7 +687,7 @@ export async function reconcileResearchRun(
       ...(marked?.basis_refs ?? []),
       ...(revoked ? ['source_revocation'] : []),
     );
-  } else if (registration.suspended && decision.next_action !== 'delete') {
+  } else if (registration?.suspended && decision.next_action !== 'delete') {
     decision.state = 'rights_unknown';
     decision.next_action = 'review_rights';
     decision.collection_allowed = false;
@@ -756,5 +758,18 @@ export async function purgeResearchEvidence(env: ResearchEnv, now: string, sourc
   )
     .bind(now, now, sourceId ?? null, sourceId ?? null)
     .all<{ source_id: string; run_id: string }>();
-  for (const r of runs.results) await eraseRunEvidence(env, r.source_id, r.run_id, now);
+  let failed = false;
+  for (const r of runs.results) {
+    try {
+      await eraseRunEvidence(env, r.source_id, r.run_id, now);
+    } catch {
+      failed = true;
+      emitLog({
+        source_id: r.source_id,
+        phase: 'research_evidence_maintenance',
+        error_code: 'research_evidence_delete_failed',
+      });
+    }
+  }
+  if (failed) throw new Error('research_evidence_delete_failed');
 }

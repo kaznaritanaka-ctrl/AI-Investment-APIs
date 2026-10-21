@@ -26,7 +26,9 @@ export const PublicAccessReviewSchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/)
       .nullable(),
-    // Highreso's already reviewed November terms use a fixed URL, never a redirect.
+    // Prefer /terms; an explicitly reviewed fallback keeps the three-request budget.
+    highreso_terms_fallback: z.boolean().optional(),
+    // Fingerprint of the already reviewed November text, at either fixed URL.
     next_terms_sha256: z
       .string()
       .regex(/^[a-f0-9]{64}$/)
@@ -45,10 +47,19 @@ export const researchTable = (adapter: string) =>
 
 export function publicGpuTermsReview(
   adapter: PublicGpuAdapter,
-  review: { terms_sha256: string | null; next_terms_sha256?: string | null },
+  review: {
+    terms_sha256: string | null;
+    next_terms_sha256?: string | null;
+    highreso_terms_fallback?: boolean;
+  },
   at: string,
 ) {
   if (adapter === 'highreso_public' && at >= '2026-10-31T15:00:00.000Z')
-    return { url: 'https://soroban.highreso.jp/5401872', sha256: review.next_terms_sha256 ?? null };
+    return {
+      url: review.highreso_terms_fallback
+        ? 'https://soroban.highreso.jp/5401872'
+        : publicGpuEndpoints.highreso_public.terms,
+      sha256: review.next_terms_sha256 ?? null,
+    };
   return { url: publicGpuEndpoints[adapter].terms, sha256: review.terms_sha256 };
 }

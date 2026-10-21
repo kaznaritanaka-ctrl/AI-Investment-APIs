@@ -27,6 +27,7 @@ export async function readReviewedPublicGpu(
     robots_sha256: string | null;
     terms_sha256: string | null;
     next_terms_sha256?: string | null;
+    highreso_terms_fallback?: boolean;
   },
   opt: NetworkOptions,
 ) {

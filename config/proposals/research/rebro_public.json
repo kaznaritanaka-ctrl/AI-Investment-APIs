@@ -114,5 +114,10 @@
     "terms_sha256": null,
     "robots_decision": "allowed",
     "reviewed_ref": "docs/license-review-20261021.md#rebro"
+  },
+  "maintenance": {
+    "collection_stopped": false,
+    "revoke_at": null,
+    "delete_requests": []
   }
 }

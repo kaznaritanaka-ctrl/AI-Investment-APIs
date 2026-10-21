@@ -118,5 +118,10 @@
     "robots_decision": "allowed",
     "reviewed_ref": "docs/license-review-20261021.md#gpusoroban",
     "next_terms_sha256": null
+  },
+  "maintenance": {
+    "collection_stopped": false,
+    "revoke_at": null,
+    "delete_requests": []
   }
 }
