@@ -41,7 +41,7 @@ describe('owner-commissioned license metadata (offline)', () => {
         .filter((s) => s.enabled)
         .map((s) => s.source_id)
         .sort(),
-    ).toEqual(['ecb', 'models_dev']);
+    ).toEqual(['ecb', 'models_dev', 'price_of_compute']);
     for (const s of sources.filter((s) => !s.enabled)) {
       expect(s.rights_checked_at).toBe(reviewDate);
       expect(s.rights_evidence_ref).toBe(reviewPath + '#' + s.source_id);
@@ -65,6 +65,37 @@ describe('owner-commissioned license metadata (offline)', () => {
     }
     expect(sources.some((s) => s.source_id === 'rebro')).toBe(false);
     expect(register).toContain('| Rebro (G3) |');
+  });
+
+  it('preserves the license review metadata and existing private-only PoC approval', async () => {
+    const s = sources.find((s) => s.source_id === 'price_of_compute')!;
+    expect(s.rights_checked_at).toBe(reviewDate);
+    expect(s.rights_evidence_ref).toBe(reviewPath + '#price_of_compute');
+    expect(s.terms_url).toBe('https://www.priceofcompute.com/api');
+    expect(s.license_url).toBeNull();
+    expect(s.attribution_text).toBe(
+      'Data: Price of Compute (https://www.priceofcompute.com/); visible link required, not a redistribution grant',
+    );
+    expect(s.known_limitations).toContain(
+      '2026-10-21 license review: API page requires a visible Price of Compute link for free use; redistribution/commercial scope and upstream terms remain ambiguous. Non-public, review_required.',
+    );
+    expect(canCollect(s, reviewDate)).toBe(true);
+    expect(canPublish(s, reviewDate, true)).toBe(false);
+    // Canonical hashes from production 0abf2b6: no new grant, SKU or retention change.
+    expect(await hash(stable(s.policy))).toBe(
+      'a9954a7e462de0a2388b80c8122dbd8e9c3e641d502780a3b1aadf21ac8d2af8',
+    );
+    expect(
+      await hash(
+        stable({
+          policy: s.policy,
+          adapter: s.adapter,
+          endpoint: s.endpoint,
+          selection: s.selection,
+          gpu: s.gpu,
+        }),
+      ),
+    ).toBe('cf525a8bc60a902190cd50cf907fa01ce64fc8e7e724a9a18b9a7cce5bfacb3f');
   });
 
   // Captured before this metadata change, using the same canonical serialization as syncSource.

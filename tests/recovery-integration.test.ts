@@ -16,6 +16,8 @@ import { source, time, responder, fixture } from './helpers';
 import { hash, stable } from '../src/util';
 import { syncSource } from '../src/publication';
 import { recordNotificationSignals } from '../src/notifications';
+import { readAdmin } from '../src/admin-read';
+import { operationsHandoff } from '../src/operations-handoff';
 
 let local: Awaited<ReturnType<typeof localEnv>>;
 beforeEach(async () => {
@@ -85,6 +87,40 @@ it('preserves the original permitted fields and time, holds publication and does
     .bind(result.run_id)
     .first<string>('metrics_json');
   expect(stored).not.toMatch(/SYNTHETIC|Authorization|synthetic-model|description/);
+  const guarded = {
+    ...local.env,
+    EVIDENCE: new Proxy({} as R2Bucket, {
+      get() {
+        throw new Error('reading_evidence_forbidden');
+      },
+    }),
+  };
+  const admin = await readAdmin('runs', { run: result.run_id }, guarded, at(11), [s]);
+  expect(admin.state).toBe('ready');
+  expect(admin.runs![0].recovery).toMatchObject({
+    schema_drift: true,
+    evidence_state: 'preserved',
+    missing_observation_count: null,
+  });
+  const overview = await readAdmin('overview', {}, guarded, at(11), [s]);
+  expect(overview.overview!.attention.find((a) => a.id === 'models_dev:run')?.message).toContain(
+    'schema drift',
+  );
+  const handoff = await operationsHandoff(admin, time, at(11));
+  expect(handoff.items[0]).toMatchObject({
+    run_id: result.run_id,
+    repair_action: 'prepare_code_patch_and_synthetic_tests',
+  });
+  expect(JSON.stringify(handoff)).not.toMatch(
+    /SYNTHETIC|Authorization|synthetic-model|description|evidence\//,
+  );
+  expect(await count(local.env.PRIVATE_DB, 'observations')).toBe(0);
+  expect(await count(local.env.PUBLIC_DB, 'published_observations')).toBe(0);
+  expect(
+    await local.env.PRIVATE_DB.prepare('SELECT metrics_json FROM collection_runs WHERE run_id=?')
+      .bind(result.run_id)
+      .first<string>('metrics_json'),
+  ).toBe(stored);
 });
 
 it('normal acquisition still completes with capture enabled; unchanged prices remain legitimate observations', async () => {

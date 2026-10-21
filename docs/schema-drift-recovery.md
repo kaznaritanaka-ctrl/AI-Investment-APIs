@@ -1,5 +1,19 @@
 # Schema drift recovery — 初版の受け入れ記録
 
+## Adminから夜間調査へ渡す追加候補（2026-10-06）
+
+Runsの読み取り投影に任意の `recovery` を追加する。分類・段階・診断コード・Evidence保存状態と絶対期限・欠測・次の対応を返す。本文、R2 key、任意の例外文は返さず、D1の既存run metadataから計算する。閲覧でDB/R2更新、Evidence読取り、収集、通知を起動しない。指定時点より後の診断は伏せ、旧版の診断なしをschema正常に置き換えない。収集/公開が実際に完了したことと、agentのpatch/test/reparseは別の証拠として扱う。
+
+`pnpm operations:handoff --report <private-admin-runs.json> --slot <overview-logical-slot>` は保存したAdmin応答を、外部エージェント用の最小metadataへ投影するオフラインCLI。15分を超える応答、部分取得、確認不能は更新を要求する。sourceと分単位の予定枠からincident keyを作り、旧秒付きrunの優先記録・対象枠を照合する。本文・実fixture・Secretは出力しない。現行の機械的修復候補はModels.devのwrapper変更だけであり、Evidence hash/期限・記録済み診断を確認する。保存Evidenceの再解析には、別途許可済みのprivate実行環境が必要。
+
+`coverage=provided_runs_only` は全ソース監視の完了ではない。`more_pages=true` なら次ページも確認し、Overviewの予定数・未確認sourceも照合する。runが存在しない、またはこのページにないsourceを正常にしてはいけない。引き渡しの生成自体はagentを起動せず、本番deploy・公開・通知の権限を与えない。
+
+AdminではOverviewのschema drift注意事項からRunsへ移動できる。Dotsの結果取込みはまだ未接続なので、修正候補/回帰/再解析は `not_reported` と表示する。外部agentの認証済み報告・検証receiptの受入口は別の変更として審査し、Adminに汎用write APIやDB credentialを加えない。現在の `SCHEMA_RECOVERY_ENABLED`、source rights、Cron、通知設定は変更しない。
+
+互換性：新Adminは旧Collectorの応答を読める。旧Adminは新しいrun fieldを厳格validationで拒否するため、反映は **Admin → Collector**、両方戻す場合は **Collector → Admin** の順。今回の投影追加にmigrationは不要。実際の本番切替と夜間接続は別途、対象差分を固定して承認する。
+
+以下は前回候補の受け入れ記録であり、この追加差分の検証結果ではない。
+
 2026-10-05 JST。基準はAPI `cf726bd52db57f90ffb6299402982e8b6bb77d03`。作業先は独立した `codex/schema-drift-recovery-20261005`。既存のoperations作業、Admin、GPU/電力作業のcheckoutは編集しない。本番の調査結果ではなく、基準コードの調査とローカル合成データによる実装・検証である。実際の本番schema drift発生を確認したとの主張ではない。
 
 初版は **Evidenceの確保 → 機械的診断 → ローカル修復候補 → 回帰検証 → 保存Evidence再解析 → briefing用JSON**。`SCHEMA_RECOVERY_ENABLED` は未設定のまま、Wrangler設定を変更していない。自動production deploy・自動公開・外部LLM呼出し・新scheduleは実装上も無効。2026-10-05に所有者がNetlifyを問題なしと確認し、対象repoのGitHub push/PR保留を解除した。[Draft PR #7](https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs/pull/7)と現在の残件は[受け入れ記録](operations-acceptance.md)を参照。
