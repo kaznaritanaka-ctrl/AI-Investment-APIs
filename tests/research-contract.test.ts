@@ -47,6 +47,7 @@ describe('private research contracts (synthetic, no live HTTP)', () => {
   });
   it('treats null license as unknown while enforcing each private grant and independent export gates', () => {
     const c = researchSource();
+    c.source.license_url = null; // Exercise unknown-license behavior independently of proposal metadata.
     expect(c.source.license_url).toBeNull();
     expect(canCollect(c.source, researchTime)).toBe(true);
     expect(() => assertResearchAllowed(c, researchTime, c.terms.version)).not.toThrow();

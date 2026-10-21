@@ -15,12 +15,13 @@
   "native_frequency": "unknown",
   "expected_update_calendar": "unknown",
   "expected_lag": "unknown",
-  "rights_checked_at": "2026-09-26T18:23:33.000Z",
-  "rights_evidence_ref": "docs/source-register.md#openrouter",
+  "rights_checked_at": "2026-10-21T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-20261021.md#openrouter",
   "attribution_text": "OpenRouter",
   "known_limitations": [
     "Terms section 7 automated-copying restrictions; applicability to historical data API unresolved.",
-    "Synthetic parser only; no HTML fallback."
+    "Synthetic parser only; no HTML fallback.",
+    "2026-10-21 license review: Terms of Service section 7 prohibits automated scraping/copying of information on the Site or Services; publication denied by the owner-commissioned review. No collection grant."
   ],
   "enabled": false,
   "adapter": "openrouter",
@@ -28,32 +29,35 @@
   "max_bytes": 1000000,
   "max_records": 100,
   "policy": {
-    "version": "openrouter-20260927-v1",
+    "version": "openrouter-20261021-license-review-v2",
     "rights": {
       "automated_collection": "review_required",
       "private_storage": "review_required",
       "internal_analysis": "review_required",
       "external_llm_processing": "review_required",
-      "public_display": "review_required",
-      "raw_redistribution": "review_required",
-      "normalized_redistribution": "review_required",
-      "derived_redistribution": "review_required",
-      "commercial_redistribution": "review_required"
+      "public_display": "denied",
+      "raw_redistribution": "denied",
+      "normalized_redistribution": "denied",
+      "derived_redistribution": "denied",
+      "commercial_redistribution": "denied"
     },
     "fields": [
       "none"
     ],
     "conditions": [
-      "No collection until rights are confirmed."
+      "No collection until rights are confirmed.",
+      "2026-10-21: Terms of Service section 7 prohibits automated scraping/copying of information on the Site or Services; publication denied by the owner-commissioned review. No collection grant. See docs/license-review-20261021.md#openrouter and https://openrouter.ai/terms."
     ],
     "valid_from": "2026-09-26T18:23:33.000Z",
     "valid_until": "2026-12-26T00:00:00.000Z",
     "retention_days": 90,
     "retention_limit_days": null,
     "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
-    "evidence_version": "2026-09-27 research",
+    "evidence_version": "Owner-commissioned license review 2026-10-21; no new grants",
     "evidence_refs": [
-      "docs/source-register.md#openrouter"
+      "docs/source-register.md#openrouter",
+      "docs/license-review-20261021.md#openrouter",
+      "https://openrouter.ai/terms"
     ]
   }
 }

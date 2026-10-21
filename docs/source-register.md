@@ -1,5 +1,32 @@
 # ソース台帳 — Phase 0
 
+## 2026-10-21 ライセンスmetadataレビュー
+
+所有者委託の[ライセンス／再配布レビュー](license-review-20261021.md)を既存のterms_url/license_url、rights_checked_at、rights_evidence_ref、attribution_text、known_limitationsとpolicyへ記録しました。ライセンス名・再配布判断は下表とknown_limitations、機械判定は既存9権限で表現し、新schemaは追加しません。disabled設定の確認日時は`2026-10-21T00:00:00.000Z`です。これは提供元への再照会や実データ取得の日時ではありません。
+
+| source_id | ライセンス／規約・根拠 | 再配布判断・表示条件 |
+|---|---|---|
+| ecb | [ESCB statistics reuse policy](license-review-20261021.md#ecb)（独自利用条件） | 既存公開範囲維持。Source: ECB statistics.、metadata維持、加工明示、第三者データ除外 |
+| models_dev | [MIT](license-review-20261021.md#models_dev) | 承認済み5 provider / 17 fieldの数値・識別子・条件のみ。MIT全文通知、raw配信denied維持 |
+| openrouter | [Terms of Service §7](license-review-20261021.md#openrouter) | 自動scrape/copy禁止を記録。公開5権限denied、新policy版。取得等はreview_required |
+| runpod | [Terms of Service 2026-03-24](license-review-20261021.md#runpod) | 書面許諾なしの体系的取得・DB化／scraper禁止。公開5権限denied、新policy版。取得等はreview_required |
+| ccir | [Data Terms](license-review-20261021.md#ccir) | 系列・履歴再配布等は書面許諾必要。公開5権限denied、新policy版。引用時CCIR (ccir.io)・系列ID・日付、引用条件を配布許可にしない |
+| lambda | [Terms of Service](license-review-20261021.md#lambda) | 価格データ再配布許諾の記載未確認。非公開、全権限review_required |
+| gpusoroban | [利用規約 第13条](license-review-20261021.md#gpusoroban) | 知財帰属条項あり、データ再配布許諾記載なし。非公開、全権限review_required |
+| sakura_dok | [約款一覧](license-review-20261021.md#sakura_dok) | API価格データの再配布許諾未確認。非公開、全権限review_required。文書CCライセンスを転用しない |
+| price_of_compute | [APIページの利用条件](license-review-20261021.md#price_of_compute) | Data: Price of Computeと可視リンクが条件。再配布・商用範囲／上流条件が曖昧、非公開・全権限review_required |
+| ebay_browse | [API License Agreement](license-review-20261021.md#ebay_browse) | JS描画で本文・条項未確認。非公開、全権限review_required |
+| capex_utilization | [提供元未選定](license-review-20261021.md#capex_utilization) | terms_url/license_url=nullの理由: 提供元・dataset未選定、評価不能。非公開、全権限review_required |
+| electricity | [提供元未選定](license-review-20261021.md#electricity) | terms_url/license_url=nullの理由: 提供元・dataset未選定、評価不能。研究EIA/JEPXとは別。非公開、全権限review_required |
+| gpu_index | [提供元未選定](license-review-20261021.md#gpu_index) | terms_url/license_url=nullの理由: 提供元・dataset未選定、評価不能。非公開、全権限review_required |
+| memory | [提供元未選定](license-review-20261021.md#memory) | terms_url/license_url=nullの理由: 提供元・dataset未選定、評価不能。非公開、全権限review_required |
+| rates_credit | [提供元未選定](license-review-20261021.md#rates_credit) | terms_url/license_url=nullの理由: 提供元・dataset未選定、評価不能。非公開、全権限review_required |
+| Rebro (G3) | [Q&A／利用条件記載なし](license-review-20261021.md#rebro) | 非公開・要確認。docsのみ、source設定なし。公式feed・取得/保存/分析/継続保存の所有者確認待ち |
+| eia_retail_co_ind（研究案） | [EIA public domain / reuse statement](license-review-20261021.md#eia) | 一般的な利用・配布根拠とEIA出典推奨をmetadataに記録。license_urlは命名ライセンスIDではなく公式再利用方針URL。grantなし、URLキー問題でblocked、保持unapproved |
+| jepx_tokyo（研究案） | [JEPX免責・著作権](license-review-20261021.md#jepx) | 出所表示条件あり、再配布・商用の明示許諾は曖昧。非公開・要確認、grantなし、blocked・保持unapproved |
+
+新規allowed・収集有効化は0件。OpenRouter/Runpod/CCIRの公開5権限以外は変更しません。license_url=nullは「データ再配布ライセンス未確認」を意味し、規約がないとの主張や内部取得の許可ではありません。ECB/Models.devの2026-10-21確認は本節とレビューにのみ追記し、稼働JSON全体（policy/hash・endpoint・選定・確認日時を含む）はそのまま保持します。履歴として残す以下の初期判定と異なる場合は本節を優先します。
+
 2026-10-15追加: [全分野の実査台帳](source-expansion-20261015.md)へ、国内GPU/電力/メモリ/DC/水/ラボ/Physical AIと既存ソースの優先判断を分離しました。稼働用sourceは増やしていません。EIA/JEPXの承認待ちproposalはconfig/proposals/researchに置き、Private合成検証のみです。以下の過去台帳と10/15の配信版には差分があるため、最新のmetadata確認は追加台帳を参照してください。
 
 10/18最終指示の反映: 次の有効化候補は[Highreso/GPUSOROBANとRebroの2件だけ](research-long-retention-20261016.md#次の有効化候補は2つだけ)。所有者が公式feed・自動取得/保存/分析・契約終了後の継続保存・認証/費用を確認します。有限holdは提供者が認める場合の任意例外で、通常取得の追加条件ではありません。許諾済みならuntil_revokedを検討し、3〜5年を自動廃棄期限にしません。内部review_dueは取得/read停止と再レビューへ進め、保存許諾内の履歴を保持します。新sourceの実観測数=0、新allowed/source enable/商用許諾=0。EIA/JEPXはblockedでcritical path外。5年容量/80%は参考でありソース獲得の停止条件ではありません。

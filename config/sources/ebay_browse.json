@@ -15,11 +15,12 @@
   "native_frequency": "unknown",
   "expected_update_calendar": "unknown",
   "expected_lag": "unknown",
-  "rights_checked_at": "2026-09-27T12:07:26.000Z",
-  "rights_evidence_ref": "docs/gpu-source-review.md#ebay_browse",
+  "rights_checked_at": "2026-10-21T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-20261021.md#ebay_browse",
   "attribution_text": "Source: eBay",
   "known_limitations": [
-    "Not connected. Owner approval, field scope and retention review are required."
+    "Not connected. Owner approval, field scope and retention review are required.",
+    "2026-10-21 license review: API License Agreement body was unavailable to the commissioned review (JS rendering); clauses and redistribution permission remain unconfirmed. Non-public, review_required."
   ],
   "enabled": false,
   "adapter": "ebay_browse",

@@ -15,11 +15,12 @@
   "native_frequency": "unknown",
   "expected_update_calendar": "unknown",
   "expected_lag": "unknown",
-  "rights_checked_at": "2026-09-27T12:07:26.000Z",
-  "rights_evidence_ref": "docs/gpu-source-review.md#price_of_compute",
-  "attribution_text": "Source: Price of Compute",
+  "rights_checked_at": "2026-10-21T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-20261021.md#price_of_compute",
+  "attribution_text": "Data: Price of Compute (https://www.priceofcompute.com/); visible link required, not a redistribution grant",
   "known_limitations": [
-    "Not connected. Owner approval, field scope and retention review are required."
+    "Not connected. Owner approval, field scope and retention review are required.",
+    "2026-10-21 license review: API page requires a visible Price of Compute link for free use; redistribution/commercial scope and upstream terms remain ambiguous. Non-public, review_required."
   ],
   "enabled": false,
   "adapter": "price_of_compute",
