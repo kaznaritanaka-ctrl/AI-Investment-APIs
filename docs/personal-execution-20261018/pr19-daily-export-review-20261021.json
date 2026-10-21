@@ -1,0 +1,80 @@
+{
+  "document_kind": "pr19_daily_export_review_v1",
+  "executable": false,
+  "production_ready": false,
+  "reviewed_base": "90ae31da9dc41a1a7e9fdfafb6d6b8148416e6ea",
+  "final_release_artifact": null,
+  "prior_review": {
+    "file": "docs/personal-execution-20261018/pr19-migration-review-20261021.json",
+    "sha256": "e71b8f81990c9f9e6ba1e084b672a47f605f335e57df60fd0d0b99ab59ca14a7",
+    "unchanged": true
+  },
+  "historical_packet": {
+    "file": "docs/personal-execution-20261018/first-cloud-owner-review.json",
+    "sha256": "79971989d95a11d0104643430c83cb236a9e720c3278b8504b0e87838dc7a22c",
+    "unchanged": true
+  },
+  "current_production_journal_confirmed": false,
+  "migration_approval_ref": null,
+  "migrations": [
+    {
+      "file": "migrations/private/0007_private_research.sql",
+      "sha256": "1902cc19a1ee09f2a9851bf271a678d76089c84184952b9831f5d2631568339b"
+    },
+    {
+      "file": "migrations/private/0008_research_retention.sql",
+      "sha256": "66104a641db434971fbc1443d78e0dca89af5f0884538effbaf25a8149fe2d37"
+    },
+    {
+      "file": "migrations/private/0009_research_retention_states.sql",
+      "sha256": "e90c9757912ec03dc6893794bac32a2324d5dbfe348cc4b5a23ad1b9c73632ed"
+    },
+    {
+      "file": "migrations/private/0010_private_gpu_research.sql",
+      "sha256": "db53395b72420883afcf6376520f92837b7553adf82dc1e293fb0147e98e9582"
+    },
+    {
+      "file": "migrations/private/0011_personal_research_authority.sql",
+      "sha256": "e9eed22d5495c24a0bf408fe195f60dcf3bbc82e70a1b6984469cabdf0d22e5d"
+    },
+    {
+      "file": "migrations/private/0012_personal_continuing.sql",
+      "sha256": "1ed1315ad664143437f51ddabe926b3f72d00b3f34b56d5f4aa04477eae83378"
+    },
+    {
+      "file": "migrations/private/0013_personal_daily.sql",
+      "sha256": "eb3471f69d96e0933e6d6a76ef2afecf2786562e1dcf1109ead29698b0c4ce0b"
+    },
+    {
+      "file": "migrations/private/0014_research_assessments_append_only.sql",
+      "sha256": "660f28eb3408b6a79ab67eef3bf9beb57131246cfed4f02772b5e745f05c73ca"
+    },
+    {
+      "file": "migrations/private/0015_daily_series_events.sql",
+      "sha256": "135144476d2355357b7368a230f2425c74161c045159c9e5b0911b18cf7eaeaa"
+    },
+    {
+      "file": "migrations/private/0016_daily_export_work.sql",
+      "sha256": "cab50743ee5a194f161c279b094a90f69ac2682aa7154a3fa156274007f0ddd3"
+    }
+  ],
+  "already_approved": ["private_personal_research_exception", "owner_continuing_history_retention"],
+  "selected_sources": null,
+  "acquisition_window": null,
+  "deploy_approval_ref": null,
+  "daily_enablement": {
+    "status": "implemented_pending_final_validation_and_real_acceptance",
+    "approval_ref": null,
+    "idle_invocations_per_source_per_day_upper_bound": 24,
+    "max_runs_per_source_invocation": 4,
+    "max_snapshot_bytes": 524288,
+    "planning_idle_slots_per_day": 16,
+    "history_run_scenario_per_source": 3660,
+    "export_generation_days_proposal": 90,
+    "real_cloud_profile_ref": null,
+    "real_nas_admission_ref": null,
+    "real_keys_configured": false,
+    "real_nas_changed": false
+  },
+  "production_mutations": false
+}

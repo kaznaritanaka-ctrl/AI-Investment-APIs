@@ -283,62 +283,39 @@ async function dailyData(
   at: string,
   cursor?: string,
   catalogPage = 0,
+  selectedRuns?: string[],
 ) {
   const root = dailyRoot(source),
     head = await json(origin, root + 'catalog.json');
-  if (!head) return { cursor: undefined, catalog_page: 0 };
+  if (!head) return { cursor: undefined, catalog_page: 0, projected: [], failed: [] };
   const catalog = DailyCatalog.parse(head);
   if (catalog.source_id !== source || catalog.checked_at > at)
     throw new Error('nas_export_catalog_scope');
-  const page = await origin.list({ prefix: root + 'runs/', cursor, limit: 1 });
+  const page = selectedRuns
+    ? null
+    : await origin.list({ prefix: root + 'runs/', cursor, limit: 1 });
   // Do not make today's run wait for a years-long history cursor. One new/latest
   // generation wins; unchanged latest leaves the slot for historical refresh.
   const latestKey = catalog.latest_run_id ? root + 'runs/' + catalog.latest_run_id + '.json' : null;
-  const latest = latestKey ? await json(origin, latestKey) : null;
-  const copied = latestKey ? await json(out, latestKey) : null;
+  const latest = !selectedRuns && latestKey ? await json(origin, latestKey) : null;
+  const copied = !selectedRuns && latestKey ? await json(out, latestKey) : null;
   const priority = latest && (!copied || copied.snapshot_hash !== latest.snapshot_hash);
-  const object = priority ? { key: latestKey! } : page.objects[0];
-  if (object) {
-    const m = DailyManifest.parse(await json(origin, object.key));
-    if (m.source_id !== source || object.key !== root + 'runs/' + m.run_id + '.json')
-      throw new Error('nas_export_manifest_scope');
-    const control = DailyControl.parse(
-      await json(origin, root + 'authority/' + m.contract_hash + '.json', 16384),
-    );
-    const denied =
-      (await origin.head(root + 'revoked.json')) ||
-      (await origin.head(
-        'personal-research/control/' + source + '/research-control/revocations/' + source + '.json',
-      )) ||
-      (await origin.head(root + 'deleted/' + m.run_id + '.json'));
-    if (
-      !denied &&
-      control.storage === 'continuing' &&
-      !(control.storage_ends_at && control.storage_ends_at <= at) &&
-      m.expires_at > at
-    ) {
-      const transfer = await parts(
-        origin,
-        out,
-        m,
-        root + 'exports/' + m.run_id + '/' + m.created_at.slice(0, 10) + '/',
-        at,
-      );
-      const s = await validateDailySnapshot(transfer.snapshot);
-      scope(s.contract, p, source);
-      if (
-        s.run_id !== m.run_id ||
-        s.contract_hash !== m.contract_hash ||
-        s.ordinal !== m.ordinal ||
-        s.created_at !== m.created_at ||
-        s.expires_at !== m.expires_at
-      )
+  const objects = selectedRuns
+    ? selectedRuns.map((run) => ({ key: root + 'runs/' + run + '.json' }))
+    : priority
+      ? [{ key: latestKey! }]
+      : page!.objects.slice(0, 1);
+  const projected: { run_id: string; generation_at: string }[] = [],
+    failed: string[] = [];
+  for (const object of objects) {
+    try {
+      const m = DailyManifest.parse(await json(origin, object.key));
+      if (m.source_id !== source || object.key !== root + 'runs/' + m.run_id + '.json')
         throw new Error('nas_export_manifest_scope');
-      await transfer.commit();
-      if (
-        stable(await json(origin, root + 'authority/' + m.contract_hash + '.json', 16384)) !==
-          stable(control) ||
-        (await origin.head(root + 'deleted/' + m.run_id + '.json')) ||
+      const control = DailyControl.parse(
+        await json(origin, root + 'authority/' + m.contract_hash + '.json', 16384),
+      );
+      const denied =
         (await origin.head(root + 'revoked.json')) ||
         (await origin.head(
           'personal-research/control/' +
@@ -346,14 +323,59 @@ async function dailyData(
             '/research-control/revocations/' +
             source +
             '.json',
-        ))
-      )
-        throw new Error('nas_export_control_changed');
-      await out.put(object.key, stable(m), { customMetadata: { expires_at: m.expires_at } });
+        )) ||
+        (await origin.head(root + 'deleted/' + m.run_id + '.json'));
+      if (
+        !denied &&
+        control.contract_hash === m.contract_hash &&
+        control.storage === 'continuing' &&
+        !(control.storage_ends_at && control.storage_ends_at <= at) &&
+        m.expires_at > at
+      ) {
+        const transfer = await parts(
+          origin,
+          out,
+          m,
+          root + 'exports/' + m.run_id + '/' + m.created_at.slice(0, 10) + '/',
+          at,
+        );
+        const s = await validateDailySnapshot(transfer.snapshot);
+        scope(s.contract, p, source);
+        if (
+          s.run_id !== m.run_id ||
+          s.contract_hash !== m.contract_hash ||
+          s.ordinal !== m.ordinal ||
+          s.created_at !== m.created_at ||
+          s.expires_at !== m.expires_at
+        )
+          throw new Error('nas_export_manifest_scope');
+        await transfer.commit();
+        if (
+          stable(await json(origin, root + 'authority/' + m.contract_hash + '.json', 16384)) !==
+            stable(control) ||
+          (await origin.head(root + 'deleted/' + m.run_id + '.json')) ||
+          (await origin.head(root + 'revoked.json')) ||
+          (await origin.head(
+            'personal-research/control/' +
+              source +
+              '/research-control/revocations/' +
+              source +
+              '.json',
+          ))
+        )
+          throw new Error('nas_export_control_changed');
+        await out.put(object.key, stable(m), { customMetadata: { expires_at: m.expires_at } });
+        projected.push({ run_id: m.run_id, generation_at: m.created_at });
+      } else if (selectedRuns) {
+        throw new Error('nas_export_authority_or_expiry');
+      }
+      const n = Math.floor((m.ordinal - 1) / 32),
+        key = root + 'catalog/' + n + '.json';
+      await out.put(key, stable(dailyCatalogPage(await json(origin, key), n)));
+    } catch (error) {
+      if (!selectedRuns) throw error;
+      failed.push(object.key.slice((root + 'runs/').length, -5));
     }
-    const n = Math.floor((m.ordinal - 1) / 32),
-      key = root + 'catalog/' + n + '.json';
-    await out.put(key, stable(dailyCatalogPage(await json(origin, key), n)));
   }
   // Latest catalog page also carries failed/purged attempts with no run manifest.
   const last = catalog.pages.find((p) => p >= catalogPage) ?? catalog.pages[0];
@@ -366,20 +388,32 @@ async function dailyData(
     throw new Error('nas_export_catalog_rollback');
   await out.put(root + 'catalog.json', stable(catalog));
   return {
-    cursor: priority ? cursor : page.truncated ? page.cursor : undefined,
+    cursor: selectedRuns || priority ? cursor : page!.truncated ? page!.cursor : undefined,
     catalog_page: last === undefined ? 0 : last + 1,
+    projected,
+    failed,
   };
 }
 
 // Separate capability: no HTTP, no DB writes, no source grants. A control sweep is
-// bounded to 20 objects per call; one complete snapshot (<=512KiB) crosses per sweep.
+// bounded to 20 objects per call; initial/legacy transfers one snapshot, the
+// durable daily queue transfers <=4 x 512KiB sequentially per call.
 export async function syncNasExport(
   base: Buckets,
   pin: NasExportPin,
   source: string,
   kind: ExportKind,
   at: string,
+  selectedRuns?: string[],
 ) {
+  if (
+    selectedRuns &&
+    (kind !== 'daily' ||
+      selectedRuns.length > 4 ||
+      new Set(selectedRuns).size !== selectedRuns.length ||
+      selectedRuns.some((r) => !/^[a-f0-9]{64}$/.test(r)))
+  )
+    throw new Error('nas_export_batch_scope');
   exportSource.parse(source);
   nasExportBinding(base, {
     account_id: pin.account_id,
@@ -454,6 +488,8 @@ export async function syncNasExport(
     const reconcile = cp.phase >= prefixes.length;
     const prefix = prefixes[cp.phase % prefixes.length];
     if (cp.phase < totalPhases) {
+      if (Date.now() - started >= 300000 || (await origin.head(leaseKey))?.etag !== lease.etag)
+        throw new Error('nas_export_lease_lost');
       const page = await (reconcile ? out : origin).list({ prefix, limit: 20, cursor: cp.cursor });
       for (const object of page.objects)
         if (personalObjectKey(object.key)) {
@@ -474,14 +510,27 @@ export async function syncNasExport(
         delete cp.cursor;
       }
     }
+    let projected: { run_id: string; generation_at: string }[] = [],
+      failed: string[] = [];
     if (kind === 'daily') {
-      const data = await dailyData(origin, out, pin, source, at, cp.run_cursor, cp.catalog_page);
+      const data = await dailyData(
+        origin,
+        out,
+        pin,
+        source,
+        at,
+        cp.run_cursor,
+        cp.catalog_page,
+        selectedRuns,
+      );
       cp.run_cursor = data.cursor;
       cp.catalog_page = data.catalog_page;
+      projected = data.projected;
+      failed = data.failed;
     }
     if (cp.phase < totalPhases) {
       await origin.put(checkpointKey, JSON.stringify(cp));
-      return { state: 'control_partial' };
+      return { state: 'control_partial', projected, failed };
     }
     if (kind === 'initial') await initialData(origin, out, pin, source, at);
 
@@ -527,7 +576,7 @@ export async function syncNasExport(
     await out.put(gateKey, stable({ ...gate, ready: true }));
     cp.phase = 0;
     await origin.put(checkpointKey, JSON.stringify(cp));
-    return { state: 'complete' };
+    return { state: 'complete', projected, failed };
   } finally {
     await origin.put(leaseKey, stable({ until: at }), { onlyIf: { etagMatches: lease.etag } });
   }

@@ -99,7 +99,7 @@ it('migrates the production 0006 schema with all three enabled sources, preservi
       await readFile('docs/collector-integration-audit-20261018.json', 'utf8'),
     ).databases.private.pending_migrations;
     // The audit is immutable evidence from October 18, not a live migration
-    // manifest. This integration adds 0015 without rewriting that old journal.
+    // manifest. This integration adds 0015/0016 without rewriting that old journal.
     expect(pending).toHaveLength(8);
     expect(
       (
@@ -107,7 +107,11 @@ it('migrates the production 0006 schema with all three enabled sources, preservi
           "SELECT name FROM d1_migrations WHERE name>='0007' ORDER BY name",
         ).all()
       ).results.map((r) => r.name),
-    ).toEqual([...pending.map((m: { name: string }) => m.name), '0015_daily_series_events.sql']);
+    ).toEqual([
+      ...pending.map((m: { name: string }) => m.name),
+      '0015_daily_series_events.sql',
+      '0016_daily_export_work.sql',
+    ]);
     expect((await local.env.PRIVATE_DB.prepare('PRAGMA foreign_key_check').all()).results).toEqual(
       [],
     );

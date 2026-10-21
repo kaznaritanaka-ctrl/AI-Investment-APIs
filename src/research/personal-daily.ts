@@ -600,24 +600,42 @@ export async function publishDailyCatalog(env: DailyEnv, source: string, run: st
     )
       throw new Error('daily_catalog_conflict');
 }
-export async function exportDailyHistory(env: DailyEnv, source: string, at: string) {
+export type DailyExportInput = {
+  row: DailyRun & { contract_json: string; coverage_json: string | null; plan_hash: string | null };
+  records: unknown[];
+};
+export async function exportDailyHistory(
+  env: DailyEnv,
+  source: string,
+  at: string,
+  input?: DailyExportInput,
+) {
   const started = Date.now();
-  const row = await env.PRIVATE_DB.prepare(
-    "SELECT * FROM personal_daily_runs WHERE source_id=? AND state='complete' AND (exported_at IS NULL OR exported_at<?) ORDER BY exported_at,ordinal LIMIT 1",
-  )
-    .bind(source, at.slice(0, 10) + 'T00:00:00.000Z')
-    .first<DailyRun>();
+  const row =
+    input?.row ??
+    (await env.PRIVATE_DB.prepare(
+      "SELECT * FROM personal_daily_runs WHERE source_id=? AND state='complete' AND (exported_at IS NULL OR exported_at<?) ORDER BY exported_at,ordinal LIMIT 1",
+    )
+      .bind(source, at.slice(0, 10) + 'T00:00:00.000Z')
+      .first<DailyRun>());
   if (!row) return { state: 'current' };
   const c = PersonalDailySchema.parse(
     JSON.parse(
-      (await env.PRIVATE_DB.prepare(
-        'SELECT contract_json FROM personal_daily_contracts WHERE contract_hash=?',
-      )
-        .bind(row.contract_hash)
-        .first<string>('contract_json'))!,
+      input?.row.contract_json ??
+        (await env.PRIVATE_DB.prepare(
+          'SELECT contract_json FROM personal_daily_contracts WHERE contract_hash=?',
+        )
+          .bind(row.contract_hash)
+          .first<string>('contract_json'))!,
     ),
   );
   const authority = await dailyAuthority(env, c, row.contract_hash, at);
+  if (
+    row.source_id !== source ||
+    row.state !== 'complete' ||
+    (await env.EVIDENCE.head(dailyRoot(source) + 'deleted/' + row.run_id + '.json'))
+  )
+    throw new Error('daily_export_scope');
   const root = dailyRoot(source),
     key = root + 'exports/' + row.run_id + '/' + at.slice(0, 10) + '/',
     leaseKey = key + 'lease.json';
@@ -635,21 +653,27 @@ export async function exportDailyHistory(env: DailyEnv, source: string, at: stri
   try {
     let snapshot = await dailyJSON(env.EVIDENCE, key + 'snapshot.json', 524288);
     if (!snapshot) {
-      const coverage = await env.PRIVATE_DB.prepare(
-        'SELECT coverage_json,plan_hash FROM personal_daily_coverage WHERE run_id=?',
-      )
-        .bind(row.run_id)
-        .first<{ coverage_json: string; plan_hash: string }>();
-      const records = await env.PRIVATE_DB.prepare(
-        'SELECT * FROM personal_daily_observations WHERE run_id=? ORDER BY record_key LIMIT 257',
-      )
-        .bind(row.run_id)
-        .all();
+      const coverage = input
+        ? input.row.coverage_json
+          ? input.row
+          : null
+        : await env.PRIVATE_DB.prepare(
+            'SELECT coverage_json,plan_hash FROM personal_daily_coverage WHERE run_id=?',
+          )
+            .bind(row.run_id)
+            .first<{ coverage_json: string; plan_hash: string }>();
+      const records = input
+        ? { results: input.records }
+        : await env.PRIVATE_DB.prepare(
+            'SELECT * FROM personal_daily_observations WHERE run_id=? ORDER BY record_key LIMIT 257',
+          )
+            .bind(row.run_id)
+            .all();
       if (records.results.length !== row.record_count) throw new Error('daily_export_count');
       snapshot = DailySnapshot.parse({
         version: coverage ? 'daily-history-v2' : 'daily-history-v1',
         ...(coverage
-          ? { coverage: JSON.parse(coverage.coverage_json), plan_hash: coverage.plan_hash }
+          ? { coverage: JSON.parse(coverage.coverage_json!), plan_hash: coverage.plan_hash }
           : {}),
         contract: c,
         contract_hash: row.contract_hash,
@@ -697,6 +721,7 @@ export async function exportDailyHistory(env: DailyEnv, source: string, at: stri
     const latest = await dailyAuthority(env, c, row.contract_hash, at);
     if (
       stable(latest) !== stable(authority) ||
+      (await env.EVIDENCE.head(root + 'deleted/' + row.run_id + '.json')) ||
       Date.now() - started >= 300000 ||
       (await env.EVIDENCE.head(leaseKey))?.etag !== lease.etag
     )
@@ -734,8 +759,10 @@ export async function exportDailyHistory(env: DailyEnv, source: string, at: stri
     )
       .bind(s.created_at, s.expires_at, row.run_id)
       .run();
-    await publishDailyCatalog(env, source, row.run_id, at);
-    return { state: 'exported', run_id: row.run_id };
+    // A refresh changes no catalog membership. Bulk callers repair the catalog
+    // separately, rather than rescanning all pages for every historical run.
+    if (!input) await publishDailyCatalog(env, source, row.run_id, at);
+    return { state: 'exported', run_id: row.run_id, bytes: bytes.length };
   } finally {
     await env.EVIDENCE.put(leaseKey, stable({ until: at }), {
       onlyIf: { etagMatches: lease.etag },

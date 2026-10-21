@@ -1,5 +1,7 @@
 # 日次個人研究履歴・Cloudflare → NAS（未有効化）
 
+2026-10-21追記: 1run/回の容量不足は[最大4runのdurable export/転送と期限索引](daily-export-capacity-20261021.md)で修正。旧本文の153日下限は修正前の記録。最大24日次枠は維持し、private0016と数千run syntheticを追加。旧世代期限・長期履歴・実行承認を変更しない。
+
 2026-10-18更新: 私的例外・長期保存は所有者承認済みです。NASには既存EVIDENCEを読めるcredentialを渡しません。[専用exportの実装・現行設定案](nas-export-isolation-20261018.md) が以下のshared-bucket案と旧CLI v1案に優先します。実行・deploy・実鍵・NAS実機変更は未承認。以下は段階ごとの履歴です。
 
 レビュー追補: [parser/cohort・規約切替・NAS専用export分離案](public-gpu-review-acceptance-20261018.md)が最新の受入条件。既存EVIDENCE全体の読取credentialをNASへ渡す案はrelease blocker。0012には後続レビューで台帳DELETE保護を復元するtriggerを追加し、0014と両順序で検証する。以下の「0001〜0012は変更せず」は日次拡張時点の記録。

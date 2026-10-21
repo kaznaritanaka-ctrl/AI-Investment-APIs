@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const html = await readFile('tests/fixtures/research/rebro.synthetic.html', 'utf8');
 const bundle = await build({
   stdin: {
-    contents: `import {dailyRuntime} from './tests/daily-runtime-harness';import {dailyScaleRuntime} from './tests/daily-scale-runtime-harness';export default {async fetch(r,env){if(new URL(r.url).pathname==='/scale')return Response.json(await dailyScaleRuntime(env));return Response.json(await dailyRuntime(env,${JSON.stringify(html)},Number(new URL(r.url).searchParams.get('step'))));}}`,
+    contents: `import {dailyRuntime} from './tests/daily-runtime-harness';import {dailyScaleRuntime} from './tests/daily-scale-runtime-harness';import {dailyExportRuntime} from './tests/daily-export-runtime-harness';export default {async fetch(r,env){if(new URL(r.url).pathname==='/export')return Response.json(await dailyExportRuntime(env,Number(new URL(r.url).searchParams.get('step'))));if(new URL(r.url).pathname==='/scale')return Response.json(await dailyScaleRuntime(env));return Response.json(await dailyRuntime(env,${JSON.stringify(html)},Number(new URL(r.url).searchParams.get('step'))));}}`,
     resolveDir: process.cwd(),
     sourcefile: 'daily-runtime.ts',
     loader: 'ts',
@@ -23,7 +23,7 @@ const mf = new Miniflare({
   compatibilityDate: '2026-07-30',
   log: new Log(LogLevel.ERROR),
   d1Databases: ['PRIVATE_DB'],
-  r2Buckets: ['EVIDENCE'],
+  r2Buckets: ['EVIDENCE', 'NAS_EXPORT'],
   bindings: { ENVIRONMENT: 'test' },
 });
 try {
@@ -68,6 +68,26 @@ try {
   assert.ok(scale.bytes <= 524288);
   console.log(
     'Daily cohort workerd passed: 64 rows / 128 price slots, 3 mocked GETs total, checkpoint replay, <=20 SQL batch, 128KiB parts and <=512KiB validated snapshot. Synthetic only.',
+  );
+  let exported = 0,
+    projected = 0;
+  for (let step = 0; step < 4; step++) {
+    const response = await mf.dispatchFetch('https://local.test/export?step=' + step);
+    assert.equal(response.status, 200);
+    const results = await response.json();
+    for (const r of results) {
+      assert.equal(r.refreshed.failed, 0);
+      assert.ok(r.refreshed.runs <= 4);
+      assert.ok(r.refreshed.bytes <= 4 * 524288);
+      assert.equal(r.projected.failed.length, 0);
+      exported += r.refreshed.runs;
+      projected += r.projected.projected.length;
+    }
+  }
+  assert.equal(exported, 17);
+  assert.equal(projected, 17);
+  console.log(
+    'Daily export workerd passed: 4-run bounded refresh/projection, 17 synthetic runs including 128-price multipart v2, forward 0016 queue/expiry SQL; no source HTTP or public DB.',
   );
 } finally {
   await mf.dispose();

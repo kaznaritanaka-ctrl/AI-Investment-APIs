@@ -4,14 +4,19 @@ import type { PersonalOptions } from './personal';
 import {
   registerDaily,
   collectDaily,
-  exportDailyHistory,
   maintainDaily,
   dailyMonitor,
   dailyJSON,
   type DailyEnv,
 } from './personal-daily';
 import { dailySource, digest } from './daily-protocol';
-import { nasExportBinding, syncNasExport } from './nas-export';
+import { nasExportBinding } from './nas-export';
+import {
+  refreshDailyExports,
+  projectDailyExports,
+  expireDailyExports,
+  dailyExportCapacity,
+} from './daily-export';
 const Pins = z
   .object({
     account_id: z.string().regex(/^[a-f0-9]{32}$/),
@@ -71,12 +76,14 @@ export async function dailyScheduled(base: CollectorEnv, opt: PersonalOptions = 
       const maintenance = await maintainDaily(env, pin.source_id, at);
       let history = 'blocked';
       try {
-        history = (await exportDailyHistory(env, pin.source_id, at)).state;
+        history = (await refreshDailyExports(env, pin.source_id, at)).state;
       } catch {
         /* current authority is required */
       }
       const nas = await dailyMonitor(env, c, at);
-      const exported = await syncNasExport(base, transport, pin.source_id, 'daily', at);
+      const exported = await projectDailyExports(env, base, transport, pin.source_id, at);
+      await expireDailyExports(env, base.NAS_EXPORT!, pin.source_id, at);
+      const capacity = await dailyExportCapacity(env, pin.source_id, at);
       results.push({
         source_id: pin.source_id,
         collection,
@@ -84,6 +91,7 @@ export async function dailyScheduled(base: CollectorEnv, opt: PersonalOptions = 
         history,
         nas: nas.state,
         nas_export: exported.state,
+        export_capacity: capacity.state,
       });
     } catch {
       results.push({ source_id: pin.source_id, state: 'configuration_or_maintenance_failed' });

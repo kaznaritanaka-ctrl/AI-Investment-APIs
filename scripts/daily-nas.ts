@@ -21,6 +21,7 @@ import { openNas, sealNas } from './personal-nas-crypto';
 import { personalLocalEnv } from './personal-local-env';
 import { NasReadError, type NasReader } from './personal-nas-transport';
 import { indexDailySeries } from '../src/research/daily-series';
+import { dailyInventoryPage, dailyInventorySlice } from '../src/research/daily-inventory';
 
 export type DailyNasOptions = {
   root: string;
@@ -124,7 +125,7 @@ async function runAllowed(reader: NasReader, source: string, run: string, dir: s
     await atomic(marker, stable({ at }));
   if (await smallFile(marker, 8192)) throw new Error('nas_authority_blocked');
 }
-async function importRun(db: D1Database, s: z.infer<typeof DailySnapshot>) {
+export async function importDailySnapshot(db: D1Database, s: z.infer<typeof DailySnapshot>) {
   await validateDailySnapshot(s);
   const previous = await db
     .prepare('SELECT state FROM personal_daily_runs WHERE run_id=?')
@@ -196,7 +197,7 @@ async function importRun(db: D1Database, s: z.infer<typeof DailySnapshot>) {
 async function verifyRun(s: z.infer<typeof DailySnapshot>) {
   const local = await personalLocalEnv(s.contract.decision.retention.store_id);
   try {
-    await importRun(local.env.PRIVATE_DB, s);
+    await importDailySnapshot(local.env.PRIVATE_DB, s);
     if (
       JSON.stringify((await local.env.PRIVATE_DB.prepare('PRAGMA quick_check').all()).results) !==
       '[{"quick_check":"ok"}]'
@@ -392,16 +393,14 @@ export async function dailyNasCycle(reader: NasReader, source: string, o: DailyN
             latestFailed = true;
           }
         }
-        const page =
-          head.pages.find((p) => p >= Math.floor(state.cursor / 32)) ??
-          Math.floor(state.ceiling / 32);
-        const items = dailyCatalogPage(
+        const page = dailyInventoryPage(head, state.cursor, state.ceiling);
+        const slice = dailyInventorySlice(
           await json(reader, dailyRoot(source) + 'catalog/' + page + '.json'),
           page,
+          state.cursor,
+          state.ceiling,
         );
-        for (const item of items
-          .filter((i) => i.ordinal > state.cursor && i.ordinal <= state.ceiling)
-          .slice(0, 19)) {
+        for (const item of slice.items) {
           if (item.state === 'complete') {
             try {
               const entry = await admit(reader, source, item.run_id, dir, o, false);
@@ -425,10 +424,8 @@ export async function dailyNasCycle(reader: NasReader, source: string, o: DailyN
               await unlink(join(dir, item.run_id + '.json'));
             }
           }
-          state.cursor = item.ordinal;
         }
-        if (!items.some((i) => i.ordinal > state.cursor && i.ordinal <= state.ceiling))
-          state.cursor = (page + 1) * 32;
+        state.cursor = slice.cursor;
         if (state.cursor >= state.ceiling) {
           if (state.scan_failed && !pending) pending++;
           if (!state.scan_failed) state.last_inventory_at = at;
@@ -579,7 +576,7 @@ export async function restoreDailyNas(
         await authority(reader, source, e.contract_hash, o.now(), dir);
         await runAllowed(reader, source, e.run_id, dir, o.now());
         const s = await readCopy(dir, e, o, source);
-        if (state.phase === 'import') await importRun(db, s);
+        if (state.phase === 'import') await importDailySnapshot(db, s);
         await authority(reader, source, e.contract_hash, o.now(), dir);
         await runAllowed(reader, source, e.run_id, dir, o.now());
         await db
