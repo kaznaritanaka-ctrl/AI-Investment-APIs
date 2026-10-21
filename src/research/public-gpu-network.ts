@@ -1,6 +1,11 @@
 import { fetchBounded, FetchFailure, type NetworkOptions } from '../network';
 import { assertResearchAllowed, type ResearchConfig } from './schema';
-import { isPublicGpu, publicGpuEndpoints, PUBLIC_GPU_UA } from './public-gpu-contract';
+import {
+  isPublicGpu,
+  publicGpuEndpoints,
+  publicGpuTermsReview,
+  PUBLIC_GPU_UA,
+} from './public-gpu-contract';
 import { robotsFingerprint, termsFingerprint } from './public-gpu-html';
 
 export async function fetchPublicGpuPage(config: ResearchConfig, opt: NetworkOptions) {
@@ -18,7 +23,12 @@ export async function fetchPublicGpuPage(config: ResearchConfig, opt: NetworkOpt
 // before entry and before each fetch. It never accepts arbitrary URLs or rights overrides.
 export async function readReviewedPublicGpu(
   config: ResearchConfig,
-  review: { robots_sha256: string | null; terms_sha256: string | null },
+  review: {
+    robots_sha256: string | null;
+    terms_sha256: string | null;
+    next_terms_sha256?: string | null;
+    highreso_terms_fallback?: boolean;
+  },
   opt: NetworkOptions,
 ) {
   if (!isPublicGpu(config.adapter)) throw new Error('public_gpu_scope_invalid');
@@ -39,8 +49,13 @@ export async function readReviewedPublicGpu(
   const robots = await read(endpoints.robots, 'csv', 16384);
   if (robots.status !== 200 || (await robotsFingerprint(robots.text)) !== review.robots_sha256)
     throw new FetchFailure('public_gpu_robots_review_required');
-  const terms = await read(endpoints.terms, 'html', 1000000);
-  if (terms.status !== 200 || (await termsFingerprint(terms.text)) !== review.terms_sha256)
+  const termsReview = publicGpuTermsReview(
+    config.adapter,
+    review,
+    (opt.now ?? (() => new Date().toISOString()))(),
+  );
+  const terms = await read(termsReview.url, 'html', 1000000);
+  if (terms.status !== 200 || (await termsFingerprint(terms.text)) !== termsReview.sha256)
     throw new FetchFailure('public_gpu_terms_review_required');
   return read(endpoints.page, 'html', config.source.max_bytes);
 }

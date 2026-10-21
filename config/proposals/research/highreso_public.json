@@ -16,15 +16,16 @@
     "native_frequency": "irregular",
     "expected_update_calendar": "Proposed one complete page per UTC day",
     "expected_lag": "unknown",
-    "rights_checked_at": "2026-10-21T00:00:00.000Z",
+    "rights_checked_at": "2026-10-21T12:06:00.000Z",
     "rights_evidence_ref": "docs/license-review-20261021.md#gpusoroban",
     "attribution_text": "Source: Highreso / GPUSOROBAN; preserve original basis, period precision and unknown conditions",
     "known_limitations": [
       "Public instance quote, not realized rental price or utilization",
       "Per-offer location, dedicated/shared and minimum term not confirmed",
       "Only explicitly listed A100/H100 products in the selected page; no whole-market coverage",
-      "2026-10-21 license review: No explicit redistribution permission recorded. Research/private only; acquisition and storage still require source-specific approval. Offline port; no new live review.",
-      "PR #18 recorded a 2026-11-01 JST terms transition. Block at that boundary; no automatic rollover or approval of later terms."
+      "2026-10-21 license review: Caller obtained terms/robots at 2026-10-21T12:06Z; no explicit automated-collection prohibition found. Owner approved private research preparation at 2026-10-21T12:05Z. No redistribution permission; all publication, redistribution, external LLM processing and AI training denied.",
+      "Production requires the explicit flag and all independent wire, retention, lifecycle and fingerprint gates. Extracted terms text cannot establish the existing HTML fingerprint.",
+      "Reviewed current terms (revision 2025-09-30) and https://soroban.highreso.jp/5401872 (revision 2026-08-27; effective 2026-11-01, overseas users 2026-08-27). No automatic review expiry at the transition; changed live fingerprints still require reviewed configuration."
     ],
     "enabled": false,
     "adapter": "candidate",
@@ -32,32 +33,33 @@
     "max_bytes": 1000000,
     "max_records": 48,
     "policy": {
-      "version": "highreso_public-20261018-proposal-v2",
+      "version": "highreso_public-20261021-private-v3",
       "rights": {
-        "automated_collection": "review_required",
-        "private_storage": "review_required",
-        "internal_analysis": "review_required",
+        "automated_collection": "allowed",
+        "private_storage": "allowed",
+        "internal_analysis": "allowed",
         "external_llm_processing": "denied",
-        "public_display": "review_required",
+        "public_display": "denied",
         "raw_redistribution": "denied",
-        "normalized_redistribution": "review_required",
-        "derived_redistribution": "review_required",
-        "commercial_redistribution": "review_required"
+        "normalized_redistribution": "denied",
+        "derived_redistribution": "denied",
+        "commercial_redistribution": "denied"
       },
       "fields": [
         "domestic_gpu_projection_v1"
       ],
       "conditions": [
-        "Private research proposal only; no active grant",
-        "No raw response archive, no public projection, no external LLM"
+        "Owner-approved private research only; all independent acquisition and retention gates remain mandatory",
+        "No raw response archive, public display, redistribution, external LLM processing or AI training"
       ],
-      "valid_from": "2026-10-17T16:51:35.001Z",
+      "valid_from": "2026-10-21T12:05:00.000Z",
       "valid_until": "2027-01-15T00:00:00.000Z",
       "retention_days": 7,
       "retention_limit_days": null,
-      "decision_actor": "pending_owner_review",
-      "evidence_version": "highreso_public-terms-review-20261018",
+      "decision_actor": "Kaz approval / AI terms assessment",
+      "evidence_version": "highreso_public-terms-review-20261021",
       "evidence_refs": [
+        "Kaz owner approval 2026-10-21T12:05Z; docs/license-review-20261021.md#gpusoroban",
         "docs/license-review-20261021.md#gpusoroban",
         "docs/private-gpu-daily.md"
       ]
@@ -66,15 +68,17 @@
   "adapter": "highreso_public",
   "visibility": "private_only",
   "method_version": "domestic-gpu-html-v2",
-  "owner_approval_ref": null,
+  "owner_approval_ref": "Kaz owner approval 2026-10-21T12:05Z; docs/license-review-20261021.md#gpusoroban",
   "wire_contract_review_ref": null,
   "history_access": [],
   "terms": {
-    "version": "highreso_public-terms-review-20261018",
-    "checked_at": "2026-10-17T16:51:35.001Z",
-    "review_after": "2026-10-31T15:00:00.000Z",
+    "version": "highreso_public-terms-review-20261021",
+    "checked_at": "2026-10-21T12:06:00.000Z",
+    "review_after": "2027-01-15T00:00:00.000Z",
     "evidence_refs": [
       "https://soroban.highreso.jp/terms",
+      "https://soroban.highreso.jp/5401872",
+      "https://soroban.highreso.jp/robots.txt",
       "docs/license-review-20261021.md#gpusoroban",
       "docs/private-gpu-daily.md"
     ]
@@ -109,9 +113,15 @@
     "reviewed_ref": null
   },
   "public_access": {
-    "robots_sha256": null,
+    "robots_sha256": "afe52e7c75ac2596bae07625f23c224be2ddaea397da7a3434c4a91107a0f446",
     "terms_sha256": null,
-    "robots_decision": "unreviewed",
-    "reviewed_ref": null
+    "robots_decision": "allowed",
+    "reviewed_ref": "docs/license-review-20261021.md#gpusoroban",
+    "next_terms_sha256": null
+  },
+  "maintenance": {
+    "collection_stopped": false,
+    "revoke_at": null,
+    "delete_requests": []
   }
 }

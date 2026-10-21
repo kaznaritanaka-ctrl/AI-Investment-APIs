@@ -1,18 +1,18 @@
 # Highreso／Rebroの非公開日次研究（Issue #17）
 
-PR #18 の公開ページ解析と研究用履歴を main（5bea9c4）へ限定移植したものです。**初期状態では収集は走りません。** `config/proposals/research/{highreso_public,rebro_public}.json` は enabled=false、研究の取得・保存・分析権限は review_required、保持期間は unapproved、owner／wire／保存／robots・規約確認は未承認です。既存Collector／Cronには接続しておらず、production呼出しも拒否します。新しいsecret、binding、Cron、サービス、grantはありません。
+PR #24をマージしたmain=b30554eに、Kazの2026-10-21 21:05 JST承認に基づく本番準備を追加しました。非secretフラグ`PRIVATE_GPU_RESEARCH_ENABLED='true'`と、Highreso/Rebroに固定した研究設定の全承認検査を通った場合だけ、本番経路を開きます。初期フラグはfalseです。両候補の自動取得・非公開保存・内部分析のみallowed、公開表示・再配布・外部LLM・AI学習は禁止です。新しいsecret、binding、Cron、依存、有料サービス、migrationはありません。
 
-ライセンス判定はmainの[2026-10-21記録](license-review-20261021.md)の `gpusoroban`／`rebro` を参照し、「記載なし→研究用・非公開」を候補の `license_url`、`rights_checked_at`、`rights_evidence_ref`、`known_limitations` に記録しました。これは取得・保存の許可ではありません。今回ネットワークによる再確認はしていません。Rebroの解析対象はPR #18で扱った `/reason/`、規約監視候補は `/rules/` で、既存のQ&Aに関するライセンス判定を取得grantへ拡張しません。稼働sourceの設定には変更を加えていません。
+規約確認は[2026-10-21記録](license-review-20261021.md)のgpusoroban／rebroを参照します。呼び出し側が21:06 JSTに取得したwork内の本文を使い、この実装作業では外部通信も実収集も行いません。Highresoは現行と11/1適用新版を確認済み、Rebroは/reason/・/rules/・robotsのContent-Signalまで記録しました。robots指紋は保存本文から計算済みです。規約は抽出テキストなので既存HTML指紋との一致を保証できず、terms_sha256=nullを維持します。source.enabled=false、wire未確認、保持unapproved、Time Travel/lifecycle未確認も維持しており、フラグだけを切り替えても取得しません。権利承認と未確認の技術ゲートを混同しません。
 
 ## 収集と保存
 
-`collectPublicGpuDay` はローカル用の日次呼出し口です。承認済み設定を渡した場合も、既存の研究用取得・保存・分析、terms、owner、wire、保持、外部取消し・削除記録を検査します。1 source／UTC日1 run、1ページ、1 run最大3 HTTP要求（robots→規約→価格を各1要求）、取得窓6時間、5分lease、SQL batch最大20文です。失敗はsourceごとに分離します。429のRetry-Afterは日を跨いでも守り、403、規約・robots・表構造の変更などは新しい設定のレビューまで停止します。単純再実行では要求予算を復活させません。
+`collectPublicGpuDay` は非公開の日次呼出し口です。承認済み設定を渡した場合も、既存の研究用取得・保存・分析、terms、owner、wire、保持、外部取消し・削除記録を検査します。1 source／UTC日1 run、1ページ、1 run最大3 HTTP要求（robots→規約→価格を各1要求、同じrunの追加fallback要求なし）、取得窓6時間、5分lease、SQL batch最大20文です。失敗はsourceごとに分離します。429のRetry-Afterは日を跨いでも守り、403、規約・robots・表構造の変更などは新しい設定のレビューまで停止します。単純再実行では要求予算を復活させません。
 
 HighresoはA100/H100の候補scope、実候補ではGPU 1枚のインスタンスを選び、時間／月額を別の原単位で保存します。最大24インスタンス×2価格＝48観測で、超過を切り捨てず停止します。Rebroは選別公開事例の1 GPUあたり買取単価・掲載年月・掲載数量を保持し、実取引日時や全市場を補完しません。同内容の重複事例も別の出現として保持し、安定した取引IDとは見なしません。金額はdecimal文字列、未掲載はnull、0は0のままです。
 
-HTML解析はPR #18の解析規則を移植し、追加依存を避けて既存のfast-xml-parserを使用しています。明示的に閉じた表を要求する厳格なHTML部分集合で、HTML5による省略タグの補修はしません。対応外のHTML、入れ子の表、colspan／rowspan、途中で切れた表、検証画面は停止します。実ページ適合性・robots・規約の指紋は有効化前の確認事項です。PR #18が記録したHighresoの2026-11-01 JST規約切替を越えて自動継続しないよう、候補の再確認期限を2026-10-31T15:00Zに置いています。新規約の許可を推測していません。
+HTML解析はPR #18の解析規則を移植し、追加依存を避けて既存のfast-xml-parserを使用しています。明示的に閉じた表を要求する厳格なHTML部分集合で、HTML5による省略タグの補修はしません。対応外のHTML、入れ子の表、colspan／rowspan、途中で切れた表、検証画面は停止します。実ページ適合性・robots・規約の指紋は有効化前の確認事項です。Highresoは2026-11-01適用の新版（最終改定2026-08-27、国外は同日適用）まで内容確認済みとして、再確認期限を2027-01-15に置きました。11/1を一律停止境界にはしません。11/1 00:00 JST以降も`/terms`を優先し、確認済み新版の`next_terms_sha256`を照合します。それ以前は`terms_sha256`です。新版が通知ページにしかない場合に限り、レビューした非secret設定`public_access.highreso_terms_fallback=true`で固定URL`/5401872`を使用します。同じrunで4要求に増やさず、通常もfallbackも最大3回です。404後の切替・再取得は新policyの明示登録と日次予算の確認後です。両指紋は未設定で、デプロイ前に既存HTML指紋形式で照合する必要があります。実応答が承認済み指紋と違う場合は従来どおり取得前に停止します。
 
-private R2には生HTMLではなく許可した最小投影とhashだけ、private D1には `research_gpu_observations` を保存します。既存のresearch_sources／runs／pages／config_versionsと保持評価台帳を再利用します。migrationは **private/0015_private_gpu_daily.sql 1本のみ**。GPU観測テーブル、索引2本、UPDATE禁止・保持削除制限triggerだけを追加し、既存テーブルを再構築しません。0001〜0009・0014の期限、FK、保持台帳のDELETE禁止を維持します。Public API／PUBLIC_DB／公開migrationは変更しません。
+private R2には生HTMLではなく許可した最小投影とhashだけ、private D1には `research_gpu_observations` を保存します。既存のresearch_sources／runs／pages／config_versionsと保持評価台帳を再利用します。PR #24のmigrationは **private/0015_private_gpu_daily.sql** で、今回の追加migrationはありません。GPU観測テーブル、索引2本、UPDATE禁止・保持削除制限triggerだけを追加し、既存テーブルを再構築しません。0001〜0009・0014の期限、FK、保持台帳のDELETE禁止を維持します。Public API／PUBLIC_DB／公開migrationは変更しません。
 
 ## 履歴と系列比較
 
@@ -24,6 +24,26 @@ private R2には生HTMLではなく許可した最小投影とhashだけ、priva
 
 履歴は追記式で first_seen／reobserved／revised／not_seen／reappeared を区別します。not_seenは直前の同scope complete snapshotとの掲載差だけを示し、価格・取引・在庫0を作りません。連日の未掲載は重複イベントを追加せず、再登場は以前のnot_seenに繋ぎます。保持処理は既存の最大20観測ずつの削除と、復元後の証拠再削除をGPUにも適用し、外部control記録や元の削除日時を消しません。Time Travelコピー消去完了とは主張しません。
 
-## 有効化前に残るもの
+## 既存Cronとの統合と保持
 
-ソース別research grant、取得形式・robots・規約、保存・Time Travel・R2 lifecycle、現行本番構成との相互レビューが必要です。将来の本番接続では既存Cron内の有限処理と保持削除の自動運用も同時に審査します。このPRでは本番entrypointを追加せず、日次手作業を要求する運転も開始しません。Claude Codeとの相互レビューと通常環境でのテスト／CIは呼び出し側に引き継ぎます。
+`src/research/collector.ts`は既存継続Cronのidle枠を使用します。従来のModels/GPU処理を優先し、空き枠の3回中2回は既存GPU保持、1回を研究に割り当て、Highreso/Rebroが交互に進みます。研究の取得時刻は既存の日次UTC論理slot（現在18:17 UTC、03:17 JST）へ固定します。同日再実行でrun数やHTTP予算は増えません。Cron追加はありません。フラグ未設定/false時は研究用DB/R2/HTTPに触れず、従来の保持呼出しを維持します。
+
+1研究枠で1ソースの証拠最大5 run、保持評価・削除最大1 run（20観測）、取得最大1ページを処理します。期限到来・削除途中・取消し・設定された削除要求の優先巡回と、全runの循環巡回を交互に行います。失敗時もresearch-control/maintenance内の巡回位置を進め、障害runを再試行しながら他runへ進みます。削除済みrunも巡回してR2だけが復元された場合を再削除し、元の削除日時・期限・外部制御記録を維持します。新しい制御用メタデータにも本文や価格は含めません。取得権限の失効や取消し後もフラグtrueなら保持・削除は継続します。取得・読取は常に現行権限で停止します。保守は各runのimmutableなresearch_config_versionsをhash・source・adapterで検証して使用し、保存時の保持snapshotと元の期限を適用します。現在同梱のconfig hashとresearch_sourcesの一致や、現在設定のTime Travel承認は要求しません。新しい無承認設定で過去の保存期限を延長しません。取消し・明示削除の外部マーカーは保存版より優先します。
+
+研究側の例外は既存Collectorの収集・通知・健康更新へ伝播しません。保持処理に失敗した回は研究取得を行いませんが、証拠削除の残りの候補とrun再評価は継続します。固定のsource_id・phaseとsafeLogCodeで許可したerror_codeだけをJSONログへ出し、任意の例外本文やデータは出しません。研究の結果はprivateのrun/保持評価台帳で確認し、Collector全体の成功を研究成功と見なしません。Public API/Adminのimport経路は研究に依存せず、研究結果をPUBLIC_DBや既存公開summaryへ追加しません。
+
+## 有効化とロールバック
+
+必要migrationはprivate 0007/0008/0009/0014および0015です（このrepoには0010〜0013はありません）。各研究枠の開始時にd1_migrationsの全5ファイルを確認し、不足・台帳不在・確認失敗ならresearch_schema_unavailableをログに出して研究処理全体をskipします。R2やresearchテーブル、HTTPには進まず、自動migrationもしません。フラグfalseではこの検査自体を行いません。現行本番構成との照合、実応答の取得形式と規約指紋、保持と保存環境のレビュー、source.enabledを含む承認済み最終設定、Claude Codeとの相互レビューとCIを完了してからフラグを切り替えます。デプロイ前の具体的な検証項目と復旧手順は追跡対象の[デプロイ前チェックリスト](private-gpu-deploy-checklist.md)に記載しました。運転は既存Cronで自動化し、日次手作業を要求しません。
+
+取得のみ停止する場合は、非secret設定`maintenance.collection_stopped=true`または`source.enabled=false`をレビューして配備し、`PRIVATE_GPU_RESEARCH_ENABLED='true'`を維持します。設定hashが変わっても、保存済み設定による期限削除と証拠削除は続行します。この停止だけでは取消し・即時削除や過去履歴の許諾更新にはなりません。再開時の新しい設定の取得・旧履歴利用は、従来どおり新policy版と明示的なadoptReviewedResearchConfig／history_access審査が必要で、Cronが自動で登録hashやgrantを書き換えることはありません。
+
+取消しは`maintenance.revoke_at`に発効日時を設定します。設定が存在する時点で取得を止め、その日時以降のCron保守でR2取消しマーカーを先に保存してD1をsuspendします。特定runの削除は`maintenance.delete_requests`（最大5件）にrun_id、requested_at、basis_ref、all_copies_delete_byを設定します。現在sourceに属するrunか確認し、発効後に外部削除マーカーを作って20観測ずつ削除します。他sourceのrunや不明runは拒否してログに残し、他の削除要求と巡回を続けます。全コピー期限がTime Travel残存より短い場合も消去完了とは扱いません。発効前の要求は保留し、設定を消しても既存の取消し・削除マーカーは解除しません。
+
+これらは同梱JSONの非secret設定であり、KazはブラウザのチャットでAIへ対象・停止/取消し/削除方針を伝えればよく、日次転記やコマンド操作は不要です。AIが既存のレビュー・CI手順を経て変更を反映します。削除方針・根拠・期限はKazへ報告して確認し、未知の権利から削除猶予や保持許可を作りません。新しいsecret・公開endpoint・bindingは不要です。
+
+フラグfalseは研究保持も止めるため、通常の取得停止には使いません。緊急に全研究処理を止める場合は既存の削除期限を満たす代替保守と復旧時間を確保します。R2のresearch-control記録を復元で消さず、再評価・再削除後に再開します。稼働設定や公開範囲を拡大せず、新しい本番設定の上に過去のmain版を配備しません。
+
+## 負荷と未計測事項（レビュー7）
+
+保持評価は巡回ごとに追記し、0014によりDELETE不可です。1日24行なら年間約9千行の参考値であり、保持台帳の増加を実測します。最大3 HTTP×各15秒により既存の健康更新が最大約45秒遅れる可能性があります。1MBの規約HTML解析がCloudflare CPU 5000ms以内かはクラウド実測が必要で、ローカルCPUを保証に使いません。18:05台の研究枠は前日18:17 slotとなり6時間窓外で取得せず、その後の枠を待ちます。これらを[有効化前チェック](private-gpu-deploy-checklist.md)に含めます。

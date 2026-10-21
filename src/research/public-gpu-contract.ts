@@ -26,6 +26,14 @@ export const PublicAccessReviewSchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/)
       .nullable(),
+    // Prefer /terms; an explicitly reviewed fallback keeps the three-request budget.
+    highreso_terms_fallback: z.boolean().optional(),
+    // Fingerprint of the already reviewed November text, at either fixed URL.
+    next_terms_sha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable()
+      .optional(),
     robots_decision: z.enum(['unreviewed', 'allowed']),
     reviewed_ref: z.string().trim().min(1).nullable(),
   })
@@ -36,3 +44,22 @@ export const PUBLIC_GPU_UA =
 // Only constants chosen by the validated adapter may become SQL identifiers.
 export const researchTable = (adapter: string) =>
   isPublicGpu(adapter) ? 'research_gpu_observations' : 'research_observations';
+
+export function publicGpuTermsReview(
+  adapter: PublicGpuAdapter,
+  review: {
+    terms_sha256: string | null;
+    next_terms_sha256?: string | null;
+    highreso_terms_fallback?: boolean;
+  },
+  at: string,
+) {
+  if (adapter === 'highreso_public' && at >= '2026-10-31T15:00:00.000Z')
+    return {
+      url: review.highreso_terms_fallback
+        ? 'https://soroban.highreso.jp/5401872'
+        : publicGpuEndpoints.highreso_public.terms,
+      sha256: review.next_terms_sha256 ?? null,
+    };
+  return { url: publicGpuEndpoints[adapter].terms, sha256: review.terms_sha256 };
+}

@@ -1,4 +1,5 @@
 import type { CollectorEnv } from './schema';
+import { privateGpuResearchTurn, runPrivateGpuResearch } from './research/collector';
 import { activeSources } from './sources';
 import { collectAll } from './pipeline';
 import { resumeGPURuns, queueGPURuns } from './gpu-pipeline';
@@ -95,7 +96,17 @@ export default {
         /* No raw error, URL or payload is logged. */
       }
       await expireEvidence(env, now);
-      if (gpuMaintenance) await expireGPUData(env, activeSources, now);
+      if (gpuMaintenance) {
+        if (privateGpuResearchTurn(env, eventScheduled) === null)
+          await expireGPUData(env, activeSources, now);
+        else {
+          try {
+            await runPrivateGpuResearch(env, eventScheduled, now);
+          } catch {
+            /* Research faults cannot affect existing Collector health. */
+          }
+        }
+      }
       await env.PUBLIC_DB.prepare(
         'INSERT INTO public_health(singleton,last_collector_completed_at,collection_enabled,monitor_connected) VALUES (1,?,1,0) ON CONFLICT(singleton) DO UPDATE SET last_collector_completed_at=excluded.last_collector_completed_at,collection_enabled=1',
       )

@@ -16,14 +16,16 @@
     "native_frequency": "irregular",
     "expected_update_calendar": "Proposed one complete page per UTC day",
     "expected_lag": "unknown",
-    "rights_checked_at": "2026-10-21T00:00:00.000Z",
+    "rights_checked_at": "2026-10-21T12:06:00.000Z",
     "rights_evidence_ref": "docs/license-review-20261021.md#rebro",
     "attribution_text": "Source: Rebro / GPU買取センター; preserve original basis, period precision and unknown conditions",
     "known_limitations": [
       "Provider-selected public purchase reports, not a complete transaction feed",
       "Month is publication-table period, not a transaction timestamp",
       "Price per GPU is separate from reported quantity; counterparties are discarded",
-      "2026-10-21 license review: No explicit redistribution permission recorded. Research/private only; acquisition and storage still require source-specific approval. Offline port; no new live review."
+      "2026-10-21 license review: Caller obtained terms/robots at 2026-10-21T12:06Z; no explicit automated-collection prohibition found. Owner approved private research preparation at 2026-10-21T12:05Z. No redistribution permission; all publication, redistribution, external LLM processing and AI training denied.",
+      "Production requires the explicit flag and all independent wire, retention, lifecycle and fingerprint gates. Extracted terms text cannot establish the existing HTML fingerprint.",
+      "Scope is /reason/; terms /rules/ Article 10; robots Content-Signal: search=yes,ai-train=no,use=reference. Training crawlers are separately disallowed; no AI training or external LLM processing."
     ],
     "enabled": false,
     "adapter": "candidate",
@@ -31,32 +33,33 @@
     "max_bytes": 1000000,
     "max_records": 48,
     "policy": {
-      "version": "rebro_public-20261018-proposal-v2",
+      "version": "rebro_public-20261021-private-v3",
       "rights": {
-        "automated_collection": "review_required",
-        "private_storage": "review_required",
-        "internal_analysis": "review_required",
+        "automated_collection": "allowed",
+        "private_storage": "allowed",
+        "internal_analysis": "allowed",
         "external_llm_processing": "denied",
-        "public_display": "review_required",
+        "public_display": "denied",
         "raw_redistribution": "denied",
-        "normalized_redistribution": "review_required",
-        "derived_redistribution": "review_required",
-        "commercial_redistribution": "review_required"
+        "normalized_redistribution": "denied",
+        "derived_redistribution": "denied",
+        "commercial_redistribution": "denied"
       },
       "fields": [
         "domestic_gpu_projection_v1"
       ],
       "conditions": [
-        "Private research proposal only; no active grant",
-        "No raw response archive, no public projection, no external LLM"
+        "Owner-approved private research only; all independent acquisition and retention gates remain mandatory",
+        "No raw response archive, public display, redistribution, external LLM processing or AI training"
       ],
-      "valid_from": "2026-10-17T16:51:35.001Z",
+      "valid_from": "2026-10-21T12:05:00.000Z",
       "valid_until": "2027-01-15T00:00:00.000Z",
       "retention_days": 7,
       "retention_limit_days": null,
-      "decision_actor": "pending_owner_review",
-      "evidence_version": "rebro_public-terms-review-20261018",
+      "decision_actor": "Kaz approval / AI terms assessment",
+      "evidence_version": "rebro_public-terms-review-20261021",
       "evidence_refs": [
+        "Kaz owner approval 2026-10-21T12:05Z; docs/license-review-20261021.md#rebro",
         "docs/license-review-20261021.md#rebro",
         "docs/private-gpu-daily.md"
       ]
@@ -65,15 +68,17 @@
   "adapter": "rebro_public",
   "visibility": "private_only",
   "method_version": "domestic-gpu-html-v2",
-  "owner_approval_ref": null,
+  "owner_approval_ref": "Kaz owner approval 2026-10-21T12:05Z; docs/license-review-20261021.md#rebro",
   "wire_contract_review_ref": null,
   "history_access": [],
   "terms": {
-    "version": "rebro_public-terms-review-20261018",
-    "checked_at": "2026-10-17T16:51:35.001Z",
+    "version": "rebro_public-terms-review-20261021",
+    "checked_at": "2026-10-21T12:06:00.000Z",
     "review_after": "2027-01-15T00:00:00.000Z",
     "evidence_refs": [
+      "https://gpu-kaitori.com/reason/",
       "https://gpu-kaitori.com/rules/",
+      "https://gpu-kaitori.com/robots.txt",
       "docs/license-review-20261021.md#rebro",
       "docs/private-gpu-daily.md"
     ]
@@ -105,9 +110,14 @@
     "reviewed_ref": null
   },
   "public_access": {
-    "robots_sha256": null,
+    "robots_sha256": "a0da93ca346f42217e2b66cc3fde0790792c9dbd4bf506a3966426c9f76dc99f",
     "terms_sha256": null,
-    "robots_decision": "unreviewed",
-    "reviewed_ref": null
+    "robots_decision": "allowed",
+    "reviewed_ref": "docs/license-review-20261021.md#rebro"
+  },
+  "maintenance": {
+    "collection_stopped": false,
+    "revoke_at": null,
+    "delete_requests": []
   }
 }
