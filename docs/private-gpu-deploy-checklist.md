@@ -1,6 +1,6 @@
 # Highreso／Rebro 非公開研究のデプロイ前チェックリスト
 
-2026-10-21 22:45 JSTのKaz承認を反映。Highresoのみ設定上enabled=true、Rebroはdeferredでenabled=false。Highresoの保存済み実応答によるwire・指紋確認と365日保持の設定を完了し、WranglerのPRIVATE_GPU_RESEARCH_ENABLEDはfalseを維持する。翌朝の本番照合・R2確認・相互レビュー・CIは別途必要。下記の既適用migrationの事実注記を除き、本書のremote手順は未実行。運用方針はAGENTS.mdに従う。
+**2026-10-22の現状更新（Kaz提示）**: 2026-10-22 07:53 JSTに、Kaz承認のもと、本番Collectorをmain `58f007f` + `PRIVATE_GPU_RESEARCH_ENABLED=true`でデプロイ済み。PR #27でmainの`wrangler.collector.jsonc`もtrueに一致した。Highresoのみenabled=true、Rebroはdeferredでenabled=false。2026-10-21 22:45 JSTのKaz承認、Highresoの保存済み実応答によるwire・指紋確認と365日保持の設定も引き続き有効。以下は配備前に用意した手順の記録として、コマンド・チェック項目をそのまま残す。個別の実施結果は別途確認する。運用方針はAGENTS.mdに従う。
 
 ## 配備・有効化前
 
@@ -63,9 +63,9 @@ D1 Time TravelはWorkers Paidの無料既定30日・常時有効・追加費用�
 
 11/1 00:00 JST（10/31 15:00Z）以降は既存切替ロジックがnext_terms_sha256を使う。/termsが第一でfallbackは未設定。**/5401872と/termsはページ見出し・共通ナビゲーションもhash対象なので、将来/termsに載る新版がこのhashと一致する保証はない。** 不一致時は価格取得前に停止し、保存応答をレビューして新policyで明示更新する。自動的に4要求目を増やしたり指紋を緩めたりしない。
 
-## 10/22朝の実施手順（AI担当、今回未実行）
+## 10/22朝の実施手順（AI担当、配備前に用意した手順の記録）
 
-以下のremoteコマンドは翌朝の担当AI用。Kazへコマンド操作を依頼しない。既存の認証とNode **24**（node --versionでv24確認）、lockfileどおりの依存を使う。`wrangler`の表記はこのrepoの`pnpm exec wrangler`。構文はインストール済みWranglerコードでも確認した。相互レビューとCIが全て通ってから実施し、上限で片方のレビューができなければ翌日に回す。Cloudflareの現行版が進んでいたら以下の指定版を盲目的に上書きせず差分を再照合する。
+以下は10/21時点で翌朝の担当AI向けに用意したremote手順の記録。現在の配備状態は冒頭の現状更新を参照する。Kazへコマンド操作を依頼しない。既存の認証とNode **24**（node --versionでv24確認）、lockfileどおりの依存を使う。`wrangler`の表記はこのrepoの`pnpm exec wrangler`。構文はインストール済みWranglerコードでも確認した。相互レビューとCIが全て通ってから実施し、上限で片方のレビューができなければ翌日に回す。Cloudflareの現行版が進んでいたら以下の指定版を盲目的に上書きせず差分を再照合する。
 
 ### (a) 07:00 JSTごろの健全性と配備前の固定
 

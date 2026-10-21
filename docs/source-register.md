@@ -14,7 +14,7 @@
 | lambda | [Terms of Service](license-review-20261021.md#lambda) | 価格データ再配布許諾の記載未確認。非公開、全権限review_required |
 | gpusoroban | [利用規約 第13条](license-review-20261021.md#gpusoroban) | 知財帰属条項あり、データ再配布許諾記載なし。非公開、全権限review_required |
 | sakura_dok | [約款一覧](license-review-20261021.md#sakura_dok) | API価格データの再配布許諾未確認。非公開、全権限review_required。文書CCライセンスを転用しない |
-| price_of_compute | [APIページの利用条件](license-review-20261021.md#price_of_compute) | Data: Price of Computeと可視リンクが条件。再配布・商用範囲／上流条件が曖昧、非公開・全権限review_required |
+| price_of_compute | [APIページの利用条件](license-review-20261021.md#price_of_compute) | Data: Price of Computeと可視リンクが条件。再配布・商用範囲／上流条件は曖昧。2026-10-06オーナー承認済みの非公開H100-SXM PoC（enabled=true）で、限定範囲の収集・非公開保存・内部分析はallowed、外部LLM処理・raw再配布はdenied。公開不可（公開表示・正規化／派生／商用再配布はreview_required） |
 | ebay_browse | [API License Agreement](license-review-20261021.md#ebay_browse) | JS描画で本文・条項未確認。非公開、全権限review_required |
 | capex_utilization | [提供元未選定](license-review-20261021.md#capex_utilization) | terms_url/license_url=nullの理由: 提供元・dataset未選定、評価不能。非公開、全権限review_required |
 | electricity | [提供元未選定](license-review-20261021.md#electricity) | terms_url/license_url=nullの理由: 提供元・dataset未選定、評価不能。研究EIA/JEPXとは別。非公開、全権限review_required |

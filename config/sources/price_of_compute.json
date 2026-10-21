@@ -19,7 +19,7 @@
   "rights_evidence_ref": "docs/license-review-20261021.md#price_of_compute",
   "attribution_text": "Data: Price of Compute (https://www.priceofcompute.com/); visible link required, not a redistribution grant",
   "known_limitations": [
-    "Not connected. Owner approval, field scope and retention review are required.",
+    "Owner approved the private H100-SXM PoC scope and retention on 2026-10-06: collection, private storage and internal analysis are allowed; external LLM processing and raw redistribution are denied; publication is not authorized.",
     "2026-10-21 license review: API page requires a visible Price of Compute link for free use; redistribution/commercial scope and upstream terms remain ambiguous. Non-public, review_required.",
     "Approved private scope; production activation awaits validated Collector deployment and R2 retention rules.",
     "Secondary listed provider prices; retrieval success is not proof of current provider quotes or availability.",
