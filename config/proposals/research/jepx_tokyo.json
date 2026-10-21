@@ -18,14 +18,15 @@
     "native_frequency": "30_minutes",
     "expected_update_calendar": "Daily day-ahead publication; proposed one delivery day per run",
     "expected_lag": "unknown",
-    "rights_checked_at": "2026-10-15T00:00:00.000Z",
-    "rights_evidence_ref": "docs/source-expansion-20261015.md",
+    "rights_checked_at": "2026-10-21T00:00:00.000Z",
+    "rights_evidence_ref": "docs/license-review-20261021.md#jepx",
     "attribution_text": "出典：一般社団法人日本卸電力取引所（JEPX）",
     "known_limitations": [
       "One area, one delivery day; not all Japan",
       "Annual fiscal-year input; only selected day price projection retained",
       "CSV header/encoding synthetic-only; wire contract review required",
-      "Automatic historical storage/commercial redistribution scope requires owner review"
+      "Automatic historical storage/commercial redistribution scope requires owner review",
+      "2026-10-21 license review: JEPX disclaimer reserves copyright and requires source attribution; explicit redistribution/commercial permission remains ambiguous. Non-public, review_required; no grant or activation."
     ],
     "enabled": false,
     "adapter": "candidate",

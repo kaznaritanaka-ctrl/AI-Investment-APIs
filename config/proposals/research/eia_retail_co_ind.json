@@ -6,7 +6,7 @@
     "source_url": "https://www.eia.gov/electricity/data.php",
     "documentation_url": "https://www.eia.gov/opendata/documentation.php",
     "terms_url": "https://www.eia.gov/opendata/terms-of-service.php",
-    "license_url": null,
+    "license_url": "https://www.eia.gov/about/copyrights_reuse.php",
     "endpoint": "https://api.eia.gov/v2/electricity/retail-sales/data/",
     "acquisition_method": "API v2 parser; transport blocked: credential URL prohibited",
     "authentication_required": true,
@@ -18,13 +18,14 @@
     "native_frequency": "monthly",
     "expected_update_calendar": "Monthly publication; proposed daily revision check",
     "expected_lag": "unknown",
-    "rights_checked_at": "2026-10-15T00:00:00.000Z",
-    "rights_evidence_ref": "docs/source-expansion-20261015.md",
+    "rights_checked_at": "2026-10-21T00:00:00.000Z",
+    "rights_evidence_ref": "docs/license-review-20261021.md#eia",
     "attribution_text": "Source: U.S. Energy Information Administration; preserve publication date when available",
     "known_limitations": [
       "Retail industrial average is not wholesale or a DC tariff",
       "API requires a key in the URL; no key or network path implemented",
-      "Publication timestamp and last revision date are unknown"
+      "Publication timestamp and last revision date are unknown",
+      "2026-10-21 license review: EIA public-domain reuse statement permits use/distribution with EIA attribution recommended; finding only, no grant or activation. URL-key transport remains blocked and retention/owner/wire review remains unapproved."
     ],
     "enabled": false,
     "adapter": "candidate",

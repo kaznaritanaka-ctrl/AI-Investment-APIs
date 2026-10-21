@@ -18,13 +18,14 @@
   "native_frequency": "unknown",
   "expected_update_calendar": "unknown",
   "expected_lag": "unknown",
-  "rights_checked_at": "2026-09-27T12:07:26.000Z",
-  "rights_evidence_ref": "docs/source-register.md#lambda",
+  "rights_checked_at": "2026-10-21T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-20261021.md#lambda",
   "attribution_text": "Lambda",
   "known_limitations": [
     "Official region mapping Virginia/California, availability per type.",
     "Cloud terms apply to API key; history redistribution unresolved.",
-    "No instance launches."
+    "No instance launches.",
+    "2026-10-21 license review: Terms of Service contain no confirmed price-data redistribution permission; non-public, review_required."
   ],
   "enabled": false,
   "adapter": "lambda",

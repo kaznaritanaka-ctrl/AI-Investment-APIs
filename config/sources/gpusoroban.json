@@ -17,12 +17,13 @@
   "native_frequency": "unknown",
   "expected_update_calendar": "unknown",
   "expected_lag": "unknown",
-  "rights_checked_at": "2026-09-26T18:23:33.000Z",
-  "rights_evidence_ref": "docs/source-register.md#gpusoroban",
+  "rights_checked_at": "2026-10-21T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-20261021.md#gpusoroban",
   "attribution_text": "Highreso",
   "known_limitations": [
     "Per-offer region and official machine price feed unverified.",
-    "Terms 2025-12-01; historical pricing rights unresolved."
+    "Terms 2025-12-01; historical pricing rights unresolved.",
+    "2026-10-21 license review: Terms article 13 reserves intellectual property to the operator and other rightsholders; no explicit data redistribution permission confirmed. Non-public, review_required."
   ],
   "enabled": false,
   "adapter": "candidate",

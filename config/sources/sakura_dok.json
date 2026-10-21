@@ -17,12 +17,13 @@
   "native_frequency": "unknown",
   "expected_update_calendar": "unknown",
   "expected_lag": "unknown",
-  "rights_checked_at": "2026-09-27T12:07:26.000Z",
-  "rights_evidence_ref": "docs/source-register.md#sakura_dok",
+  "rights_checked_at": "2026-10-21T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-20261021.md#sakura_dok",
   "attribution_text": "SAKURA internet",
   "known_limitations": [
     "Official API: Ishikari, standard vs account-specific unit prices.",
-    "CC BY-ND docs do not license response storage/redistribution."
+    "CC BY-ND docs do not license response storage/redistribution.",
+    "2026-10-21 license review: Agreement index does not establish permission to redistribute price API data; non-public, review_required. Documentation licensing does not license response data."
   ],
   "enabled": false,
   "adapter": "sakura_dok",

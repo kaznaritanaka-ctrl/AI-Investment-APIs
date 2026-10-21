@@ -4,7 +4,7 @@
   "operator": "CCIR",
   "source_url": "https://ccir.io/hardware",
   "documentation_url": "https://ccir.io/hardware",
-  "terms_url": "https://ccir.io/hardware",
+  "terms_url": "https://ccir.io/documents/data-terms",
   "license_url": null,
   "endpoint": null,
   "acquisition_method": "unconfirmed",
@@ -15,11 +15,12 @@
   "native_frequency": "unknown",
   "expected_update_calendar": "unknown",
   "expected_lag": "unknown",
-  "rights_checked_at": "2026-09-27T12:07:26.000Z",
-  "rights_evidence_ref": "docs/gpu-source-review.md#ccir",
-  "attribution_text": "Source: CCIR",
+  "rights_checked_at": "2026-10-21T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-20261021.md#ccir",
+  "attribution_text": "CCIR (ccir.io); include series ID and date when quoting (not a redistribution grant)",
   "known_limitations": [
-    "Not connected. Owner approval, field scope and retention review are required."
+    "Not connected. Owner approval, field scope and retention review are required.",
+    "2026-10-21 license review: Data Terms require written permission for systematic/bulk retrieval and redistribution of series or series history; publication denied without that permission. No collection grant."
   ],
   "enabled": false,
   "adapter": "candidate",
@@ -27,33 +28,36 @@
   "max_bytes": 1000000,
   "max_records": 100,
   "policy": {
-    "version": "ccir-20260927-review",
+    "version": "ccir-20261021-license-review-v2",
     "rights": {
       "automated_collection": "review_required",
       "private_storage": "review_required",
       "internal_analysis": "review_required",
       "external_llm_processing": "review_required",
-      "public_display": "review_required",
-      "raw_redistribution": "review_required",
-      "normalized_redistribution": "review_required",
-      "derived_redistribution": "review_required",
-      "commercial_redistribution": "review_required"
+      "public_display": "denied",
+      "raw_redistribution": "denied",
+      "normalized_redistribution": "denied",
+      "derived_redistribution": "denied",
+      "commercial_redistribution": "denied"
     },
     "fields": [
       "Unapproved field scope"
     ],
     "conditions": [
-      "No collection, storage or redistribution before explicit authorization."
+      "No collection, storage or redistribution before explicit authorization.",
+      "2026-10-21: Data Terms require written permission for systematic/bulk retrieval and redistribution of series or series history; publication denied without that permission. No collection grant. See docs/license-review-20261021.md#ccir and https://ccir.io/documents/data-terms."
     ],
     "valid_from": "2026-09-26T18:23:33.000Z",
     "valid_until": null,
     "retention_days": 90,
     "retention_limit_days": null,
     "decision_actor": "Known-license implementation rules; unresolved rights remain disabled",
-    "evidence_version": "Documentation reviewed 2026-09-27; no new rights approved",
+    "evidence_version": "Owner-commissioned license review 2026-10-21; no new grants",
     "evidence_refs": [
       "https://ccir.io/hardware",
-      "https://ccir.io/hardware"
+      "https://ccir.io/hardware",
+      "docs/license-review-20261021.md#ccir",
+      "https://ccir.io/documents/data-terms"
     ]
   }
 }
