@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 import { sources } from '../src/sources';
 import highreso from '../config/proposals/research/highreso_public.json';
 import rebro from '../config/proposals/research/rebro_public.json';
@@ -23,21 +24,33 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
     (proposal) => {
       const c = ResearchConfigSchema.parse(proposal);
       expect(c.source.enabled).toBe(false);
-      expect(Object.values(c.source.policy.rights)).not.toContain('allowed');
+      for (const right of ['automated_collection', 'private_storage', 'internal_analysis'] as const)
+        expect(c.source.policy.rights[right]).toBe('allowed');
+      for (const right of [
+        'raw_redistribution',
+        'normalized_redistribution',
+        'derived_redistribution',
+        'public_display',
+        'external_llm_processing',
+        'commercial_redistribution',
+      ] as const)
+        expect(c.source.policy.rights[right]).toBe('denied');
       expect(c.retention.normalized_mode).toBe('unapproved');
-      expect(c.public_access?.reviewed_ref).toBeNull();
+      expect(c.public_access?.reviewed_ref).toContain('docs/license-review-20261021.md#');
+      expect(c.public_access?.terms_sha256).toBeNull();
+      expect(c.owner_approval_ref).toContain('2026-10-21T12:05Z');
       expect(() => assertResearchAllowed(c, gpuTime, c.terms.version)).toThrow('policy_blocked');
       for (const purpose of ['public', 'external_llm', 'raw'] as const)
         expect(() => assertResearchExport(c, purpose)).toThrow('research_export_not_supported');
     },
   );
-  it('preserves main license records, independent private gates and the disabled production boundary', async () => {
+  it('preserves reviewed license records, independent private gates and public/Admin separation', async () => {
     const review = readFileSync('docs/license-review-20261021.md', 'utf8');
     for (const proposal of [highreso, rebro]) {
       const c = ResearchConfigSchema.parse(proposal);
       const anchor = c.adapter === 'highreso_public' ? 'gpusoroban' : 'rebro';
       expect(c.source.license_url).toBeNull();
-      expect(c.source.rights_checked_at).toBe('2026-10-21T00:00:00.000Z');
+      expect(c.source.rights_checked_at).toBe('2026-10-21T12:06:00.000Z');
       expect(c.source.rights_evidence_ref).toBe('docs/license-review-20261021.md#' + anchor);
       expect(review).toContain('<a id="' + anchor + '"></a>');
       expect(c.source.known_limitations.join(' ')).toContain('2026-10-21 license review:');
@@ -52,7 +65,38 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
       );
       expect(fetcher).not.toHaveBeenCalled();
     }
-    expect(readFileSync('src/collector-handlers.ts', 'utf8')).not.toMatch(/research\//);
+    expect(readFileSync('src/collector-handlers.ts', 'utf8')).toContain('./research/collector');
+    // Traverse the API and Admin import graphs, including indirect imports.
+    const seen = new Set<string>();
+    const visit = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      expect(file).not.toMatch(/research\//);
+      const body = readFileSync(file, 'utf8');
+      for (const match of body.matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)) {
+        const target = resolve(dirname(file), match[1]);
+        if (target.endsWith('.json')) continue;
+        visit(target + '.ts');
+      }
+    };
+    for (const root of ['src/api.ts', 'src/admin-entrypoint.ts']) visit(resolve(root));
+  });
+  it('keeps the reviewed Highreso transition beyond November 1 while preserving every remaining gate', async () => {
+    const c = await publicGpuSource();
+    c.terms = structuredClone(highreso.terms);
+    c.source.policy.evidence_version = c.terms.version;
+    for (const at of [
+      '2026-10-31T14:59:59.000Z',
+      '2026-10-31T15:00:00.000Z',
+      '2026-11-02T00:00:00.000Z',
+    ])
+      expect(() => assertResearchAllowed(c, at, c.terms.version)).not.toThrow();
+    expect(c.terms.evidence_refs).toContain('https://soroban.highreso.jp/5401872');
+    const pending = ResearchConfigSchema.parse(highreso);
+    pending.source.enabled = true;
+    expect(() =>
+      assertResearchAllowed(pending, '2026-11-02T00:00:00.000Z', pending.terms.version),
+    ).toThrow('research_review_required');
   });
   it('rejects arbitrary endpoints, expanded scope, missing access/retention approvals', async () => {
     const c = await publicGpuSource();
@@ -178,6 +222,36 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
       expect(new Headers(init?.headers).has('authorization')).toBe(false);
     }
     expect(new Headers(fetcher.mock.calls[2][1]?.headers).get('accept')).toBe('text/html');
+  });
+  it('switches only Highreso to the reviewed fixed November terms with a separate fingerprint and three GETs', async () => {
+    const c = await publicGpuSource();
+    const nextTerms = terms.replace('fixture', 'November fixture');
+    c.public_access!.next_terms_sha256 = await termsFingerprint(nextTerms);
+    const original = gpuFetcher('highreso_public');
+    const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) =>
+      String(url).endsWith('/5401872')
+        ? new Response(nextTerms, { headers: { 'content-type': 'text/html' } })
+        : original(url, init),
+    );
+    await fetchPublicGpuPage(c, { fetcher, now: () => '2026-10-31T14:59:59.000Z' });
+    expect(fetcher.mock.calls[1][0]).toBe(publicGpuEndpoints.highreso_public.terms);
+    fetcher.mockClear();
+    await fetchPublicGpuPage(c, { fetcher, now: () => '2026-10-31T15:00:00.000Z' });
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      publicGpuEndpoints.highreso_public.robots,
+      'https://soroban.highreso.jp/5401872',
+      publicGpuEndpoints.highreso_public.page,
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    c.public_access!.next_terms_sha256 = null;
+    fetcher.mockClear();
+    await expect(
+      fetchPublicGpuPage(c, { fetcher, now: () => '2026-10-31T15:00:00.000Z' }),
+    ).rejects.toThrow('public_access_review_required');
+    expect(fetcher).not.toHaveBeenCalled();
+    const b = await publicGpuSource('rebro_public');
+    b.public_access!.next_terms_sha256 = await termsFingerprint(nextTerms);
+    expect(ResearchConfigSchema.safeParse(b).success).toBe(false);
   });
   it.each([401, 403, 429, 500])('does not retry HTTP %s within the run', async (status) => {
     const c = await publicGpuSource();

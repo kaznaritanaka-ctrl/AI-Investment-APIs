@@ -26,6 +26,12 @@ export const PublicAccessReviewSchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/)
       .nullable(),
+    // Highreso's already reviewed November terms use a fixed URL, never a redirect.
+    next_terms_sha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable()
+      .optional(),
     robots_decision: z.enum(['unreviewed', 'allowed']),
     reviewed_ref: z.string().trim().min(1).nullable(),
   })
@@ -36,3 +42,13 @@ export const PUBLIC_GPU_UA =
 // Only constants chosen by the validated adapter may become SQL identifiers.
 export const researchTable = (adapter: string) =>
   isPublicGpu(adapter) ? 'research_gpu_observations' : 'research_observations';
+
+export function publicGpuTermsReview(
+  adapter: PublicGpuAdapter,
+  review: { terms_sha256: string | null; next_terms_sha256?: string | null },
+  at: string,
+) {
+  if (adapter === 'highreso_public' && at >= '2026-10-31T15:00:00.000Z')
+    return { url: 'https://soroban.highreso.jp/5401872', sha256: review.next_terms_sha256 ?? null };
+  return { url: publicGpuEndpoints[adapter].terms, sha256: review.terms_sha256 };
+}

@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  assertResearchExecution,
+  assertResearchConfigExecution,
+  assertResearchFeatureEnabled,
+} from './execution';
 import { fetchBounded, FetchFailure, type NetworkOptions } from '../network';
 import { errorCode, hash, isoTime, stable } from '../util';
 import { parseElectricity, researchRequest } from './electricity';
@@ -34,6 +39,7 @@ export type ResearchEnv = {
   PRIVATE_DB: D1Database;
   EVIDENCE: R2Bucket;
   ENVIRONMENT: 'test' | 'development' | 'production';
+  PRIVATE_GPU_RESEARCH_ENABLED?: string;
 };
 type Options = Omit<NetworkOptions, 'onBody' | 'validators'> & {
   current_terms_version: string;
@@ -56,10 +62,6 @@ const envelopeSchema = z
     page: z.union([ResearchPageSchema, PublicGpuPageSchema]),
   })
   .strict();
-function localOnly(env: ResearchEnv) {
-  // Deliberately not a deployed entrypoint. Production integration is a separate review.
-  if (env.ENVIRONMENT === 'production') throw new Error('research_production_not_integrated');
-}
 async function checkCurrent(
   env: ResearchEnv,
   config: ResearchConfig,
@@ -98,7 +100,7 @@ export async function collectResearchPage(
   scheduled: string,
   opt: Options,
 ) {
-  localOnly(env);
+  assertResearchConfigExecution(env, config);
   const now = opt.now ?? (() => new Date().toISOString()),
     at = now();
   assertResearchAllowed(config, at, opt.current_terms_version);
@@ -123,7 +125,7 @@ export async function collectResearchPage(
     stable([source.source_id, source.policy.version, scheduled, queryHash, synthetic]),
   );
   await assertNotRevoked(env, source.source_id, runId);
-  // Local explicit registration; a changed config cannot silently replace the accepted version.
+  // Explicit registration; a changed config cannot silently replace the accepted version.
   await env.PRIVATE_DB.prepare(
     'INSERT OR IGNORE INTO research_sources(source_id,policy_version,config_hash) VALUES (?,?,?)',
   )
@@ -505,7 +507,7 @@ export async function readResearchRun(
   runId: string,
   opt: Options,
 ) {
-  localOnly(env);
+  assertResearchConfigExecution(env, config);
   const configHash = await hash(stable(config));
   await checkCurrent(env, config, configHash, opt, false);
   // Current rights and expiry are rechecked after restore, not inferred from historical grants.
@@ -537,7 +539,7 @@ export async function purgeResearchRun(
   now: string,
   cleanup: { time_travel_days: 7 | 30; revoke?: boolean; all_copies_deadline?: string | null },
 ) {
-  localOnly(env);
+  assertResearchFeatureEnabled(env);
   if (!isoTime(now)) throw new Error('invalid_retention_time');
   if (
     ![7, 30].includes(cleanup.time_travel_days) ||
@@ -548,6 +550,7 @@ export async function purgeResearchRun(
     .bind(runId)
     .first<RetainedRun & { backup_residual_until: string | null }>();
   if (!r) return;
+  assertResearchExecution(env, r.source_id);
   // GPU config validation fixes source_id to its adapter; legacy IDs stay electricity.
   const table = researchTable(r.source_id);
   if (cleanup.revoke) await revokeResearchSource(env, r.source_id, now);
@@ -630,7 +633,7 @@ export async function purgeResearchRun(
 }
 
 // One run / at most 20 records. A restore or future continuation must iterate this before reopening.
-// No historical permissions or database restore are performed by this local function.
+// No historical permissions or database restore are performed by this function.
 export async function reconcileResearchRun(
   env: ResearchEnv,
   config: ResearchConfig,
@@ -638,7 +641,7 @@ export async function reconcileResearchRun(
   now: string,
   currentTerms: string,
 ) {
-  localOnly(env);
+  assertResearchConfigExecution(env, config);
   if (!isoTime(now)) throw new Error('invalid_retention_time');
   const registration = await env.PRIVATE_DB.prepare(
     'SELECT config_hash,suspended FROM research_sources WHERE source_id=?',
@@ -745,13 +748,13 @@ async function eraseRunEvidence(env: ResearchEnv, sourceId: string, runId: strin
   ]);
 }
 
-export async function purgeResearchEvidence(env: ResearchEnv, now: string) {
-  localOnly(env);
+export async function purgeResearchEvidence(env: ResearchEnv, now: string, sourceId?: string) {
+  assertResearchExecution(env, sourceId);
   if (!isoTime(now)) throw new Error('invalid_retention_time');
   const runs = await env.PRIVATE_DB.prepare(
-    'SELECT source_id,run_id FROM research_runs WHERE evidence_expires_at<=? AND evidence_purged_at IS NULL AND (lease_until IS NULL OR lease_until<=?) ORDER BY evidence_expires_at LIMIT 5',
+    'SELECT source_id,run_id FROM research_runs WHERE evidence_expires_at<=? AND evidence_purged_at IS NULL AND (lease_until IS NULL OR lease_until<=?) AND (? IS NULL OR source_id=?) ORDER BY evidence_expires_at LIMIT 5',
   )
-    .bind(now, now)
+    .bind(now, now, sourceId ?? null, sourceId ?? null)
     .all<{ source_id: string; run_id: string }>();
   for (const r of runs.results) await eraseRunEvidence(env, r.source_id, r.run_id, now);
 }

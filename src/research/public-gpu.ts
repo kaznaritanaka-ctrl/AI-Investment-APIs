@@ -3,7 +3,7 @@ import { isPublicGpu } from './public-gpu-contract';
 import type { ResearchConfig } from './schema';
 import { errorCode } from '../util';
 
-// Local orchestration only. No scheduler, HTTP entrypoint, export or notification delivery.
+// Private orchestration only. No HTTP entrypoint, export or notification delivery.
 // One source's rights or network failure must not prevent the next reviewed source.
 export async function collectPublicGpuDay(
   env: ResearchEnv,

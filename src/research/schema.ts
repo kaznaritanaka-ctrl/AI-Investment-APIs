@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { SourceSchema } from '../schema';
 import { canCollect, validPolicy } from '../policy';
 import { D, isoDate, isoTime } from '../util';
-import { isPublicGpu, publicGpuEndpoints, PublicAccessReviewSchema } from './public-gpu-contract';
+import {
+  isPublicGpu,
+  publicGpuEndpoints,
+  publicGpuTermsReview,
+  PublicAccessReviewSchema,
+} from './public-gpu-contract';
 
 export const StorageReviewHoldSchema = z
   .object({
@@ -13,7 +18,7 @@ export const StorageReviewHoldSchema = z
   })
   .strict();
 
-// Proposals are deliberately outside config/sources and the Collector dispatch.
+// Private GPU configs stay outside the public/active source dispatch.
 export const ResearchConfigSchema = z
   .object({
     source: SourceSchema,
@@ -146,6 +151,7 @@ export const ResearchConfigSchema = z
         v.source.terms_url !== urls.terms ||
         v.source.authentication_required ||
         !v.public_access ||
+        (v.adapter === 'rebro_public' && v.public_access.next_terms_sha256 != null) ||
         v.limits.max_pages !== 1 ||
         v.limits.max_input_rows > 100 ||
         v.source.max_bytes > 1000000
@@ -222,7 +228,7 @@ function assertResearchAuthority(
     isPublicGpu(config.adapter) &&
     (!config.public_access?.reviewed_ref ||
       !config.public_access.robots_sha256 ||
-      !config.public_access.terms_sha256 ||
+      !publicGpuTermsReview(config.adapter, config.public_access, now).sha256 ||
       config.public_access.robots_decision !== 'allowed')
   )
     throw new Error('public_access_review_required');

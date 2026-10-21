@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  assertResearchExecution,
+  assertResearchConfigExecution,
+  assertResearchFeatureEnabled,
+} from './execution';
 import { hash, isoTime, stable } from '../util';
 import {
   assertResearchAllowed,
@@ -13,10 +18,6 @@ export const plusDays = (at: string, days: number) =>
   new Date(Date.parse(at) + days * 86400000).toISOString();
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const sourceIdSchema = z.string().regex(/^[a-z0-9_-]+$/);
-function localOnly(env: ResearchEnv) {
-  if (env.ENVIRONMENT === 'production') throw new Error('research_production_not_integrated');
-}
-
 const LegacyRetentionSnapshotSchema = z
   .object({
     version: z.literal('research-retention-v1'),
@@ -292,7 +293,7 @@ export async function auditRetentionDecision(
   currentTerms: string,
   decision: RetentionDecision,
 ) {
-  localOnly(env);
+  assertResearchConfigExecution(env, config);
   const decisionJson = stable({
     ...decision,
     current_rights: {
@@ -343,7 +344,7 @@ export function runDeletionKey(sourceId: string, runId: string) {
   );
 }
 export async function assertNotRevoked(env: ResearchEnv, sourceId: string, runId?: string) {
-  localOnly(env);
+  assertResearchExecution(env, sourceId);
   if (await env.EVIDENCE.head(sourceRevocationKey(sourceId)))
     throw new Error('research_source_revoked');
   if (runId && (await env.EVIDENCE.head(runDeletionKey(sourceId, runId))))
@@ -370,7 +371,7 @@ export async function recordDeletion(
     | 'explicit_delete_request',
   obligation?: { basis_refs: string[]; all_copies_delete_by: string | null },
 ) {
-  localOnly(env);
+  assertResearchExecution(env, sourceId);
   if (!isoTime(at)) throw new Error('invalid_retention_time');
   const key = runDeletionKey(sourceId, runId);
   const existing = await env.EVIDENCE.get(key);
@@ -410,7 +411,7 @@ export async function requestResearchDeletion(
   at: string,
   request: { basis_ref: string; all_copies_delete_by: string },
 ) {
-  localOnly(env);
+  assertResearchFeatureEnabled(env);
   const approved = z
     .object({ basis_ref: z.string().trim().min(1), all_copies_delete_by: z.iso.datetime() })
     .strict()
@@ -419,6 +420,7 @@ export async function requestResearchDeletion(
     .bind(runId)
     .first<{ source_id: string }>();
   if (!run) throw new Error('research_run_missing');
+  assertResearchExecution(env, run.source_id);
   await recordDeletion(env, run.source_id, runId, at, 'explicit_delete_request', {
     basis_refs: [approved.basis_ref],
     all_copies_delete_by: approved.all_copies_delete_by,
@@ -426,7 +428,7 @@ export async function requestResearchDeletion(
 }
 
 export async function deletionObligation(env: ResearchEnv, run: RetainedRun) {
-  localOnly(env);
+  assertResearchExecution(env, run.source_id);
   const body = await env.EVIDENCE.get(runDeletionKey(run.source_id, run.run_id));
   if (!body) return null;
   if (body.size > 16384) throw new Error('invalid_deletion_marker');
@@ -436,7 +438,7 @@ export async function deletionObligation(env: ResearchEnv, run: RetainedRun) {
   return marker;
 }
 export async function sourceRevocation(env: ResearchEnv, sourceId: string) {
-  localOnly(env);
+  assertResearchExecution(env, sourceId);
   const body = await env.EVIDENCE.get(sourceRevocationKey(sourceId));
   if (!body) return null;
   if (body.size > 16384) throw new Error('invalid_revocation_marker');
@@ -447,7 +449,7 @@ export async function sourceRevocation(env: ResearchEnv, sourceId: string) {
   return marker;
 }
 export async function revokeResearchSource(env: ResearchEnv, sourceId: string, at: string) {
-  localOnly(env);
+  assertResearchExecution(env, sourceId);
   if (!isoTime(at)) throw new Error('invalid_retention_time');
   // Persist the external deny record first. Suspend the current DB even if R2 fails,
   // but propagate the failure: restore protection is incomplete until the marker is saved.
@@ -473,7 +475,7 @@ export async function saveResearchConfigVersion(
   digest: string,
   now: string,
 ) {
-  localOnly(env);
+  assertResearchConfigExecution(env, config);
   await env.PRIVATE_DB.prepare(
     'INSERT OR IGNORE INTO research_config_versions(config_hash,source_id,policy_version,registered_at,config_json) VALUES (?,?,?,?,?)',
   )
@@ -487,7 +489,7 @@ export async function saveResearchConfigVersion(
   if (saved?.config_hash !== digest) throw new Error('research_policy_version_reused');
 }
 
-// Explicit local policy renewal. No active grants, production entrypoint or schedule is added.
+// Explicit policy renewal. Disabled assessments cannot grant acquisition or history access.
 export async function adoptReviewedResearchConfig(
   env: ResearchEnv,
   config: ResearchConfig,
@@ -495,7 +497,7 @@ export async function adoptReviewedResearchConfig(
   now: string,
   currentTerms: string,
 ) {
-  localOnly(env);
+  assertResearchConfigExecution(env, config);
   if (config.source.enabled) assertResearchAllowed(config, now, currentTerms);
   else {
     // Disabled policy assessments may record uncertainty/denial without granting data use.

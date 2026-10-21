@@ -17,7 +17,7 @@ export function gpuFetcher(adapter: PublicGpuAdapter, html = gpuHtml(adapter)): 
     return new Response(
       u.endsWith('/robots.txt')
         ? robots
-        : u.endsWith('/terms') || u.endsWith('/rules/')
+        : u.endsWith('/terms') || u.endsWith('/rules/') || u.endsWith('/5401872')
           ? terms
           : html,
       {
