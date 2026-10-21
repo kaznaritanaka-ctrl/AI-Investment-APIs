@@ -1,5 +1,7 @@
 # Highreso／Rebroの非公開日次研究（Issue #17）
 
+**10/21 22:45 JSTの更新**: KazはHighresoのみ承認。Highresoはenabled=true・正規化履歴365日のfixed_days、保存済み実HTMLで指紋とwire（24インスタンス/48観測）確認済み。Rebroは第10条と未公開サイト規約のリスクによりdeferred、enabled=false・取得/保存/分析はreview_required。WranglerのPRIVATE_GPU_RESEARCH_ENABLEDはfalseを維持する。最新の承認記録・保持の意味・実応答確認・10/22朝の配備/復旧/R2確認手順は[デプロイ前チェックリスト](private-gpu-deploy-checklist.md#approval-20261021)を参照。以下の未承認・両候補allowed等は21:05 JST時点の実装/準備の履歴であり、現在の設定はこの更新を優先する。
+
 PR #24をマージしたmain=b30554eに、Kazの2026-10-21 21:05 JST承認に基づく本番準備を追加しました。非secretフラグ`PRIVATE_GPU_RESEARCH_ENABLED='true'`と、Highreso/Rebroに固定した研究設定の全承認検査を通った場合だけ、本番経路を開きます。初期フラグはfalseです。両候補の自動取得・非公開保存・内部分析のみallowed、公開表示・再配布・外部LLM・AI学習は禁止です。新しいsecret、binding、Cron、依存、有料サービス、migrationはありません。
 
 規約確認は[2026-10-21記録](license-review-20261021.md)のgpusoroban／rebroを参照します。呼び出し側が21:06 JSTに取得したwork内の本文を使い、この実装作業では外部通信も実収集も行いません。Highresoは現行と11/1適用新版を確認済み、Rebroは/reason/・/rules/・robotsのContent-Signalまで記録しました。robots指紋は保存本文から計算済みです。規約は抽出テキストなので既存HTML指紋との一致を保証できず、terms_sha256=nullを維持します。source.enabled=false、wire未確認、保持unapproved、Time Travel/lifecycle未確認も維持しており、フラグだけを切り替えても取得しません。権利承認と未確認の技術ゲートを混同しません。

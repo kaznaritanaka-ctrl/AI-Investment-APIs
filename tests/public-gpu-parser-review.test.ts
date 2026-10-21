@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parsePublicGpu, gpuRecordFingerprint } from '../src/research/public-gpu-html';
+import {
+  parsePublicGpu,
+  gpuRecordFingerprint,
+  termsFingerprint,
+} from '../src/research/public-gpu-html';
 import { ResearchConfigSchema } from '../src/research/schema';
 import { publicGpuSource, gpuHtml, gpuTime } from './public-gpu-helpers';
 import { researchFixture } from './research-helpers';
@@ -13,6 +17,31 @@ const table = (count: number, prefix: string) =>
   ).join('') +
   '</tbody></table>';
 describe('public GPU parser review: synthetic scope and completeness', () => {
+  it('ignores HTML raw-text script/style bodies while retaining strict table validation', async () => {
+    const c = await publicGpuSource();
+    // Invented markup reproduces bare ampersands/less-than signs, never live HTML.
+    const rawText =
+      '<script type="text/javascript">const query = "?a=1&b=2"; if (1 < 2) run();</script>' +
+      '<style>.synthetic::before { content: "<&"; }</style>';
+    const baseline = await parsePublicGpu(c, hierarchical, gpuTime, true);
+    const page = await parsePublicGpu(c, rawText + hierarchical, gpuTime, true);
+    expect(page.selection).toEqual(baseline.selection);
+    expect(await Promise.all(page.records.map(gpuRecordFingerprint))).toEqual(
+      await Promise.all(baseline.records.map(gpuRecordFingerprint)),
+    );
+    expect(await termsFingerprint('<p>Artificial visible terms</p>' + rawText)).toBe(
+      await termsFingerprint('<p>Artificial visible terms</p>'),
+    );
+    for (const broken of [
+      hierarchical.slice(0, hierarchical.lastIndexOf('</table>')),
+      hierarchical.replace('<td>11円</td>', '<td colspan="2">11円</td>'),
+      '<script>unclosed &',
+      '<style>unclosed <',
+    ])
+      await expect(parsePublicGpu(c, rawText + broken, gpuTime, true)).rejects.toThrow(
+        'public_gpu_table_schema_changed',
+      );
+  });
   it('keeps GPU ancestry across nested headings and multiple 8/12-column tables, switches GPU and keeps null', async () => {
     const c = await publicGpuSource(),
       page = await parsePublicGpu(c, hierarchical, gpuTime, true);
