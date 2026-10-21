@@ -65,7 +65,7 @@ NASはsourceごとに署名付きreceiptを固定key `daily/receipts/<source>.js
 
 候補値はbootstrap=24h、heartbeat=3h、backup/restore freshness=48h、全体inventory=14日、backup世代=90日。実承認済み値ではない。正規化履歴は無期限の継続保存、証拠は7日を候補とし別に扱う。backup schemaのinterval/restore_checkは24h、max_copiesは**runごとの世代**として最低retention_days+1。NASは各runの最新検証済み暗号化世代を保持し、R2は期限内世代を保持する。全履歴を90日で捨てる設定ではない。
 
-1run/callのexportは現在のcontinuation約72回/日を仮定すると、10年分3650run/sourceの再世代化に約51日。NASの19run/時は約9日で同範囲を走査する計算になる。2sourceは各呼出しで別々に処理する。この数値は上限からの見積りで、実CPU/通信成功率の測定ではない。90日世代期限・14日inventoryの余裕は実環境で確認が必要。期限内に追いつかなければNAS healthは異常になり新規取得が止まる。大規模historyの一括ロードや無制限batchで回避しない。
+2026-10-21 PR #19再レビューで訂正: 統合後は既存72 continuation枠のうち日次保守用は最大24枠/日であり、Models/GPUが使った枠はさらに延期される。1run/callのexportでは、10年分3650run/sourceの再世代化は障害も新規runもない理論上限で約153日かかり、候補の90日世代期限に収まらない。旧「72回/日・約51日」は統合前の仮定で、現行候補の容量根拠には使わない。D1の継続保存を90日で削除する意味ではなく、全履歴の有効なbackup/export範囲を維持できない問題である。日次有効化は容量設計と大規模synthetic検証の見直し待ち。初回1runの受入とは分離し、Cron/TTL/既存sourceの枠を無断変更したり、日々の手動exportで補ったりしない。詳しくは[最新レビュー](pr19-review-followup-20261021.md)。
 
 実行形は以下。現在はdaily-planのみ利用可能な状態で、他はdraft/disabledにより拒否される。以下をNASに登録していない。
 

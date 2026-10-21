@@ -97,6 +97,87 @@ describe('PR18 reviewed recovery boundaries, synthetic only', { timeout: 180000 
     vi.fn<typeof fetch>(async () => {
       throw new Error('source HTTP forbidden during saved-response recovery');
     });
+  it.each([
+    'valid',
+    'changed_stage',
+    'missing_stage',
+    'corrupt_part',
+    'foreign_part',
+    'forged_part_hash',
+  ] as const)(
+    'recovers missing capture parts only from an identical immutable projection (%s)',
+    async (mode) => {
+      const f = await dailyFixture('highreso_public');
+      await heartbeat(env, 'highreso_public', gpuTime);
+      const get = vi.fn(gpuFetcher('highreso_public', rentalHtml(10)));
+      expect(
+        (
+          await collectDaily(env, f.c, f.pin, {
+            now: () => gpuTime,
+            allow_network: true,
+            fetcher: get,
+          })
+        ).state,
+      ).toBe('partial');
+      const run = await dailyRunId('highreso_public', gpuTime.slice(0, 10), 'synthetic'),
+        root = dailyRoot('highreso_public') + 'evidence/' + run,
+        pointer = root + '.json',
+        stage = root + '/projection.json',
+        pointerText = await (await env.EVIDENCE.get(pointer))!.text(),
+        stageText = await (await env.EVIDENCE.get(stage))!.text(),
+        manifest = JSON.parse(pointerText) as { parts: { key: string; sha256: string }[] },
+        part = manifest.parts[0].key,
+        original = (await env.EVIDENCE.get(part))!,
+        partText = await original.text(),
+        before = await rows(run);
+      expect(before).toHaveLength(19);
+      await env.EVIDENCE.delete(part);
+      if (mode === 'changed_stage') {
+        const changed = JSON.parse(stageText);
+        changed.payload_hash = 'b'.repeat(64);
+        await env.EVIDENCE.put(stage, stable(changed));
+      } else if (mode === 'missing_stage') await env.EVIDENCE.delete(stage);
+      else if (mode === 'corrupt_part') await env.EVIDENCE.put(part, 'synthetic corrupt part');
+      else if (mode === 'foreign_part') {
+        manifest.parts[0].key = dailyRoot('rebro_public') + 'foreign.json';
+        await env.EVIDENCE.put(pointer, stable(manifest));
+      } else if (mode === 'forged_part_hash') {
+        manifest.parts[0].sha256 = 'c'.repeat(64);
+        await env.EVIDENCE.put(pointer, stable(manifest));
+      }
+      const forbidden = noHttp();
+      const resumed = collectDaily(
+        env,
+        f.c,
+        f.pin,
+        { now: () => gpuTime, allow_network: true, fetcher: forbidden },
+        gpuTime.slice(0, 10),
+      );
+      if (mode === 'valid') {
+        expect((await resumed).state).toBe('complete');
+        const restored = (await env.EVIDENCE.get(part))!;
+        expect(await restored.text()).toBe(partText);
+        expect(restored.customMetadata).toEqual(original.customMetadata);
+        expect(await (await env.EVIDENCE.get(pointer))!.text()).toBe(pointerText);
+        expect(await (await env.EVIDENCE.get(stage))!.text()).toBe(stageText);
+        const after = await rows(run);
+        expect(after).toHaveLength(20);
+        for (const old of before)
+          expect(after.find((r) => r.observation_id === old.observation_id)).toEqual(old);
+      } else {
+        await expect(resumed).rejects.toThrow('daily_capture_failed');
+        expect(await rows(run)).toEqual(before);
+        expect(
+          await env.PRIVATE_DB.prepare('SELECT state FROM personal_daily_runs WHERE run_id=?')
+            .bind(run)
+            .first('state'),
+        ).toBe('partial');
+        if (mode !== 'corrupt_part') expect(await env.EVIDENCE.get(part)).toBeNull();
+      }
+      expect(get).toHaveBeenCalledTimes(3);
+      expect(forbidden).not.toHaveBeenCalled();
+    },
+  );
   async function resume(f: Fixture, at: string) {
     const get = noHttp();
     const r = await collectDaily(

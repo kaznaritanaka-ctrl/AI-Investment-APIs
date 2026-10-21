@@ -67,12 +67,33 @@ export async function loadDailyCapture(bucket: R2Bucket, root: string, run: stri
   if ((raw as { version?: string }).version !== 'daily-capture-parts-v2') return raw; // immutable legacy evidence
   const m = CaptureManifest.parse(raw),
     parts: Uint8Array[] = [];
+  if (
+    m.parts.some((p, i) => p.key !== root + 'evidence/' + run + '/part-' + i + '.json') ||
+    m.parts.reduce((n, p) => n + p.bytes, 0) !== m.bytes
+  )
+    throw new Error('daily_capture_scope');
   let bytes = 0;
-  for (const [i, p] of m.parts.entries()) {
-    if (p.key !== root + 'evidence/' + run + '/part-' + i + '.json')
-      throw new Error('daily_capture_scope');
+  for (const p of m.parts) {
     const o = await bucket.get(p.key);
-    if (!o || o.size !== p.bytes) throw new Error('daily_capture_part_missing');
+    if (!o) {
+      // A partial R2 restore can retain the immutable manifest/full projection
+      // while losing a part. Only that exact projection may rebuild missing
+      // parts through saveDailyCapture's existing authority/lease/CAS checks.
+      const stage = await boundedDailyJSON(bucket, captureStageKey(root, run));
+      if (!stage) throw new Error('daily_capture_part_missing');
+      const capture = DailyCapture.parse(stage),
+        encoded = new TextEncoder().encode(stable(capture));
+      if (encoded.length !== m.bytes || (await bytesHash(encoded)) !== m.sha256)
+        throw new Error('daily_capture_hash');
+      let offset = 0;
+      for (const part of m.parts) {
+        if ((await bytesHash(encoded.slice(offset, offset + part.bytes))) !== part.sha256)
+          throw new Error('daily_capture_part_hash');
+        offset += part.bytes;
+      }
+      return capture;
+    }
+    if (o.size !== p.bytes) throw new Error('daily_capture_part_missing');
     const b = new Uint8Array(await o.arrayBuffer());
     if ((await bytesHash(b)) !== p.sha256) throw new Error('daily_capture_part_hash');
     bytes += b.length;

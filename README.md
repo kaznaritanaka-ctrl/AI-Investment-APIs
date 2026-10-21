@@ -1,5 +1,7 @@
 # AI-Investment-APIs
 
+2026-10-21 PR #19再レビュー: [欠落partの保存済み投影からの復旧と、初回Cloud実行前の残件](docs/pr19-review-followup-20261021.md)。既存3sourceは不変です。旧72枠を用いた日次容量見積りは訂正し、10年分のbackup/export容量は日次有効化前の見直し事項として明示しました。初回1runと日次稼働を分け、承認や本番状態を変更しません。
+
 2026-10-21 PR #19更新: [PR #18の最新修正を本番基点へ統合](docs/pr19-integration-20261021.md)。ECB・Models.dev・private PoCと既存運用を保持し、日次の比較/消失・128価格枠・保存復旧を取り込みました。以下の8本のmigration承認資料は履歴で、新候補は0015を含む9本の別レビューが必要です。全件検証とCIの確定結果はPR #19本文へ記録します。本番未反映・実収集0件です。
 
 PR #19の初回Cloud準備に対する[2026-10-19レビューと残る承認事項](docs/pr19-review-20261019.md)、[personal NAS専用runtimeのsynthetic受入](deploy/personal-nas/README.md)を参照。実NAS・本番への反映は未実施です。
