@@ -1,0 +1,6 @@
+-- Private GPU payloads are separate from electricity. Shared runs/pages retain their original gates and deadlines.
+CREATE TABLE research_gpu_observations ( observation_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES research_runs(run_id), page_number INTEGER NOT NULL, record_key TEXT NOT NULL, source_url TEXT NOT NULL, method_version TEXT NOT NULL, observed_at TEXT NOT NULL, recorded_at TEXT NOT NULL, record_hash TEXT NOT NULL, previous_observation_id TEXT, change_kind TEXT NOT NULL CHECK(change_kind IN ('first_seen','reobserved','revised','not_seen','reappeared')), domain_json TEXT NOT NULL CHECK(json_valid(domain_json)), UNIQUE(run_id,record_key) );
+CREATE INDEX research_gpu_records_key ON research_gpu_observations(record_key,observed_at);
+CREATE INDEX research_gpu_records_run ON research_gpu_observations(run_id,record_key);
+CREATE TRIGGER research_gpu_observations_immutable BEFORE UPDATE ON research_gpu_observations BEGIN SELECT RAISE(ABORT,'immutable_research_observation'); END;
+CREATE TRIGGER research_gpu_observations_retention BEFORE DELETE ON research_gpu_observations WHEN (SELECT state FROM research_runs WHERE run_id=OLD.run_id) IS NOT 'purging' BEGIN SELECT RAISE(ABORT,'research_retention_required'); END;
