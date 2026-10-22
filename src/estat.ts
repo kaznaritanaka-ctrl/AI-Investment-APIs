@@ -250,6 +250,38 @@ const measures: Record<string, string> = {
   在庫指数: 'inventory_index_sa',
   在庫率指数: 'inventory_ratio_index_sa',
 };
+// Annual 表側 embeds these five supported measures in product classification names.
+// Other well-formed measures (capacity, receipts, etc.) are deliberately excluded.
+const annualMeasures: Record<string, string> = {
+  生産数量: 'production_qty',
+  生産金額: 'production_value',
+  販売数量: 'sales_qty',
+  販売金額: 'sales_value',
+  月末在庫数量: 'inventory',
+};
+function annualItem(name: unknown, tableCode: string) {
+  // Greedy item name preserves embedded underscores; read letter/measure/unit from the right.
+  const match = text(name).match(/^製品_(\d{4})_(.+)_([A-Z])_([^_]+)_([^_]+)$/);
+  if (!match) throw new Error('estat_classification_unknown');
+  return {
+    item_code: id(tableCode + '_' + match[1]),
+    item_name_ja: text(match[2]),
+    measure_letter: match[3],
+    measure_name: text(match[4]),
+    measure: Object.hasOwn(annualMeasures, match[4]) ? annualMeasures[match[4]] : undefined,
+    unit_raw: text(match[5]),
+  };
+}
+function iipBaseYear(info: Obj, table: EstatTable): number {
+  const metadata = [label(info.STATISTICS_NAME), label(info.TITLE), table.title].join(' ');
+  const years = new Set(
+    [...metadata.matchAll(/(?<!\d)(\d{4})(?:年基準|\s*[＝=]\s*100(?:\.0+)?(?=[）)\s]|$))/g)].map(
+      (m) => Number(m[1]),
+    ),
+  );
+  if (years.size !== 1) throw new Error('estat_base_year_unknown');
+  return [...years][0];
+}
 function periodOf(name: string): string {
   const compact = name.match(/^(\d{4})(\d{2})$/);
   const m = compact ?? name.match(/^(\d{4})年(?:(\d{1,2})月|(度))?$/);
@@ -279,8 +311,12 @@ export async function parseEstatData(
     const codes = list(d.CLASS).map((c) => id(object(c)['@code']));
     if (new Set(codes).size !== codes.length) throw new Error('estat_classification_unknown');
   }
-  const item = dimensions.filter((d) =>
-    /^(品目|品目別|品目分類)(_\d{4})?$/.test(label(d['@name'])),
+  const embeddedTableCode = (d: Obj) =>
+    s.estat!.release_kind === 'annual'
+      ? label(d['@name']).match(/^\d{4}_(\d{4})_表側$/)?.[1]
+      : undefined;
+  const item = dimensions.filter(
+    (d) => /^(品目|品目別|品目分類)(_\d{4})?$/.test(label(d['@name'])) || embeddedTableCode(d),
   );
   const time = dimensions.filter((d) => d['@id'] === 'time');
   const metric = dimensions.filter((d) => /^(表章項目|データ項目)$/.test(label(d['@name'])));
@@ -289,11 +325,26 @@ export async function parseEstatData(
     item.length !== 1 ||
     time.length !== 1 ||
     metric.length > 1 ||
-    (metric.length === 0 && !impliedMeasure)
+    (metric.length === 0 && !impliedMeasure && !embeddedTableCode(item[0])) ||
+    (item.length === 1 && embeddedTableCode(item[0]) && metric.length > 0)
   )
     throw new Error('estat_dimensions_unknown');
+  const tableCode = embeddedTableCode(item[0]);
+  if (tableCode && !table.title.includes(`${tableCode}_`)) throw new Error('estat_table_mismatch');
+  const embeddedItems = tableCode
+    ? new Map(
+        list(item[0].CLASS).map((c) => {
+          const cls = object(c);
+          const parsed = annualItem(cls['@name'], tableCode);
+          if (Object.hasOwn(cls, '@unit') && cls['@unit'] !== parsed.unit_raw)
+            throw new Error('estat_unit_mismatch');
+          return [id(cls['@code']), parsed] as const;
+        }),
+      )
+    : undefined;
   // Preserve the existing signature contract: exclude the entire time dimension,
   // including weights and rolling periods; sort remaining dimension IDs and codes.
+  // Positional annual codes also need their parsed product/measure/unit meaning.
   const signatures = dimensions
     .filter((d) => d['@id'] !== 'time')
     .map((d) => ({
@@ -301,6 +352,21 @@ export async function parseEstatData(
       codes: list(d.CLASS)
         .map((c) => id(object(c)['@code']))
         .sort(),
+      ...(embeddedItems && d === item[0]
+        ? {
+            items: [...embeddedItems.keys()].sort().map((code) => {
+              const parsed = embeddedItems.get(code)!;
+              return [
+                code,
+                parsed.item_code,
+                parsed.item_name_ja,
+                parsed.measure_letter,
+                parsed.measure_name,
+                parsed.unit_raw,
+              ];
+            }),
+          }
+        : {}),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   const schema_signature = await hash(stable(signatures));
@@ -319,6 +385,8 @@ export async function parseEstatData(
   );
   const rows: EstatRow[] = [];
   const seen = new Set<string>();
+  // Resolve lazily so empty/weight-only pages still skip observation metadata checks.
+  let baseYear: number | null = null;
   for (const entry of values) {
     const v = object(entry),
       selected = new Map<string, Obj>();
@@ -341,7 +409,11 @@ export async function parseEstatData(
     if (weightTime(selected.get('time')!['@name'])) continue;
     const it = selected.get(String(item[0]['@id']))!,
       mt = metric[0] ? selected.get(String(metric[0]['@id']))! : undefined;
-    let measure = mt ? measures[label(mt['@name'])] : impliedMeasure;
+    const embedded = embeddedItems?.get(id(it['@code']));
+    if (embedded && Object.hasOwn(v, '@unit') && v['@unit'] !== embedded.unit_raw)
+      throw new Error('estat_unit_mismatch');
+    if (embedded && !embedded.measure) continue;
+    let measure = embedded ? embedded.measure : mt ? measures[label(mt['@name'])] : impliedMeasure;
     if (mt && s.estat!.release_kind === 'iip_monthly') {
       const expected = table.group === '在庫率' ? 'inventory_ratio_index_sa' : 'inventory_index_sa';
       if (!['指数', '季節調整済指数', table.group + '指数'].includes(label(mt['@name'])))
@@ -349,25 +421,28 @@ export async function parseEstatData(
       measure = expected;
     }
     if (!measure) throw new Error('estat_measure_unknown');
+    if (s.estat!.release_kind === 'iip_monthly' && baseYear === null)
+      baseYear = iipBaseYear(info, table);
     const raw = text(v.$),
-      unit = text(v['@unit'] ?? mt?.['@unit']);
+      unit = text(
+        embedded?.unit_raw ??
+          v['@unit'] ??
+          mt?.['@unit'] ??
+          it['@unit'] ??
+          (baseYear === null ? undefined : `${baseYear}=100`),
+      );
     const suppression = ['X', 'x', '-', '…', '...', '***', '秘匿'].includes(raw);
     const value = suppression ? null : estatDecimal(raw);
     const row: EstatRow = {
-      item_code: id(it['@code']),
-      item_name_ja: text(it['@name']),
+      item_code: embedded?.item_code ?? id(it['@code']),
+      item_name_ja: embedded?.item_name_ja ?? text(it['@name']),
       measure,
       unit_raw: unit,
-      base_year: null,
+      base_year: baseYear,
       period: periodOf(text(selected.get('time')!['@name'])),
       value_decimal: value,
       value_flag: suppression ? raw : null,
     };
-    if (s.estat!.release_kind === 'iip_monthly') {
-      const year = (label(info.STATISTICS_NAME) + ' ' + table.title).match(/(\d{4})年基準/)?.[1];
-      if (!year) throw new Error('estat_base_year_unknown');
-      row.base_year = Number(year);
-    }
     const key = stable([row.item_code, row.measure, row.unit_raw, row.period]);
     if (seen.has(key)) throw new Error('estat_duplicate_value');
     seen.add(key);
