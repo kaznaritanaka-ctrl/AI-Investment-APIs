@@ -447,15 +447,16 @@ export async function resumeEstat(
     ).all();
     if (publicTables.results.length !== 5) {
       logFailure('estat_schema_unavailable');
-      return { results: [], work: true };
+      return { results: [], work: false };
     }
     if (await expireEstat(env, now)) return { results: [], work: true };
-    if (env.ESTAT_ENABLED !== 'true' || !sources.some((s) => s.enabled && s.estat))
-      return { results: [], work: false };
+    if (env.ESTAT_ENABLED !== 'true') return { results: [], work: false };
     const row = await env.PRIVATE_DB.prepare(
-      "SELECT c.source_id,c.scheduled_for FROM collection_runs c JOIN sc_intakes i ON c.run_id=i.run_id WHERE c.state='pending' AND i.phase IN ('list','data','rows','complete') ORDER BY c.scheduled_for,c.source_id LIMIT 1",
-    ).first<{ source_id: string; scheduled_for: string }>();
-    const source = row && sources.find((s) => s.source_id === row.source_id && s.enabled);
+      "SELECT c.run_id,c.source_id,c.scheduled_for FROM collection_runs c JOIN sc_intakes i ON c.run_id=i.run_id WHERE c.state='pending' AND (c.lease_until IS NULL OR c.lease_until<?) AND i.phase IN ('list','data','rows','complete') ORDER BY c.scheduled_for,c.source_id LIMIT 1",
+    )
+      .bind(now)
+      .first<{ run_id: string; source_id: string; scheduled_for: string }>();
+    const source = row && sources.find((s) => s.source_id === row.source_id && s.estat);
     const results =
       row && source
         ? [
@@ -464,6 +465,16 @@ export async function resumeEstat(
             ),
           ]
         : [];
+    if (row && results[0]?.state === 'policy_skipped') {
+      // Early collection gates do not touch the checkpoint. Retire the pending run
+      // with a fixed code so it cannot monopolize this queue or the GPU workload.
+      await env.PRIVATE_DB.prepare(
+        "UPDATE collection_runs SET state='failed',finished_at=?,error_code='estat_resume_skipped',lease_token=NULL,lease_until=NULL WHERE run_id=? AND state='pending' AND (lease_until IS NULL OR lease_until<?)",
+      )
+        .bind(now, row.run_id, now)
+        .run();
+      return { results, work: false };
+    }
     return { results, work: results.length > 0 };
   } catch {
     logFailure('estat_resume_failed');

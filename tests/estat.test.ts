@@ -6,6 +6,8 @@ import { estatDue, estatRequest, maskEstat, parseEstatData, type EstatTable } fr
 import { supplyChainAPI } from '../src/supply-chain-api';
 import { sourceObserver, safeLogCode } from '../src/telemetry';
 import { resumeEstat } from '../src/estat-pipeline';
+import { resumeCollections } from '../src/collection-continuation';
+import * as gpuPipeline from '../src/gpu-pipeline';
 import { expireEvidence } from '../src/operations';
 import { ESTAT_CREDIT } from '../src/estat-schema';
 import { supplyChainSQLite } from './supply-chain-sqlite';
@@ -330,18 +332,73 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     consoleLog.mockRestore();
   });
 
-  it('signals partial migrations and maintenance failures with fixed codes and reserves the workload', async () => {
+  it.each(['expired policy', 'blocked policy', 'missing appId', 'not due', 'disabled source'])(
+    'retires a pending run with %s and still resumes GPU work on the same tick',
+    async (blocked) => {
+      const pending = await turn();
+      expect(pending.state).toBe('pending');
+      const resumedEnv = env();
+      if (blocked === 'expired policy') source.policy.valid_until = now;
+      if (blocked === 'blocked policy') source.policy.rights.private_storage = 'denied';
+      if (blocked === 'missing appId') resumedEnv.ESTAT_APP_ID = '';
+      if (blocked === 'not due') source.estat!.months_utc = [8];
+      if (blocked === 'disabled source') source.enabled = false;
+      const gpuResult = { source_id: 'synthetic_gpu', run_id: 'gpu-run', state: 'pending' };
+      const gpu = vi.spyOn(gpuPipeline, 'resumeGPURuns').mockResolvedValue([gpuResult]);
+      const noNetwork = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error(secret));
+      const attempts = calls.length;
+
+      expect(await resumeCollections(resumedEnv, [source], now)).toEqual({
+        results: [gpuResult],
+        models_work: false,
+      });
+      expect(gpu).toHaveBeenCalledWith(resumedEnv, [source], now, false, undefined);
+      expect(
+        await local.env.PRIVATE_DB.prepare(
+          'SELECT state,error_code,finished_at FROM collection_runs WHERE run_id=?',
+        )
+          .bind(pending.run_id)
+          .first(),
+      ).toEqual({ state: 'failed', error_code: 'estat_resume_skipped', finished_at: now });
+      expect(await resumeEstat(resumedEnv, [source], now)).toEqual({ results: [], work: false });
+
+      // Once the GPU queue is empty, the continuation also leaves maintenance available.
+      gpu.mockResolvedValue([]);
+      expect(await resumeCollections(resumedEnv, [source], now)).toEqual({
+        results: [],
+        models_work: false,
+      });
+      expect(gpu).toHaveBeenCalledTimes(2);
+      expect(calls).toHaveLength(attempts);
+      expect(noNetwork).not.toHaveBeenCalled();
+    },
+  );
+
+  it('lets GPU resume continue when either e-Stat migration is missing', async () => {
     const logs: string[] = [];
     vi.spyOn(console, 'log').mockImplementation((line: string) => logs.push(line));
-    const publicDb = await supplyChainSQLite(3);
+    const legacy = await supplyChainSQLite(3);
+    const gpu = vi.spyOn(gpuPipeline, 'resumeGPURuns').mockResolvedValue([]);
     try {
-      expect(
-        await resumeEstat({ ...env(), PUBLIC_DB: publicDb.env.PUBLIC_DB }, [source], now),
-      ).toEqual({ results: [], work: true });
+      for (const binding of ['PUBLIC_DB', 'PRIVATE_DB'] as const) {
+        const partial = { ...env(), [binding]: legacy.env[binding] };
+        expect(await resumeEstat(partial, [source], now)).toEqual({ results: [], work: false });
+        expect(await resumeCollections(partial, [source], now)).toEqual({
+          results: [],
+          models_work: false,
+        });
+        expect(gpu).toHaveBeenLastCalledWith(partial, [source], now, false, undefined);
+      }
+      expect(gpu).toHaveBeenCalledTimes(2);
       expect(logs.map((line) => JSON.parse(line).error_code)).toContain('estat_schema_unavailable');
     } finally {
-      await publicDb.mf.dispose();
+      await legacy.mf.dispose();
     }
+  });
+
+  it('signals maintenance failures with fixed codes and reserves the workload', async () => {
+    const logs: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((line: string) => logs.push(line));
     const broken = new Proxy(local.env.PUBLIC_DB, {
       get(target, key, receiver) {
         if (key === 'prepare') throw new Error(secret);
