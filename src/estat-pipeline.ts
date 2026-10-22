@@ -15,7 +15,7 @@ import { assertPersistenceAllowed, canCollect, canPublish } from './policy';
 import { syncSource } from './publication';
 import { collectionIdentity } from './run-identity';
 import { hash, stable, isoTime } from './util';
-import { safeAttemptCode, type SourceObserver, observe } from './telemetry';
+import { safeAttemptCode, type SourceObserver, observe, emitLog } from './telemetry';
 
 type Intake = {
   configuration_hash: string;
@@ -45,6 +45,14 @@ type PageEnvelope = {
   expires_at: string;
   synthetic: boolean;
 };
+const logFailure = (
+  code: 'estat_resume_failed' | 'estat_schema_unavailable' | 'estat_cleanup_failed',
+) =>
+  emitLog({
+    phase: 'estat_failure',
+    state: 'failed',
+    error_code: code,
+  });
 const plusDays = (at: string, days: number) =>
   new Date(Date.parse(at) + days * 86400000).toISOString();
 const failures = new Set([
@@ -188,7 +196,7 @@ export async function collectEstat(
       const response = await request('getStatsList', {
         statsCode: s.estat!.stats_code,
         searchWord: s.estat!.release_kind === 'annual' ? '年報 時系列表' : '品目別 季節調整済',
-        limit: String(s.estat!.page_size),
+        limit: String(Math.min(s.estat!.page_size, 100)),
         startPosition: String(intake.list_start),
       });
       const result = parseEstatList(s, response.body, intake.list_start);
@@ -380,17 +388,17 @@ export async function collectEstat(
       )
         .bind(s.source_id, await hash(run + '|estat-v1|' + (await estatConfigurationHash(s))))
         .run()
-        .catch(() => {});
+        .catch(() => logFailure('estat_cleanup_failed'));
       await env.PRIVATE_DB.prepare(
         'UPDATE collection_runs SET state=?,finished_at=?,error_code=? WHERE run_id=? AND lease_token=?',
       )
         .bind(quarantine ? 'quarantined' : 'failed', clock(), reason, run, lease)
         .run()
-        .catch(() => {});
+        .catch(() => logFailure('estat_cleanup_failed'));
       await env.PRIVATE_DB.prepare('UPDATE sc_intakes SET phase=? WHERE run_id=?')
         .bind(quarantine ? 'quarantined' : 'failed', run)
         .run()
-        .catch(() => {});
+        .catch(() => logFailure('estat_cleanup_failed'));
     }
     return { ...base(), state: quarantine ? 'quarantined' : 'failed', reason };
   } finally {
@@ -400,7 +408,7 @@ export async function collectEstat(
       )
         .bind(run, lease)
         .run()
-        .catch(() => {});
+        .catch(() => logFailure('estat_cleanup_failed'));
   }
 }
 async function finishRun(
@@ -433,21 +441,32 @@ export async function resumeEstat(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='sc_intakes'",
       ).first())
     )
-      return [];
-    if (await expireEstat(env, now)) return [];
-    if (env.ESTAT_ENABLED !== 'true' || !sources.some((s) => s.enabled && s.estat)) return [];
+      return { results: [], work: false };
+    const publicTables = await env.PUBLIC_DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('sc_policy_versions','sc_observations','sc_definition_versions','sc_series','sc_revisions')",
+    ).all();
+    if (publicTables.results.length !== 5) {
+      logFailure('estat_schema_unavailable');
+      return { results: [], work: true };
+    }
+    if (await expireEstat(env, now)) return { results: [], work: true };
+    if (env.ESTAT_ENABLED !== 'true' || !sources.some((s) => s.enabled && s.estat))
+      return { results: [], work: false };
     const row = await env.PRIVATE_DB.prepare(
       "SELECT c.source_id,c.scheduled_for FROM collection_runs c JOIN sc_intakes i ON c.run_id=i.run_id WHERE c.state='pending' AND i.phase IN ('list','data','rows','complete') ORDER BY c.scheduled_for,c.source_id LIMIT 1",
     ).first<{ source_id: string; scheduled_for: string }>();
     const source = row && sources.find((s) => s.source_id === row.source_id && s.enabled);
-    return row && source
-      ? [
-          await observe(observer, source, row.scheduled_for, () =>
-            collectEstat(env, source, row.scheduled_for, { now: () => now }),
-          ),
-        ]
-      : [];
+    const results =
+      row && source
+        ? [
+            await observe(observer, source, row.scheduled_for, () =>
+              collectEstat(env, source, row.scheduled_for, { now: () => now }),
+            ),
+          ]
+        : [];
+    return { results, work: results.length > 0 };
   } catch {
-    return [];
+    logFailure('estat_resume_failed');
+    return { results: [], work: true };
   }
 }

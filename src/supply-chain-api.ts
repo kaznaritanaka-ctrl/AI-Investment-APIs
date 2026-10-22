@@ -2,19 +2,30 @@ import type { APIEnv } from './api';
 import type { Source } from './schema';
 import { sources } from './sources';
 import { canPublish } from './policy';
+import { estatConfigurationHash } from './estat';
+import { ESTAT_CREDIT } from './estat-schema';
 import { hash, stable, isoTime } from './util';
 
-const json = (data: unknown, status = 200) =>
-  Response.json(data, {
-    status,
-    headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },
-  });
+export const supplyChainJSON = (data: Record<string, unknown>, status = 200) =>
+  Response.json(
+    {
+      ...data,
+      api_credit: ESTAT_CREDIT,
+      attribution:
+        '経済産業省生産動態統計／鉱工業指数（経済産業省）、政府統計の総合窓口(e-Stat)（https://www.e-stat.go.jp/）を加工して作成',
+    },
+    {
+      status,
+      headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },
+    },
+  );
 const encode = (data: unknown) =>
   btoa(JSON.stringify(data)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const period = (value: string) => /^(?:\d{4}(?:-(?:0[1-9]|1[0-2])|FY)?)$/.test(value);
 
-// Current bundled policy is checked as well as the public copy. A changed policy/endpoint/
-// selection requires a newly reviewed version and a matching publication, never an old replay.
+// Current authorization gates all reads. Each historical row must independently match its
+// immutable reviewed configuration and have been fetched during its own policy window.
+// Renewal deactivates old policies for collection, but revocation still withdraws their history.
 export async function supplyChainAPI(
   url: URL,
   env: APIEnv,
@@ -26,7 +37,7 @@ export async function supplyChainAPI(
       /^\/v1\/supply-chain\/series(?:\/([A-Za-z0-9_-]{1,160})\/(observations|revisions))?$/.exec(
         url.pathname,
       );
-    if (!match) return json({ error: { code: 'not_found' } }, 404);
+    if (!match) return supplyChainJSON({ error: { code: 'not_found' } }, 404);
     const kind = match[2] ?? 'series',
       seriesId = match[1] ?? null;
     for (const key of url.searchParams.keys())
@@ -72,30 +83,26 @@ export async function supplyChainAPI(
       }
     }
     const scopes: string[] = [],
-      bindings: unknown[] = [now, now, now, asOf, asOf];
+      bindings: unknown[] = [now, asOf, asOf];
     for (const source of sourceList) {
       if (
         !['estat_meti_seidou', 'estat_meti_iip'].includes(source.source_id) ||
         !canPublish(source, now, kind === 'revisions')
       )
         continue;
-      const configurationHash = await hash(
-        stable({
-          policy: source.policy,
-          adapter: source.adapter,
-          endpoint: source.endpoint,
-          selection: source.selection,
-          ...('estat' in source ? { estat: source.estat } : {}),
-        }),
+      const configurationHash = await estatConfigurationHash(source);
+      scopes.push(
+        '(o.source_id=? AND EXISTS (SELECT 1 FROM source_publications current JOIN sc_policy_versions reviewed ON reviewed.source_id=current.source_id AND reviewed.policy_version=current.policy_version WHERE current.source_id=o.source_id AND current.policy_version=? AND reviewed.configuration_hash=? AND current.active=1 AND current.revoked=0 AND current.valid_from<=? AND (current.valid_until IS NULL OR current.valid_until>?)' +
+          (kind === 'revisions' ? ' AND current.derived_allowed=1' : '') +
+          '))',
       );
-      scopes.push('(o.source_id=? AND o.policy_version=? AND o.configuration_hash=?)');
-      bindings.push(source.source_id, source.policy.version, configurationHash);
+      bindings.push(source.source_id, source.policy.version, configurationHash, now, now);
     }
     // Even with no enabled source, query the projection so an unapplied migration returns a
     // controlled 503 and never changes any legacy API query or its migration requirements.
     const eligible =
-      'WITH eligible AS (SELECT o.* FROM sc_observations o JOIN sc_series s ON s.series_id=o.series_id AND s.source_id=o.source_id AND s.policy_version=o.policy_version AND s.configuration_hash=o.configuration_hash JOIN sc_definition_versions d ON d.definition_version_id=o.definition_version_id AND d.series_id=o.series_id JOIN publication_batches b ON b.batch_id=o.batch_id AND b.source_id=o.source_id AND b.policy_version=o.policy_version JOIN source_publications p ON p.source_id=o.source_id AND p.policy_version=o.policy_version ' +
-      "WHERE b.state='complete' AND p.active=1 AND p.revoked=0 AND p.valid_from<=? AND (p.valid_until IS NULL OR p.valid_until>?) AND o.expires_at>? AND b.completed_at<=? AND o.fetched_at<=? AND " +
+      'WITH eligible AS (SELECT o.* FROM sc_observations o JOIN sc_series s ON s.series_id=o.series_id AND s.source_id=o.source_id JOIN sc_definition_versions d ON d.definition_version_id=o.definition_version_id AND d.series_id=o.series_id JOIN publication_batches b ON b.batch_id=o.batch_id AND b.source_id=o.source_id AND b.policy_version=o.policy_version JOIN source_publications p ON p.source_id=o.source_id AND p.policy_version=o.policy_version JOIN sc_policy_versions reviewed ON reviewed.source_id=o.source_id AND reviewed.policy_version=o.policy_version AND reviewed.configuration_hash=o.configuration_hash ' +
+      "WHERE b.state='complete' AND p.revoked=0 AND p.valid_from<=o.fetched_at AND (p.valid_until IS NULL OR p.valid_until>o.fetched_at) AND o.expires_at>? AND b.completed_at<=? AND o.fetched_at<=? AND " +
       (scopes.length ? '(' + scopes.join(' OR ') + ')' : '0') +
       (kind === 'revisions' ? ' AND p.derived_allowed=1' : '') +
       ') ';
@@ -144,7 +151,7 @@ export async function supplyChainAPI(
       }>();
     const rows = result.results.slice(0, +limitText),
       last = rows.at(-1);
-    return json({
+    return supplyChainJSON({
       schema_version: '1',
       snapshot_as_of: asOf,
       data: rows.map((row) => ({
@@ -172,6 +179,6 @@ export async function supplyChainAPI(
       error instanceof Error && ['invalid_query', 'invalid_cursor'].includes(error.message)
         ? error.message
         : 'public_store_unavailable';
-    return json({ error: { code } }, code === 'public_store_unavailable' ? 503 : 400);
+    return supplyChainJSON({ error: { code } }, code === 'public_store_unavailable' ? 503 : 400);
   }
 }

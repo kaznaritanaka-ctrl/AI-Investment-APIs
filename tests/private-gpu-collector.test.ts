@@ -163,3 +163,20 @@ it('retains the daily logical slot and alternating acquisition dispatch when ena
     [highreso.source.enabled, rebro.source.enabled] = enabled;
   }
 });
+
+it('reserves an e-Stat maintenance tick without starting GPU retention or research', async () => {
+  vi.mocked(resumeCollections).mockResolvedValueOnce({
+    results: [],
+    models_work: false,
+    estat_work: true,
+  });
+  await collector.scheduled(
+    scheduled(start),
+    { ...env, PRIVATE_GPU_RESEARCH_ENABLED: 'true' },
+    {} as ExecutionContext,
+  );
+  expect(expireGPUData).not.toHaveBeenCalled();
+  expect(purgeResearchEvidence).not.toHaveBeenCalled();
+  expect(collectPublicGpuDay).not.toHaveBeenCalled();
+  expect(expireEvidence).toHaveBeenCalledTimes(1);
+});

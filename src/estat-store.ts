@@ -7,6 +7,7 @@ import { D, hash, stable } from './util';
 
 type StoredObservation = {
   obs_id: string;
+  definition_version_id: string;
   value_decimal: string | null;
   value_flag: string | null;
 };
@@ -37,24 +38,27 @@ export async function storeEstatRow(
 ) {
   await assertPersistenceAllowed(env, s, now);
   const config = await estatConfigurationHash(s);
-  const series = await hash(
-    stable([s.source_id, config, page.table.group, row.item_code, row.measure]),
-  );
+  const series = await hash(stable([s.source_id, page.table.group, row.item_code, row.measure]));
   const definition = await hash(
     stable([series, row.item_name_ja, row.unit_raw, row.base_year, page.schema_signature]),
   );
   const obs = await hash(stable([run, page.table.table_id, series, definition, row.period]));
   const prior = await env.PRIVATE_DB.prepare(
-    "SELECT o.obs_id,o.value_decimal,o.value_flag FROM sc_observations o JOIN sc_intakes i ON i.publication_batch=o.batch_id JOIN collection_runs c ON c.run_id=i.run_id WHERE c.state='complete' AND o.series_id=? AND o.definition_version_id=? AND o.period=? AND o.obs_id<>? AND o.fetched_at<=? ORDER BY o.fetched_at DESC,o.obs_id DESC LIMIT 1",
+    "SELECT o.obs_id,o.definition_version_id,o.value_decimal,o.value_flag FROM sc_observations o JOIN sc_intakes i ON i.publication_batch=o.batch_id JOIN collection_runs c ON c.run_id=i.run_id WHERE c.state='complete' AND o.series_id=? AND o.period=? AND o.obs_id<>? AND o.fetched_at<=? ORDER BY o.fetched_at DESC,o.obs_id DESC LIMIT 1",
   )
-    .bind(series, definition, row.period, obs, fetchedAt)
+    .bind(series, row.period, obs, fetchedAt)
     .first<StoredObservation>();
+  // Compare only within an unchanged definition; a renamed/rebased series starts a new
+  // definition without automatically linking values across incompatible units or codes.
+  const comparable = prior?.definition_version_id === definition;
   const changed =
     !!prior &&
+    comparable &&
     ((prior.value_decimal === null || row.value_decimal === null
       ? prior.value_decimal !== row.value_decimal
       : !new D(prior.value_decimal).eq(row.value_decimal)) ||
       prior.value_flag !== row.value_flag);
+  if (prior && comparable && !changed) return { observations: 0, changes: 0 };
   const supersedes = changed ? prior!.obs_id : null;
   const expires = new Date(
     Date.parse(fetchedAt) + s.estat!.normalized_days * 86400000,

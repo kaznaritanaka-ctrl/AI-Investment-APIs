@@ -4,7 +4,9 @@ import { applyMigrations } from '../scripts/migrations';
 import { supplyChainAPI } from '../src/supply-chain-api';
 import { handle } from '../src/api';
 import { sources } from '../src/sources';
-import { hash, stable } from '../src/util';
+import { stable } from '../src/util';
+import { estatConfigurationHash } from '../src/estat';
+import { syncSource } from '../src/publication';
 import type { Source } from '../src/schema';
 
 const now = '2026-10-22T09:43:00.000Z';
@@ -76,6 +78,10 @@ async function seed() {
     )
     .run();
   await db
+    .prepare('INSERT INTO sc_policy_versions VALUES (?,?,?)')
+    .bind(current.source_id, current.policy.version, configurationHash)
+    .run();
+  await db
     .prepare("INSERT INTO publication_batches VALUES (?,?,?,'complete',?,?)")
     .bind('synthetic-batch', current.source_id, current.policy.version, now, now)
     .run();
@@ -119,15 +125,7 @@ beforeEach(async () => {
   // No HTTP is used. An enabled synthetic copy authorizes only this isolated local test.
   current = structuredClone(sources.find((source) => source.source_id === 'estat_meti_seidou')!);
   current.enabled = true;
-  configurationHash = await hash(
-    stable({
-      policy: current.policy,
-      adapter: current.adapter,
-      endpoint: current.endpoint,
-      selection: current.selection,
-      ...('estat' in current ? { estat: current.estat } : {}),
-    }),
-  );
+  configurationHash = await estatConfigurationHash(current);
 });
 afterEach(async () => {
   await local?.mf.dispose();
@@ -223,6 +221,94 @@ describe('e-Stat public projection and migration (synthetic only)', () => {
     expect((await api('series')).body.data).toEqual([]);
   });
 
+  it('retains history across reviewed policy renewal but independently rejects invalid row gates', async () => {
+    await seed();
+    const oldVersion = current.policy.version;
+    current.policy.version += '-renewed';
+    current.policy.valid_from = '2027-01-01T00:00:00.000Z';
+    current.policy.valid_until = '2028-01-01T00:00:00.000Z';
+    current.estat!.reviewed_schema_signatures = ['b'.repeat(64)];
+    const later = '2027-02-01T00:00:00.000Z';
+    await syncSource(local.env, current, later);
+    // Extend only this synthetic input's retention, via a second row (immutable updates are forbidden).
+    // Original row expires in January; the long-lived period remains visible after old policy expiry.
+    const db = local.env.PUBLIC_DB;
+    await db
+      .prepare(
+        "INSERT INTO sc_observations SELECT 'long-history',series_id,definition_version_id,batch_id,source_id,policy_version,configuration_hash,'2025-06',value_decimal,value_flag,release_kind,stats_data_id,source_updated_at,fetched_at,response_sha256,NULL,'2028-01-01T00:00:00.000Z',public_json FROM sc_observations WHERE obs_id='synthetic-original'",
+      )
+      .run();
+    expect((await api('series', [current], later)).body.data).toHaveLength(1);
+    expect(
+      (await api('series/synthetic-series/observations', [current], later)).body.data,
+    ).toHaveLength(1);
+    // A mismatched historical hash never inherits the new policy's authorization.
+    await db
+      .prepare(
+        "INSERT INTO sc_observations SELECT 'bad-history',series_id,definition_version_id,batch_id,source_id,policy_version,?,period,value_decimal,value_flag,release_kind,stats_data_id,source_updated_at,fetched_at,response_sha256,NULL,expires_at,public_json FROM sc_observations WHERE obs_id='long-history'",
+      )
+      .bind('c'.repeat(64))
+      .run();
+    expect(
+      (await api('series/synthetic-series/observations', [current], later)).body.data,
+    ).toHaveLength(1);
+    await db
+      .prepare(
+        "INSERT INTO sc_observations SELECT 'outside-own-policy',series_id,definition_version_id,batch_id,source_id,policy_version,configuration_hash,period,value_decimal,value_flag,release_kind,stats_data_id,source_updated_at,'2026-01-01T00:00:00.000Z',response_sha256,NULL,expires_at,public_json FROM sc_observations WHERE obs_id='long-history'",
+      )
+      .run();
+    expect(
+      (await api('series/synthetic-series/observations', [current], later)).body.data,
+    ).toHaveLength(1);
+    await db
+      .prepare('UPDATE source_publications SET revoked=1 WHERE policy_version=?')
+      .bind(oldVersion)
+      .run();
+    expect((await api('series', [current], later)).body.data).toEqual([]);
+  });
+
+  it('includes verbatim credit and attribution on empty and error responses, including outer API gates', async () => {
+    for (const path of [
+      'series',
+      'series/synthetic-series/observations',
+      'series/synthetic-series/revisions',
+      'unknown',
+      'series?limit=0',
+    ]) {
+      const response = await api(path);
+      expect(response.body).toMatchObject({
+        api_credit: credit,
+        attribution: expect.stringContaining('経済産業省'),
+      });
+    }
+    for (const [request, extra] of [
+      [new Request('https://local.test/v1/supply-chain/series', { method: 'POST' }), {}],
+      [new Request('https://local.test/v1/supply-chain'), {}],
+      [
+        new Request('https://local.test/v1/supply-chain/series'),
+        {
+          RATE_LIMITER: {
+            limit: async () => {
+              throw new Error('synthetic-private-failure');
+            },
+          },
+        },
+      ],
+      [new Request('https://local.test/v1/supply-chain/series?padding=' + 'a'.repeat(8200)), {}],
+      [
+        new Request('https://local.test/v1/supply-chain/series'),
+        { RATE_LIMITER: { limit: async () => ({ success: false }) } },
+      ],
+    ] as const) {
+      const response = await handle(request, { PUBLIC_DB: local.env.PUBLIC_DB, ...extra }, now);
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(await response.json()).toMatchObject({
+        api_credit: credit,
+        attribution: expect.stringContaining('経済産業省'),
+      });
+    }
+  });
+
   it('rejects malformed queries without disclosing stored errors', async () => {
     for (const path of [
       'series?secret=x',
@@ -256,7 +342,11 @@ describe('e-Stat public projection and migration (synthetic only)', () => {
         now,
       );
       expect(response.status).toBe(503);
-      expect(await response.json()).toEqual({ error: { code: 'public_store_unavailable' } });
+      expect(await response.json()).toMatchObject({
+        error: { code: 'public_store_unavailable' },
+        api_credit: credit,
+        attribution: expect.stringContaining('経済産業省'),
+      });
     }
     for (const path of ['/v1/sources', '/v1/datasets', '/health', '/openapi.json'])
       expect(
@@ -275,11 +365,38 @@ describe('e-Stat public projection and migration (synthetic only)', () => {
     expect((await api('series')).body.data).toEqual([]);
   });
 
+  it('uses indexed expiry and orphan probes in both unapplied migrations', async () => {
+    for (const db of [local.env.PRIVATE_DB, local.env.PUBLIC_DB]) {
+      const expiry = await db
+        .prepare(
+          'EXPLAIN QUERY PLAN SELECT obs_id FROM sc_observations WHERE expires_at<=? ORDER BY expires_at,obs_id LIMIT 20',
+        )
+        .bind(now)
+        .all<{ detail: string }>();
+      expect(expiry.results.map((row) => row.detail).join(' ')).toContain('sc_observations_expiry');
+      const definitions = await db
+        .prepare(
+          'EXPLAIN QUERY PLAN SELECT definition_version_id FROM sc_definition_versions d WHERE NOT EXISTS (SELECT 1 FROM sc_observations o WHERE o.definition_version_id=d.definition_version_id) LIMIT 20',
+        )
+        .all<{ detail: string }>();
+      expect(definitions.results.map((row) => row.detail).join(' ')).toContain(
+        'sc_observations_definition',
+      );
+      const series = await db
+        .prepare(
+          'EXPLAIN QUERY PLAN SELECT series_id FROM sc_series s WHERE NOT EXISTS (SELECT 1 FROM sc_definition_versions d WHERE d.series_id=s.series_id) LIMIT 20',
+        )
+        .all<{ detail: string }>();
+      expect(series.results.map((row) => row.detail).join(' ')).toContain('sc_definitions_series');
+    }
+  });
+
   it('enforces decimal strings, foreign keys and append-only updates', async () => {
     await seed();
     for (const invalid of ['', '.', '-.', '1e3', '1.2.3', '--1', '.1', '1.', ' 1'])
       await expect(observation('invalid-' + invalid, invalid)).rejects.toThrow();
     for (const table of [
+      'sc_policy_versions',
       'sc_series',
       'sc_definition_versions',
       'sc_observations',
@@ -299,7 +416,13 @@ describe('e-Stat public projection and migration (synthetic only)', () => {
           .run();
       }
       await expect(
-        local.env.PUBLIC_DB.prepare('UPDATE ' + table + " SET public_json='{}'").run(),
+        local.env.PUBLIC_DB.prepare(
+          'UPDATE ' +
+            table +
+            (table === 'sc_policy_versions'
+              ? " SET configuration_hash='" + 'd'.repeat(64) + "'"
+              : " SET public_json='{}'"),
+        ).run(),
       ).rejects.toThrow(/immutable/);
     }
     await expect(

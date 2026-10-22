@@ -42,7 +42,9 @@
                   "type": "object",
                   "required": [
                     "schema_version",
-                    "data"
+                    "data",
+                    "api_credit",
+                    "attribution"
                   ],
                   "properties": {
                     "schema_version": {
@@ -63,6 +65,14 @@
                     "snapshot_as_of": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "api_credit": {
+                      "type": "string",
+                      "description": "Verbatim e-Stat API credit; also present on empty and error responses."
+                    },
+                    "attribution": {
+                      "type": "string",
+                      "description": "METI and e-Stat attribution with source URL and processing notice; also present on errors."
                     }
                   }
                 }
@@ -291,7 +301,9 @@
                   "type": "object",
                   "required": [
                     "schema_version",
-                    "data"
+                    "data",
+                    "api_credit",
+                    "attribution"
                   ],
                   "properties": {
                     "schema_version": {
@@ -312,6 +324,14 @@
                     "snapshot_as_of": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "api_credit": {
+                      "type": "string",
+                      "description": "Verbatim e-Stat API credit; also present on empty and error responses."
+                    },
+                    "attribution": {
+                      "type": "string",
+                      "description": "METI and e-Stat attribution with source URL and processing notice; also present on errors."
                     }
                   }
                 }
@@ -520,7 +540,9 @@
                   "type": "object",
                   "required": [
                     "schema_version",
-                    "data"
+                    "data",
+                    "api_credit",
+                    "attribution"
                   ],
                   "properties": {
                     "schema_version": {
@@ -541,6 +563,14 @@
                     "snapshot_as_of": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "api_credit": {
+                      "type": "string",
+                      "description": "Verbatim e-Stat API credit; also present on empty and error responses."
+                    },
+                    "attribution": {
+                      "type": "string",
+                      "description": "METI and e-Stat attribution with source URL and processing notice; also present on errors."
                     }
                   }
                 }

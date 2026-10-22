@@ -35,7 +35,7 @@
     "運搬機械及び産業用ロボット",
     "開閉制御装置"
   ],
-  "max_bytes": 2000000,
+  "max_bytes": 16000000,
   "max_records": 100,
   "estat": {
     "owner_approval_ref": "Kaz owner approval 2026-10-22T09:43Z estat",
@@ -54,8 +54,8 @@
     ],
     "day_utc": 1,
     "max_list_pages": 4,
-    "max_data_pages": 8,
-    "page_size": 100,
+    "max_data_pages": 5,
+    "page_size": 10000,
     "normalized_days": 1095,
     "reviewed_schema_signatures": []
   },

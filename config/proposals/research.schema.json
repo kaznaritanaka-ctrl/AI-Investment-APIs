@@ -480,12 +480,12 @@
             "max_data_pages": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 8
+              "maximum": 5
             },
             "page_size": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100
+              "maximum": 10000
             },
             "normalized_days": {
               "type": "integer",

@@ -23,6 +23,9 @@ export const observe = (
 // Never log arbitrary Error.message or arbitrary result properties, even if they look like a code.
 const codes = new Set([
   'estat_disabled',
+  'estat_resume_failed',
+  'estat_schema_unavailable',
+  'estat_cleanup_failed',
   'estat_app_id_missing',
   'estat_not_due',
   'estat_operation_failed',

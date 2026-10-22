@@ -296,6 +296,22 @@ const gpuArray = (schema: string) => ({
     data: { type: 'array', items: { $ref: '#/components/schemas/' + schema } },
   },
 });
+const supplyChainArray = (schema: string) => ({
+  ...gpuArray(schema),
+  required: [...arraySchema.required, 'api_credit', 'attribution'],
+  properties: {
+    ...gpuArray(schema).properties,
+    api_credit: {
+      type: 'string',
+      description: 'Verbatim e-Stat API credit; also present on empty and error responses.',
+    },
+    attribution: {
+      type: 'string',
+      description:
+        'METI and e-Stat attribution with source URL and processing notice; also present on errors.',
+    },
+  },
+});
 export const openapi = {
   openapi: '3.1.0',
   info: {
@@ -309,7 +325,7 @@ export const openapi = {
       get: operation(
         'Supply-chain series, original units and definitions with current publishable observations',
         supplyChainPaging,
-        gpuArray('SupplyChainSeries'),
+        supplyChainArray('SupplyChainSeries'),
       ),
     },
     '/v1/supply-chain/series/{id}/observations': {
@@ -334,7 +350,7 @@ export const openapi = {
           ),
           ...supplyChainPaging,
         ],
-        gpuArray('SupplyChainObservation'),
+        supplyChainArray('SupplyChainObservation'),
       ),
     },
     '/v1/supply-chain/series/{id}/revisions': {
@@ -349,7 +365,7 @@ export const openapi = {
           },
           ...supplyChainPaging,
         ],
-        gpuArray('SupplyChainRevision'),
+        supplyChainArray('SupplyChainRevision'),
       ),
     },
     '/v1/models/coverage': {

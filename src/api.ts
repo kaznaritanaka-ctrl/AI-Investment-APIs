@@ -1,6 +1,6 @@
 import { gpuAPI } from './gpu-api';
 import { modelsAPI } from './models-api';
-import { supplyChainAPI } from './supply-chain-api';
+import { supplyChainAPI, supplyChainJSON } from './supply-chain-api';
 import { visibleSQL, visibleJoin, MIT_NOTICE } from './publication';
 import { freshness } from './fx';
 import { hash, stable, isoTime } from './util';
@@ -105,14 +105,22 @@ export async function handle(
   env: APIEnv,
   now = new Date().toISOString(),
 ): Promise<Response> {
+  const url = new URL(request.url),
+    path = url.pathname;
+  const supplyChain = path === '/v1/supply-chain' || path.startsWith('/v1/supply-chain/');
+  const replyError = (code: string, status: number) =>
+    supplyChain ? supplyChainJSON({ error: { code } }, status) : error(code, status);
+  if (supplyChain && !['GET', 'HEAD'].includes(request.method)) {
+    const response = replyError('method_not_allowed', 405);
+    response.headers.set('Allow', 'GET, HEAD');
+    return response;
+  }
   if (!['GET', 'HEAD'].includes(request.method))
     return new Response(null, {
       status: 405,
       headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store' },
     });
-  if (request.url.length > 8192) return error('invalid_query', 400);
-  const url = new URL(request.url),
-    path = url.pathname;
+  if (request.url.length > 8192) return replyError('invalid_query', 400);
   try {
     if (
       env.RATE_LIMITER &&
@@ -122,13 +130,13 @@ export async function handle(
         })
       ).success
     ) {
-      const response = error('rate_limited', 429);
+      const response = replyError('rate_limited', 429);
       response.headers.set('Retry-After', '60');
       return response;
     }
     if (path.startsWith('/v1/gpu/')) return await gpuAPI(url, env, now);
     if (path.startsWith('/v1/models/')) return await modelsAPI(url, env, now);
-    if (path.startsWith('/v1/supply-chain/')) return await supplyChainAPI(url, env, now);
+    if (supplyChain) return await supplyChainAPI(url, env, now);
     if (path === '/openapi.json') return json(openapi);
     if (path === '/llms.txt')
       return new Response(
@@ -378,8 +386,8 @@ export async function handle(
       e instanceof Error &&
       ['invalid_query', 'invalid_cursor', 'cursor_filter_mismatch'].includes(e.message)
     )
-      return error(e.message, 400);
-    return error('public_store_unavailable', 503);
+      return replyError(e.message, 400);
+    return replyError('public_store_unavailable', 503);
   }
 }
 export default {

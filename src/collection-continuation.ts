@@ -18,6 +18,6 @@ export async function resumeCollections(
   const models = await resumeModelRuns(env, sources, now, false, observer);
   if (models.length) return { results: models, models_work: true };
   const estat = await resumeEstat(env, sources, now, observer);
-  if (estat.length) return { results: estat, models_work: false };
+  if (estat.work) return { results: estat.results, models_work: false, estat_work: true };
   return { results: await resumeGPURuns(env, sources, now, false, observer), models_work: false };
 }

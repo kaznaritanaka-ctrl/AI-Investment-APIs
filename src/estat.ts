@@ -34,7 +34,12 @@ const id = (value: unknown): string => {
 export function maskEstat(value: string, secret?: string): string {
   let masked = value;
   if (secret)
-    for (const token of new Set([secret, encodeURIComponent(secret), encodeURI(secret)])) {
+    for (const token of new Set([
+      secret,
+      encodeURIComponent(secret),
+      encodeURI(secret),
+      new URLSearchParams({ v: secret }).toString().slice(2),
+    ])) {
       masked = masked.split(token).join('[REDACTED]');
     }
   return masked.replace(
@@ -175,7 +180,7 @@ export function parseEstatList(s: Source, body: unknown, start = 1) {
   const root = object(object(body).GET_STATS_LIST),
     data = object(root.DATALIST_INF);
   const rows = list(data.TABLE_INF);
-  if (rows.length > e.page_size) throw new Error('estat_page_too_large');
+  if (rows.length > Math.min(e.page_size, 100)) throw new Error('estat_page_too_large');
   const tables: EstatTable[] = [];
   for (const entry of rows) {
     const row = object(entry);
@@ -288,6 +293,17 @@ export async function parseEstatData(
   const schema_signature = await hash(stable(signatures));
   const values = list(object(data.DATA_INF).VALUE);
   if (values.length > s.estat!.page_size) throw new Error('estat_page_too_large');
+  const classifications = new Map(
+    dimensions.map((d) => [
+      id(d['@id']),
+      new Map(
+        list(d.CLASS).map((c) => {
+          const cls = object(c);
+          return [id(cls['@code']), cls] as const;
+        }),
+      ),
+    ]),
+  );
   const rows: EstatRow[] = [];
   const seen = new Set<string>();
   for (const entry of values) {
@@ -295,13 +311,11 @@ export async function parseEstatData(
       selected = new Map<string, Obj>();
     for (const d of dimensions) {
       const dimensionId = id(d['@id']);
-      const cls = list(d.CLASS)
-        .map(object)
-        .filter((c) => String(c['@code']) === v['@' + dimensionId]);
-      if (cls.length !== 1) throw new Error('estat_classification_unknown');
+      const cls = classifications.get(dimensionId)!.get(String(v['@' + dimensionId]));
+      if (!cls) throw new Error('estat_classification_unknown');
       if (![item[0], time[0], metric[0]].includes(d) && list(d.CLASS).length !== 1)
         throw new Error('estat_dimensions_unknown');
-      selected.set(dimensionId, cls[0]);
+      selected.set(dimensionId, cls);
     }
     if (
       Object.keys(v).some(

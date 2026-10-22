@@ -7,6 +7,7 @@ import { supplyChainAPI } from '../src/supply-chain-api';
 import { sourceObserver, safeLogCode } from '../src/telemetry';
 import { resumeEstat } from '../src/estat-pipeline';
 import { expireEvidence } from '../src/operations';
+import { ESTAT_CREDIT } from '../src/estat-schema';
 import { supplyChainSQLite } from './supply-chain-sqlite';
 
 let local: Awaited<ReturnType<typeof supplyChainSQLite>>;
@@ -45,7 +46,7 @@ const listBody = (start: number) => ({
   },
 });
 function dataBody(start = 1, unit = '台') {
-  const rows = values.slice(start - 1, start + 1);
+  const rows = values.slice(start - 1, start - 1 + source.estat!.page_size);
   return {
     GET_STATS_DATA: {
       RESULT: { STATUS: 0 },
@@ -194,6 +195,17 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
       note: 'AI向け専用統計ではない',
       data_origin: 'synthetic',
     });
+    const credit =
+      'このサービスは、政府統計総合窓口(e-Stat)のAPI機能を使用していますが、サービスの内容は国によって保証されたものではありません。';
+    expect(ESTAT_CREDIT).toBe(credit);
+    for (const db of [local.env.PRIVATE_DB, local.env.PUBLIC_DB])
+      for (const table of ['sc_series', 'sc_definition_versions', 'sc_observations']) {
+        const rows = await db
+          .prepare('SELECT public_json FROM ' + table)
+          .all<{ public_json: string }>();
+        expect(rows.results.length).toBeGreaterThan(0);
+        for (const row of rows.results) expect(JSON.parse(row.public_json).api_credit).toBe(credit);
+      }
     const before = calls.length;
     expect((await finish()).reason).toBe('already_processed');
     slot = '2026-07-01T18:18:00.000Z';
@@ -215,6 +227,13 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     expect((await finish()).state).toBe('complete');
     const revisions = (await api(`series/${series}/revisions`)).data;
     expect(revisions).toHaveLength(1);
+    expect(revisions[0].api_credit).toBe(ESTAT_CREDIT);
+    for (const db of [local.env.PRIVATE_DB, local.env.PUBLIC_DB]) {
+      const saved = await db
+        .prepare('SELECT public_json FROM sc_revisions')
+        .first<{ public_json: string }>();
+      expect(JSON.parse(saved!.public_json).api_credit).toBe(ESTAT_CREDIT);
+    }
     expect(revisions[0]).toMatchObject({
       before: { value_decimal: '1.2300' },
       after: { value_decimal: '1.2400' },
@@ -227,9 +246,116 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     expect(listing).toHaveLength(1);
     expect(listing[0].item_name_ja).toBe('合成変圧器（名称改正）');
     expect(listing[0].definitions).toHaveLength(2);
-    expect((await api(`series/${series}/observations`)).data).toHaveLength(9);
+    expect((await api(`series/${series}/observations`)).data).toHaveLength(7);
     expect((await api(`series/${series}/revisions`)).data).toHaveLength(1);
   });
+  it('keeps stable identity and revision lineage across policy/signature renewals without duplicating unchanged periods', async () => {
+    await finish();
+    const id = (await api('series')).data[0].series_id;
+    const signature = (await parseEstatData(source, table(), dataBody())).schema_signature;
+    source.policy.version += '-renewed';
+    source.estat!.reviewed_schema_signatures = [signature];
+    now = '2026-08-01T18:17:01.000Z';
+    slot = '2026-08-01T18:17:00.000Z';
+    values = ['1.23000', 'X', '-']; // Numerically unchanged, keep original decimal spelling.
+    expect(await finish()).toMatchObject({ state: 'complete', observations: 0 });
+    expect((await api('series')).data.map((r: any) => r.series_id)).toEqual([id]);
+    expect((await api(`series/${id}/observations`)).data).toHaveLength(3);
+    now = '2026-09-01T18:17:01.000Z';
+    slot = '2026-09-01T18:17:00.000Z';
+    values = ['1.2400', 'X', '-'];
+    expect(await finish()).toMatchObject({ state: 'complete', observations: 1 });
+    expect((await api('series')).data[0].series_id).toBe(id);
+    expect((await api(`series/${id}/observations`)).data).toHaveLength(4);
+    expect((await api(`series/${id}/revisions`)).data).toHaveLength(1);
+    for (const db of [local.env.PRIVATE_DB, local.env.PUBLIC_DB]) {
+      expect(await db.prepare('SELECT count(*) n FROM sc_observations').first<number>('n')).toBe(4);
+      expect(await db.prepare('SELECT count(*) n FROM sc_series').first<number>('n')).toBe(1);
+    }
+  });
+
+  it('masks raw, URI and URLSearchParams form-encoded echoes in keys, values and failures', async () => {
+    const token = "synthetic !'()*~+/key";
+    const variants = [
+      token,
+      encodeURIComponent(token),
+      encodeURI(token),
+      new URLSearchParams({ v: token }).toString().slice(2),
+    ];
+    for (const variant of variants)
+      expect(maskEstat('echo ' + variant, token)).toBe('echo [REDACTED]');
+    const response = await estatRequest(
+      source,
+      { ...env(), ESTAT_APP_ID: token },
+      'getStatsList',
+      {},
+      {
+        now: () => now,
+        fetcher: async () =>
+          new Response(
+            JSON.stringify({ GET_STATS_LIST: { RESULT: { STATUS: 0 }, [variants[3]]: variants } }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+      },
+    );
+    for (const variant of variants) expect(JSON.stringify(response)).not.toContain(variant);
+  });
+
+  it('never retains or logs a non-200 body echoing appId', async () => {
+    const logs: unknown[] = [];
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation((line) => logs.push(line));
+    const bad = vi.fn(
+      async () =>
+        new Response('appId=' + secret + ' ' + encodeURIComponent(secret), { status: 503 }),
+    );
+    const result = await collectSource(env(), source, slot, {
+      now: () => now,
+      observer: sourceObserver(
+        env(),
+        'collection',
+        slot,
+        (log) => logs.push(log),
+        () => now,
+      ),
+      network: { fetcher: bad, sleep: async () => {}, random: () => 0 },
+    });
+    expect(result).toMatchObject({ state: 'failed', reason: 'estat_request_failed' });
+    expect(bad).toHaveBeenCalledTimes(3);
+    const attempts = await local.env.PRIVATE_DB.prepare('SELECT * FROM fetch_attempts').all();
+    const runs = await local.env.PRIVATE_DB.prepare('SELECT * FROM collection_runs').all();
+    expect(attempts.results).toHaveLength(3);
+    expect(local.objects.size).toBe(0);
+    const retained = JSON.stringify([result, attempts, runs, logs]);
+    for (const token of [secret, encodeURIComponent(secret)]) expect(retained).not.toContain(token);
+    consoleLog.mockRestore();
+  });
+
+  it('signals partial migrations and maintenance failures with fixed codes and reserves the workload', async () => {
+    const logs: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((line: string) => logs.push(line));
+    const publicDb = await supplyChainSQLite(3);
+    try {
+      expect(
+        await resumeEstat({ ...env(), PUBLIC_DB: publicDb.env.PUBLIC_DB }, [source], now),
+      ).toEqual({ results: [], work: true });
+      expect(logs.map((line) => JSON.parse(line).error_code)).toContain('estat_schema_unavailable');
+    } finally {
+      await publicDb.mf.dispose();
+    }
+    const broken = new Proxy(local.env.PUBLIC_DB, {
+      get(target, key, receiver) {
+        if (key === 'prepare') throw new Error(secret);
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    expect(await resumeEstat({ ...env(), PUBLIC_DB: broken }, [source], now)).toEqual({
+      results: [],
+      work: true,
+    });
+    expect(logs.map((line) => JSON.parse(line).error_code)).toContain('estat_resume_failed');
+    expect(logs.join('')).not.toContain(secret);
+  });
+
   it('quarantines changed code systems and unreviewed 2026 annual tables', async () => {
     await finish();
     itemCode = 'changed2026';
@@ -327,6 +453,61 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     expect(await finish()).toMatchObject({ state: 'failed', reason: 'estat_page_limit' });
     expect(calls).toHaveLength(2);
   });
+  it('bounds the SQL work for a ten-row revision continuation', async () => {
+    source.estat!.page_size = 10;
+    values = Array.from({ length: 10 }, () => '1.00');
+    await finish();
+    now = '2026-08-01T18:17:01.000Z';
+    slot = '2026-08-01T18:17:00.000Z';
+    values = Array.from({ length: 10 }, () => '2.00');
+    const queries = { private: 0, public: 0 };
+    const track = (db: D1Database, kind: 'private' | 'public') =>
+      new Proxy(db, {
+        get(target, key, receiver) {
+          if (key === 'prepare')
+            return (sql: string) => {
+              queries[kind]++;
+              return target.prepare(sql);
+            };
+          return Reflect.get(target, key, receiver);
+        },
+      });
+    const tracked = {
+      ...env(),
+      PRIVATE_DB: track(local.env.PRIVATE_DB, 'private'),
+      PUBLIC_DB: track(local.env.PUBLIC_DB, 'public'),
+    };
+    for (let i = 0; i < 10; i++) {
+      queries.private = queries.public = 0;
+      const result = await collectSource(tracked, source, slot, {
+        now: () => now,
+        synthetic: true,
+        network: { fetcher },
+      });
+      if (result.state === 'complete') {
+        expect(result.observations).toBe(10);
+        expect(result.changes).toBe(10);
+        expect(queries.private + queries.public).toBeLessThan(200);
+        expect(queries.private + queries.public).toBeGreaterThan(100);
+        return;
+      }
+      expect(result.state).toBe('pending');
+    }
+    throw new Error('synthetic_revision_chunk_did_not_finish');
+  });
+
+  it('stops at the data-page cap and withholds a partial table', async () => {
+    source.estat!.max_data_pages = 1;
+    expect(await finish()).toMatchObject({ state: 'failed', reason: 'estat_page_limit' });
+    expect(calls.filter((u) => u.pathname.endsWith('getStatsData'))).toHaveLength(1);
+    expect((await api('series')).data).toEqual([]);
+    expect(
+      await local.env.PRIVATE_DB.prepare('SELECT count(*) n FROM sc_observations').first<number>(
+        'n',
+      ),
+    ).toBe(2);
+  });
+
   it('discovers monthly IIP tables and retains the seasonal-adjustment base year', async () => {
     source = structuredClone(sources.find((s) => s.source_id === 'estat_meti_iip')!);
     source.enabled = true;
@@ -371,7 +552,7 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     source.enabled = false;
     const maintenance = { ...env(), ESTAT_ENABLED: 'false' };
     const later = '2030-01-01T00:00:00.000Z';
-    await resumeEstat(maintenance, [source], later);
+    expect(await resumeEstat(maintenance, [source], later)).toEqual({ results: [], work: true });
     expect(
       await local.env.PUBLIC_DB.prepare('SELECT count(*) n FROM sc_observations').first<number>(
         'n',

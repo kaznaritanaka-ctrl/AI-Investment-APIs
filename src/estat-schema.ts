@@ -11,8 +11,8 @@ export const EstatConfigSchema = z
     months_utc: z.array(z.number().int().min(1).max(12)).min(1).max(12),
     day_utc: z.literal(1),
     max_list_pages: z.number().int().min(1).max(4),
-    max_data_pages: z.number().int().min(1).max(8),
-    page_size: z.number().int().min(1).max(100),
+    max_data_pages: z.number().int().min(1).max(5),
+    page_size: z.number().int().min(1).max(10000),
     normalized_days: z.number().int().positive().max(3650),
     // New code systems are never joined automatically, including the 2026 redesign.
     reviewed_schema_signatures: z.array(z.string().regex(/^[0-9a-f]{64}$/)).max(16),
