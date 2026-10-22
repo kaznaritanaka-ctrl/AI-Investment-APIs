@@ -5,7 +5,7 @@
 ## e-Stat追加時の適用順序（未実施・2026-10-22）
 
 - [ ] [e-Stat設計・有効化境界](supply-chain-stats.md#9-実装と有効化の境界)と相互レビュー・CI・ローカル検証を確認する。適用順序は **public `0004_supply_chain_stats.sql` → private `0017_supply_chain_stats.sql`**。公開側の適用結果・台帳・追加テーブルを確認してから非公開側を適用する。0017を先行させず、既存migrationや設定を上書きしない。
-- [ ] 片側未適用でもe-Stat再開が `work:false` となり、既存GPUの再開・保守が続くことを確認する。public不足時は固定 `estat_schema_unavailable` を記録する。これはe-Stat有効化の許可ではなく、`ESTAT_ENABLED="false"`・両sourceの `enabled=false` を維持する。今回の作業ではmigration・deploy・Secret作成・実HTTPは行わない。
+- [ ] 片側未適用でもe-Stat再開が `work:false` となり、既存GPUの再開・保守が続くことを確認する。public不足時は固定 `estat_schema_unavailable` を記録する。（当時の手順。e-StatはPR #35で有効化済み。）今回の作業ではmigration・deploy・Secret作成・実HTTPは行わない。
 
 <a id="dc-0016"></a>
 ## DC事業者8社の配備手順（未実施・2026-10-22）

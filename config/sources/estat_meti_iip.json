@@ -11,9 +11,7 @@
   "authentication_required": true,
   "native_currency": null,
   "native_unit": "series_specific",
-  "geography": [
-    "JP"
-  ],
+  "geography": ["JP"],
   "native_frequency": "monthly",
   "expected_update_calendar": "Existing 18:17 UTC collection; first UTC day of each month",
   "expected_lag": "Monthly publication; revisions possible",
@@ -27,54 +25,27 @@
     "Raw redistribution and external LLM processing are denied.",
     "Unknown classifications and unreviewed 2026 code systems are quarantined."
   ],
-  "enabled": false,
+  "enabled": true,
   "adapter": "estat",
-  "selection": [
-    "在庫",
-    "在庫率"
-  ],
+  "selection": ["在庫", "在庫率"],
   "max_bytes": 16000000,
   "max_records": 100,
   "estat": {
     "owner_approval_ref": "Kaz owner approval 2026-10-22T09:43Z estat",
     "stats_code": "00550300",
     "release_kind": "iip_monthly",
-    "table_groups": [
-      "在庫",
-      "在庫率"
-    ],
-    "months_utc": [
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12
-    ],
+    "table_groups": ["在庫", "在庫率"],
+    "months_utc": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
     "day_utc": 1,
     "max_list_pages": 4,
     "max_data_pages": 5,
     "page_size": 10000,
     "normalized_days": 1095,
-    "reviewed_schema_signatures": [],
-    "search_words": [
-      "在庫",
-      "在庫率"
+    "reviewed_schema_signatures": [
+      "3cb4f263893f77d845c65f59d869b2ac2d33bee69990a4d3b837198f348ed7c5"
     ],
-    "item_codes": [
-      "0076000",
-      "0083000",
-      "0140000",
-      "0145000",
-      "0146000",
-      "0147000"
-    ],
+    "search_words": ["在庫", "在庫率"],
+    "item_codes": ["0076000", "0083000", "0140000", "0145000", "0146000", "0147000"],
     "implied_measures": {
       "在庫": "inventory_index_sa",
       "在庫率": "inventory_ratio_index_sa"

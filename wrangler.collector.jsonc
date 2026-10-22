@@ -18,7 +18,7 @@
   "vars": {
     "ENVIRONMENT": "production",
     "AGENT_ENABLED": "false",
-    "ESTAT_ENABLED": "false",
+    "ESTAT_ENABLED": "true",
     "PRIVATE_GPU_RESEARCH_ENABLED": "true",
     "DC_TRACKER_ENABLED": "true",
     "COLLECTION_CRON": "17 18 * * *",

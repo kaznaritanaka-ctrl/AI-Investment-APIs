@@ -1,6 +1,6 @@
 # 供給網統計（公開商品・e-Stat経由）— 2026-10-22
 
-状態: 初版はmain（PR #31, fdea983）にマージ・本番デプロイ済み。public 0004 / private 0017 適用済み（2026-10-22 21:0x JST）。Worker Secret `ESTAT_APP_ID` 登録済み。以下は `codex/estat-real-layout` の実表対応。収集は両source `enabled=false`、`ESTAT_ENABLED="false"`、`reviewed_schema_signatures=[]` を維持し、有効化は保留。
+状態: 初版はmain（PR #31, fdea983）にマージ・本番デプロイ済み。public 0004 / private 0017 適用済み（2026-10-22 21:0x JST）。Worker Secret `ESTAT_APP_ID` 登録済み。以下は `codex/estat-real-layout` の実表対応。その後PR #35で審査済み署名を登録し、両source `enabled=true`・`ESTAT_ENABLED="true"` に有効化した（下記「有効化」）。
 
 ## 実表の確認結果とローカル修正（2026-10-22）
 
@@ -106,7 +106,7 @@ R2には生JSONではなく、マスク済み・正規化済みのページ投�
 - 未適用0017/0004に `expires_at,obs_id`、観測→定義、定義→系列、batchおよびrevision両入力の索引を追加し、期限走査・孤立行検査・削除参照を支える。SQLiteのEXPLAINで期限・孤立行の内側の検索が索引を使うことを検証する。private intakeのbatch検索にも索引を付ける。
 - 継続処理はpublic migrationも確認し、その他の再開失敗は `estat_resume_failed`、失敗状態記録やlease解放の失敗は `estat_cleanup_failed` をログへ出す。例外本文は出さない。policy失効・拒否、appId不足、予定日対象外、source無効によって再開できないpending runは、固定コード `estat_resume_skipped` で `failed` にし、checkpointを残して `work:false` で同じ回のGPU再開・保守へ進む。次回は後続のe-Stat runを選べる。有効なleaseがあるrunは選ばない。期限削除や失敗した保守がtickを使った場合は `estat_work=true` とし、同じtickでGPU収集・期限処理・研究収集を始めない。
 - **e-Statは既存watchdogのstaleness（予定からの遅れ）判定の対象外**（N3）。日次watchdogをそのまま適用すると、月次/年報を毎日missing扱いするため除外している。自動の遅延警報・復旧は今回追加しない。継続runのpending/failed/quarantined、`sc_intakes` のphase/row_index、collection_runsのエラー、継続処理ログで確認する。pendingが動かないことへの自動警報は未対応であり、collector全体の完了時刻だけでe-Statが新鮮とは判定しない。
-- source設定は追加したが、フラグとsourceは無効のまま。有効化・実HTTP・Secret作成・本番操作は今回の対象外。生成スキーマ・OpenAPIも同期する。
+- source設定は追加したが、当初はフラグ・sourceとも無効だった（有効化・実HTTP・Secret作成・本番操作は初版の対象外）。PR #35で有効化（下記「有効化」）。生成スキーマ・OpenAPIも同期する。
 - public migration未適用の場合、新3 endpointだけ固定JSON `public_store_unavailable` / 503を返す。既存health/sources/datasets/FX/Models/GPU等のSQLは新テーブルを参照せず、APIのbindingもPUBLIC_DBだけのまま。
 
 ## 10. 検証とレビュー
@@ -119,7 +119,7 @@ R2には生JSONではなく、マスク済み・正規化済みのページ投�
 - `tests/estat.test.ts`・`estat-shape.test.ts`・`estat-capacity.test.ts`・`supply-chain-api.test.ts` は4ファイル85件成功。Socket不要のSQLiteで既存データ相当のmigrationと実際のSQLも検証。`node --test scripts/resilience.test.mjs` も1件成功。
 - `node scripts/run.mjs build`（両WorkerのWrangler dry-run）成功。`WRANGLER_HIDE_BANNER=true` と `WRANGLER_SEND_METRICS=false` を指定し、更新確認とメトリクスを止めた。ログ先は既存runスクリプトのwork配下。
 - `node scripts/generate.mjs` と生成物3点の `git diff --exit-code` が成功。`config/source.schema.json` は現在のZod定義と一致し、スキーマ・OpenAPIに変更はない。
-- offline preflightはstatic_valid/ready=true、network_performed=false。`git diff --check` 成功。両sourceのenabled=false・署名リスト空・CollectorのESTAT_ENABLED=falseを合成テストで確認。
+- offline preflightはstatic_valid/ready=true、network_performed=false。`git diff --check` 成功。（当時は両source無効・署名リスト空。PR #35で有効化。）
 - 全件Vitest（`npx vitest run`、Node 24.22.0、box上）は539件成功。CIでも検証する。
 
 実表の署名承認・本番性能・認証成功を、ローカル合成テストの成功だけで実証したとは扱わない。
@@ -127,3 +127,13 @@ R2には生JSONではなく、マスク済み・正規化済みのページ投�
 定義の適用開始年はソース版の年から推測せず、`valid_from_year=null` として表の年（source_table_year）を別記する。
 
 相互レビューはAGENTS.mdに従いClaude Code（claude-sonnet-5-5）が担当し、意見が割れたらclaude-opus-5-5が判断する。結果はPRに記録する。
+
+## 有効化（2026-10-22 夜）
+
+- box上からのマスク済みレイアウト確認（`/workspace/estat-probe/probe8`〜`probe10`、計30リクエスト、appIdはログ・結果に含まれないことを確認）で、6表すべてが本番パーサーで解析できた。
+- 生産動態の実表には各表2件の `労務_0301/0302_…_月末従事者数_人` 分類があり、旧パーサーでは表全体が `estat_classification_unknown` で隔離されていた。`労務` 行は形式を検証し署名に含めたうえで観測値から除外する（item_codeは `<表コード>_L<番号>`）。
+- 審査済み署名: IIP 在庫/在庫率 `3cb4f263…`（同一分類のため1件）。生産動態2025年版 静止電気 `007a4354…`（732行）、半導体製造装置 `efc6fd88…`（120行）、運搬機械及び産業用ロボット `5397ab22…`（468行）、開閉制御装置 `4758d856…`（624行）。IIPは各99行。
+- 翌年の新しい年報表は分類が変われば署名が変わり隔離されるため、毎年7月の初回に署名審査が必要。
+- 保存は10行/tickで、IIPは各約10 ticks（1日以内）。生産動態は静止電気が約74 ticksでおよそ1〜2日、その他は1日以内。4表合計約200 ticksのため、7月1日の回は全表完了まで約3日。
+
+- 注意: 生産動態（estat_meti_seidou）は `months_utc: [7,8,9]` だが利用条件の `valid_until` は2027-01-22。延長しない限り、enabled=trueでも2027年7月までデータは入らない（fail-closed）。2027年7月前に利用条件の再確認・延長が必要。IIPも同じ `valid_until` のため、2027-01-22以降は収集が止まる（2027年1月までに再確認・延長が必要）。

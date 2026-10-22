@@ -11,9 +11,7 @@
   "authentication_required": true,
   "native_currency": null,
   "native_unit": "series_specific",
-  "geography": [
-    "JP"
-  ],
+  "geography": ["JP"],
   "native_frequency": "annual_monthly_values",
   "expected_update_calendar": "Existing 18:17 UTC collection; first UTC day of July through September",
   "expected_lag": "Annual time-series tables may lag up to approximately 18 months",
@@ -27,7 +25,7 @@
     "Raw redistribution and external LLM processing are denied.",
     "Unknown classifications and unreviewed 2026 code systems are quarantined."
   ],
-  "enabled": false,
+  "enabled": true,
   "adapter": "estat",
   "selection": [
     "静止電気機械器具",
@@ -47,23 +45,19 @@
       "運搬機械及び産業用ロボット",
       "開閉制御装置"
     ],
-    "months_utc": [
-      7,
-      8,
-      9
-    ],
+    "months_utc": [7, 8, 9],
     "day_utc": 1,
     "max_list_pages": 4,
     "max_data_pages": 5,
     "page_size": 10000,
     "normalized_days": 1095,
-    "reviewed_schema_signatures": [],
-    "search_words": [
-      "静止電気機械器具",
-      "半導体製造装置",
-      "産業用ロボット",
-      "開閉制御装置"
-    ]
+    "reviewed_schema_signatures": [
+      "007a4354cb462e4671b48c30ccc676372ccf5ca92776ca59489252d046c054ee",
+      "efc6fd882ce24490d9d993dac24268be9efd51f4fa756455d06ce82122804259",
+      "5397ab2257f89d5ab24f7b89b3c413d3ec57dce6e0bad20029100e675f94efb1",
+      "4758d8561d16b9229461288a16c47635f321f504b2f00f589457ea5f3fe6f8d6"
+    ],
+    "search_words": ["静止電気機械器具", "半導体製造装置", "産業用ロボット", "開閉制御装置"]
   },
   "policy": {
     "version": "estat_meti_seidou-20261022-v3",
