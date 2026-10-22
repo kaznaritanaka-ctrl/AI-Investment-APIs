@@ -62,15 +62,15 @@ UTC予定slotと秒付き旧runの照合、保存済み証拠からの有限復�
 
 Each IP address has a general limit of 60 requests per minute. Data routes
 (`/health`, `/v1/datasets`, `/v1/sources`, `/v1/fx`, `/v1/gpu/*`, `/v1/models/*`,
-`/v1/supply-chain` and its subroutes) also share a 20 requests per minute limit.
+`/v1/latest`, `/v1/observations`, `/v1/changes`, `/v1/supply-chain` and its subroutes) also share a 20 requests per minute limit.
 IPv6 addresses share a /64 bucket. Cloudflare always supplies `CF-Connecting-IP`;
 requests without it defensively share a `noip` bucket subject to the tighter limit.
 A rejected request returns HTTP 429 with `Retry-After: 60` and `Cache-Control: no-store`.
 Production returns HTTP 503 if a required limiter is missing or unavailable.
 
-Limits apply before cache lookup. Successful GET data responses use a full-URL
-edge cache for 300 seconds; API documentation and methodology use 3600 seconds.
-HEAD requests and errors are not cached. `/health` keeps `no-store` externally
-and uses a 60-second internal cache, preserving its existing dataset statistics.
-Published updates and rights withdrawals may therefore take up to 300 seconds
-to disappear from data caches, including downstream browser caches.
+Limits apply before cache lookup. Rights-gated data routes and `/health` use
+`no-store` and bypass the cache. `/v1/datasets` and `/v1/sources` use an internal
+cache for at most 300 seconds, capped at policy and retention boundaries; each
+lookup rechecks current publication controls. These metadata responses remain
+`no-store` for downstream clients. Static API documentation and methodology use
+3600 seconds. HEAD requests and errors are not cached.

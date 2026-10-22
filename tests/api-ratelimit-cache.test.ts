@@ -4,6 +4,7 @@ import { handle, type APIEnv } from '../src/api';
 const db = {
   prepare: vi.fn(() => ({
     first: async () => null,
+    all: async () => ({ results: [] }),
     bind: () => ({ all: async () => ({ results: [] }) }),
   })),
 } as unknown as D1Database;
@@ -74,7 +75,7 @@ it('caches full GET URLs after limiting, skips HEAD and never caches errors', as
     );
   }
   expect((await handle(request('/v1/datasets'), env)).headers.get('Cache-Control')).toBe(
-    'public, max-age=300',
+    'no-store',
   );
   const calls = put.mock.calls.length;
   await handle(request('/v1/datasets'), env);
@@ -92,20 +93,114 @@ it('caches full GET URLs after limiting, skips HEAD and never caches errors', as
   expect(put).toHaveBeenCalledTimes(calls);
 });
 
-it('keeps health no-store externally while reusing a 60 second internal entry', async () => {
-  let entry: Response | undefined;
-  const put = vi.fn(async (_key: Request, response: Response) => {
-    entry = response.clone();
-  });
-  vi.stubGlobal('caches', { default: { match: async () => entry?.clone(), put } });
-  const env = { PUBLIC_DB: db };
-  for (let i = 0; i < 2; i++) {
-    const response = await handle(request('/health'), env);
-    expect(response.status).toBe(200);
+it('never consults or populates caches for rights-gated data or health', async () => {
+  const match = vi.fn(async () => new Response('unsafe old cached data'));
+  const put = vi.fn();
+  vi.stubGlobal('caches', { default: { match, put } });
+  for (const path of [
+    '/health',
+    '/v1/fx',
+    '/v1/latest',
+    '/v1/observations',
+    '/v1/changes',
+    '/v1/gpu/prices',
+    '/v1/models/catalog',
+    '/v1/supply-chain/series',
+  ]) {
+    const response = await handle(request(path), { PUBLIC_DB: db });
     expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.text()).not.toContain('unsafe old cached data');
   }
+  expect(match).not.toHaveBeenCalled();
+  expect(put).not.toHaveBeenCalled();
+});
+
+it('rechecks metadata controls, caps TTL at deadlines and fails closed on gate errors', async () => {
+  const entries = new Map<string, Response>();
+  const put = vi.fn(async (key: Request, response: Response) => {
+    entries.set(key.url, response.clone());
+  });
+  const match = vi.fn(async (key: Request) => entries.get(key.url)?.clone());
+  vi.stubGlobal('caches', { default: { match, put } });
+  let active = 1;
+  let broken = false;
+  let coverageState = 'complete';
+  const prepare = vi.fn((sql: string) => ({
+    all: async () => {
+      if (broken) throw new Error('unavailable');
+      return {
+        results: sql.includes('published_coverage')
+          ? [{ snapshot_id: 'synthetic', state: coverageState }]
+          : sql.includes('source_publications')
+            ? [
+                {
+                  source_id: 'synthetic',
+                  active,
+                  valid_until: '2026-10-23T00:00:02.000Z',
+                },
+              ]
+            : [],
+      };
+    },
+    bind: () => ({ all: async () => ({ results: [] }) }),
+  }));
+  const env = { PUBLIC_DB: { prepare } as unknown as D1Database };
+  for (const path of ['/v1/datasets', '/v1/sources']) {
+    await handle(request(path), env, '2026-10-23T00:00:00.000Z');
+    expect(put.mock.calls.at(-1)![1].headers.get('Cache-Control')).toBe('public, max-age=2');
+    const calls = put.mock.calls.length;
+    const hit = await handle(request(path), env, '2026-10-23T00:00:01.000Z');
+    expect(hit.headers.get('Cache-Control')).toBe('no-store');
+    expect(put).toHaveBeenCalledTimes(calls);
+    if (path === '/v1/datasets') {
+      coverageState = 'withdrawn';
+      await handle(request(path), env, '2026-10-23T00:00:01.000Z');
+      expect(put).toHaveBeenCalledTimes(calls + 1);
+      coverageState = 'complete';
+    }
+    active = 0;
+    await handle(request(path), env, '2026-10-23T00:00:01.000Z');
+    expect(put).toHaveBeenCalledTimes(calls + (path === '/v1/datasets' ? 2 : 1));
+    await handle(request(path), env, '2026-10-23T00:00:02.000Z');
+    expect(put).toHaveBeenCalledTimes(calls + (path === '/v1/datasets' ? 3 : 2));
+    active = 1;
+  }
+  broken = true;
+  const calls = match.mock.calls.length;
+  expect((await handle(request('/v1/datasets'), env)).status).toBe(503);
+  expect(match).toHaveBeenCalledTimes(calls);
+});
+
+it('caps dataset cache lifetime at model retention and skips subsecond entries', async () => {
+  const put = vi.fn(async () => {});
+  const match = vi.fn(async () => undefined);
+  vi.stubGlobal('caches', { default: { match, put } });
+  const env = {
+    PUBLIC_DB: {
+      prepare: (sql: string) => ({
+        all: async () => ({
+          results: sql.includes('published_model_snapshots')
+            ? [
+                {
+                  snapshot_id: 'synthetic',
+                  state: 'complete',
+                  expires_at: '2026-10-23T00:00:01.000Z',
+                },
+              ]
+            : [],
+        }),
+        bind: () => ({ all: async () => ({ results: [] }) }),
+      }),
+    } as unknown as D1Database,
+  };
+  await handle(request('/v1/datasets'), env, '2026-10-23T00:00:00.000Z');
   expect(put).toHaveBeenCalledTimes(1);
-  expect(entry?.headers.get('Cache-Control')).toBe('public, max-age=60');
+  expect(
+    (put.mock.calls as unknown as [Request, Response][])[0][1].headers.get('Cache-Control'),
+  ).toBe('public, max-age=1');
+  await handle(request('/v1/datasets'), env, '2026-10-23T00:00:00.500Z');
+  expect(put).toHaveBeenCalledTimes(1);
+  expect(match).toHaveBeenCalledTimes(1);
 });
 
 it('applies the heavy limiter to every data family and preserves supply-chain error credit', async () => {
@@ -119,6 +214,9 @@ it('applies the heavy limiter to every data family and preserves supply-chain er
     '/v1/datasets',
     '/v1/sources',
     '/v1/fx',
+    '/v1/latest',
+    '/v1/observations',
+    '/v1/changes',
     '/v1/gpu/prices',
     '/v1/models/catalog',
     '/v1/supply-chain',

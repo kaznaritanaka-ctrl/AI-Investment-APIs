@@ -126,16 +126,78 @@ function clientKey(ip: string | null): string {
 }
 function heavyRoute(path: string): boolean {
   return (
-    ['/health', '/v1/datasets', '/v1/sources', '/v1/fx'].includes(path) ||
+    [
+      '/health',
+      '/v1/datasets',
+      '/v1/sources',
+      '/v1/fx',
+      '/v1/latest',
+      '/v1/observations',
+      '/v1/changes',
+    ].includes(path) ||
     ['/v1/gpu/', '/v1/models/', '/v1/supply-chain/'].some((prefix) => path.startsWith(prefix)) ||
     path === '/v1/supply-chain'
   );
 }
 function cacheTTL(path: string): number {
-  if (path === '/health') return 60;
+  if (path === '/v1/datasets' || path === '/v1/sources') return 300;
   if (path === '/openapi.json' || path === '/llms.txt' || path.startsWith('/v1/methodology/'))
     return 3600;
-  return heavyRoute(path) ? 300 : 0;
+  return 0;
+}
+// Metadata caches contain no observations, but counts and source notices must still
+// disappear immediately on withdrawal. Read only control tables, never the large
+// observation/lineage tables. The versioned key also ignores older unsafe entries.
+async function metadataCacheGate(env: APIEnv, path: string, now: string) {
+  const policies = await env.PUBLIC_DB.prepare(
+    'SELECT * FROM source_publications ORDER BY source_id,policy_version',
+  ).all<Record<string, unknown>>();
+  const batches =
+    path === '/v1/datasets'
+      ? (
+          await env.PUBLIC_DB.prepare('SELECT * FROM publication_batches ORDER BY batch_id').all<
+            Record<string, unknown>
+          >()
+        ).results
+      : [];
+  const snapshots =
+    path === '/v1/datasets'
+      ? (
+          await env.PUBLIC_DB.prepare(
+            'SELECT snapshot_id,state,expires_at FROM published_model_snapshots ORDER BY snapshot_id',
+          ).all<Record<string, unknown>>()
+        ).results
+      : [];
+  const coverage =
+    path === '/v1/datasets'
+      ? (
+          await env.PUBLIC_DB.prepare(
+            'SELECT snapshot_id,state FROM published_coverage ORDER BY snapshot_id',
+          ).all<Record<string, unknown>>()
+        ).results
+      : [];
+  let ttl = 300;
+  for (const row of [...policies.results, ...snapshots]) {
+    for (const field of ['valid_from', 'valid_until', 'expires_at']) {
+      const value = row[field];
+      if (typeof value === 'string') {
+        const seconds = (Date.parse(value) - Date.parse(now)) / 1000;
+        if (!Number.isFinite(seconds)) ttl = 0;
+        else if (seconds > 0) ttl = Math.min(ttl, Math.floor(seconds));
+      }
+    }
+  }
+  // Include time eligibility so even a stale cache backend cannot resurrect an
+  // entry across a policy or retention boundary.
+  const eligibility = [...policies.results, ...snapshots].map((row) => [
+    !row.valid_from || String(row.valid_from) <= now,
+    !row.valid_until || String(row.valid_until) > now,
+    !row.expires_at || String(row.expires_at) > now,
+  ]);
+  return {
+    ttl,
+    token: await hash(stable([policies.results, batches, snapshots, coverage, eligibility])),
+  };
 }
 export async function handle(
   request: Request,
@@ -167,15 +229,29 @@ export async function handle(
   } catch {
     return replyError('rate_limiter_unavailable', 503);
   }
-  const ttl = cacheTTL(path);
+  let ttl = cacheTTL(path);
+  const metadata = path === '/v1/datasets' || path === '/v1/sources';
+  if (metadata && new URL(request.url).search) return route(request, env, now);
+  let token = 'static';
+  if (metadata && request.method === 'GET') {
+    try {
+      const gate = await metadataCacheGate(env, path, now);
+      ttl = gate.ttl;
+      token = gate.token;
+    } catch {
+      return replyError('public_store_unavailable', 503);
+    }
+  }
   const cache =
     request.method === 'GET' && ttl && typeof caches !== 'undefined' ? caches.default : undefined;
-  const cacheKey = new Request(request.url);
+  const keyURL = new URL(request.url);
+  keyURL.searchParams.set('__cache_version', 'rights-v2-' + token);
+  const cacheKey = new Request(keyURL);
   try {
     const hit = await cache?.match(cacheKey);
     if (hit) {
       const response = new Response(hit.body, hit);
-      if (path === '/health') response.headers.set('Cache-Control', 'no-store');
+      if (metadata) response.headers.set('Cache-Control', 'no-store');
       return response;
     }
   } catch {
@@ -183,10 +259,7 @@ export async function handle(
   }
   const response = await route(request, env, now);
   if (response.status === 200 && ttl) {
-    response.headers.set(
-      'Cache-Control',
-      path === '/health' ? 'no-store' : `public, max-age=${ttl}`,
-    );
+    response.headers.set('Cache-Control', metadata ? 'no-store' : `public, max-age=${ttl}`);
     if (cache) {
       const stored = response.clone();
       stored.headers.set('Cache-Control', `public, max-age=${ttl}`);

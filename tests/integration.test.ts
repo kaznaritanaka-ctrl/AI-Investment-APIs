@@ -15,6 +15,7 @@ beforeEach(async () => {
   local = await localEnv();
 });
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await local?.mf.dispose();
 });
 const count = async (table: string, db = local.env.PRIVATE_DB) =>
@@ -46,7 +47,7 @@ describe('Cloudflare D1/R2 integration (synthetic only)', () => {
     expect(body.data.lineage).toHaveLength(2);
     expect(body.data.data_origin).toBe('synthetic');
     expect(JSON.stringify(body)).not.toMatch(/raw_artifact|payload_hash|lease_token|evidence\//);
-    expect(r.headers.get('cache-control')).toBe('public, max-age=300');
+    expect(r.headers.get('cache-control')).toBe('no-store');
   });
   it('is idempotent in one slot but records same price next day; absence is distinct', async () => {
     const fetcher = vi.fn(fxFetch());
@@ -173,6 +174,31 @@ describe('Cloudflare D1/R2 integration (synthetic only)', () => {
     expect((await api('/v1/fx')).status).toBe(404);
     await local.env.PUBLIC_DB.prepare("UPDATE publication_batches SET state='complete'").run();
     expect((await api('/v1/fx')).status).toBe(200);
+  });
+  it('invalidates warmed metadata caches on public stop and policy expiry', async () => {
+    const entries = new Map<string, Response>();
+    vi.stubGlobal('caches', {
+      default: {
+        match: async (key: Request) => entries.get(key.url)?.clone(),
+        put: async (key: Request, response: Response) => {
+          entries.set(key.url, response.clone());
+        },
+      },
+    });
+    await fx();
+    for (const path of ['/v1/datasets', '/v1/sources']) {
+      expect(((await (await api(path)).json()) as any).data.length).toBeGreaterThan(0);
+      expect(((await (await api(path)).json()) as any).data.length).toBeGreaterThan(0);
+      expect(((await (await api(path, '2026-12-27T18:17:00.000Z')).json()) as any).data).toEqual(
+        [],
+      );
+    }
+    await revokeSource(local.env, 'ecb');
+    for (const path of ['/v1/datasets', '/v1/sources']) {
+      const response = await api(path);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(((await response.json()) as any).data).toEqual([]);
+    }
   });
   it('withdraws source and derived records, uses no cache and does not reactivate revoked policy', async () => {
     await fx();

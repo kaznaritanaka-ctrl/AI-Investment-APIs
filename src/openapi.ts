@@ -230,7 +230,7 @@ const operation = (summary: string, parameters: unknown[], schema: unknown) => (
       ...response(schema, 'Success; null is not zero.'),
       headers: {
         'Cache-Control': {
-          schema: { enum: ['no-store', 'public, max-age=300', 'public, max-age=3600'] },
+          schema: { enum: ['no-store', 'public, max-age=3600'] },
         },
       },
     },
