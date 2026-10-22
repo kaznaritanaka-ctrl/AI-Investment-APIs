@@ -42,7 +42,7 @@ describe('owner-commissioned license metadata (offline)', () => {
         .filter((s) => s.enabled)
         .map((s) => s.source_id)
         .sort(),
-    ).toEqual(['ecb', 'models_dev', 'price_of_compute']);
+    ).toEqual(['ecb', 'estat_meti_iip', 'estat_meti_seidou', 'models_dev', 'price_of_compute']);
     for (const s of sources.filter((s) => !s.enabled)) {
       expect(canCollect(s, reviewDate)).toBe(false);
       expect(canPublish(s, reviewDate, true)).toBe(false);
@@ -71,14 +71,14 @@ describe('owner-commissioned license metadata (offline)', () => {
     expect(register).toContain('| Rebro (G3) |');
   });
 
-  it('registers the two owner-approved e-Stat public scopes while keeping collection disabled', () => {
+  it('registers the two owner-approved e-Stat public scopes, enabled after the reviewed layout check', () => {
     const approved = sources.filter((s) => s.estat);
     expect(approved.map((s) => s.source_id).sort()).toEqual([
       'estat_meti_iip',
       'estat_meti_seidou',
     ]);
     for (const s of approved) {
-      expect(s.enabled).toBe(false);
+      expect(s.enabled).toBe(true);
       expect(s.estat!.owner_approval_ref).toBe('Kaz owner approval 2026-10-22T09:43Z estat');
       expect(s.attribution_text).toContain(ESTAT_CREDIT);
       expect(s.rights_evidence_ref).toBe('docs/supply-chain-stats.md#rights');
@@ -86,8 +86,10 @@ describe('owner-commissioned license metadata (offline)', () => {
         expect(status).toBe(
           ['raw_redistribution', 'external_llm_processing'].includes(right) ? 'denied' : 'allowed',
         );
-      expect(canCollect(s, '2026-10-22T09:43:00.000Z')).toBe(false);
-      expect(canPublish(s, '2026-10-22T09:43:00.000Z')).toBe(false);
+      expect(canCollect(s, '2026-10-22T09:43:00.000Z')).toBe(true);
+      expect(canPublish(s, '2026-10-22T09:43:00.000Z')).toBe(true);
+      // Outside the approved policy window nothing is collected or published.
+      expect(canCollect(s, '2027-01-22T00:00:00.000Z')).toBe(false);
     }
   });
 

@@ -278,7 +278,7 @@ describe('e-Stat verified shape support (synthetic, offline)', () => {
     ])
       expect(EstatConfigSchema.safeParse({ ...config, search_words }).success).toBe(false);
   });
-  it('hashes all new selection fields and keeps bundled sources disabled and unreviewed', async () => {
+  it('hashes all new selection fields and enables bundled sources only with reviewed real-table signatures', async () => {
     const f = fixture();
     const baseline = await estatConfigurationHash(f.source);
     for (const changes of [
@@ -291,8 +291,11 @@ describe('e-Stat verified shape support (synthetic, offline)', () => {
       expect(await estatConfigurationHash(modified)).not.toBe(baseline);
     }
     for (const source of sources.filter((s) => s.estat)) {
-      expect(source.enabled).toBe(false);
-      expect(source.estat!.reviewed_schema_signatures).toEqual([]);
+      // Enabled only after the masked live layout check (probe10, 2026-10-22).
+      expect(source.enabled).toBe(true);
+      expect(source.estat!.reviewed_schema_signatures.length).toBeGreaterThan(0);
+      for (const sig of source.estat!.reviewed_schema_signatures)
+        expect(sig).toMatch(/^[0-9a-f]{64}$/);
       expect(source.policy.version).toBe(`${source.source_id}-20261022-v3`);
       const previous = structuredClone(source);
       previous.policy.version = `${source.source_id}-20261022-v2`;
@@ -301,7 +304,7 @@ describe('e-Stat verified shape support (synthetic, offline)', () => {
     expect(
       JSON.parse(readFileSync(new NodeURL('../wrangler.collector.jsonc', import.meta.url), 'utf8'))
         .vars.ESTAT_ENABLED,
-    ).toBe('false');
+    ).toBe('true');
     expect(f.source.estat!.item_codes).toEqual([
       '0076000',
       '0083000',
@@ -490,6 +493,32 @@ describe('e-Stat annual embedded product measures (synthetic, offline)', () => {
     });
     f.item.CLASS[1]['@name'] = '製品_0101_合成品_B_toString_台';
     expect((await parseEstatData(f.source, f.table, f.body, 13)).rows).toEqual([]);
+  });
+  it('validates and excludes real 労務 headcount rows (月末従事者数) without failing the table', async () => {
+    const f = annualFixture();
+    const labour = [
+      { '@code': '2290010800', '@name': '労務_0301_当該品目群_A_月末従事者数_人' },
+      { '@code': '2290010810', '@name': '労務_0302_事業所_A_月末従事者数_人' },
+    ];
+    f.item.CLASS.push(...labour);
+    for (const c of labour)
+      f.data.DATA_INF.VALUE.push(
+        ...f.time.CLASS.map((t) => ({ '@cat01': c['@code'], '@time': t['@code'], $: '1234' })),
+      );
+    f.data.RESULT_INF.TOTAL_NUMBER = f.data.DATA_INF.VALUE.length;
+    const base = await parseEstatData(
+      annualFixture().source,
+      annualFixture().table,
+      annualFixture().body,
+    );
+    const page = await parseEstatData(f.source, f.table, f.body);
+    expect(page.rows).toHaveLength(60);
+    expect(page.rows.every((r) => r.item_code === '2290_0101')).toBe(true);
+    expect(page.schema_signature).not.toBe(base.schema_signature);
+    f.item.CLASS[f.item.CLASS.length - 1]['@name'] = '労務_302_事業所_A_月末従事者数_人';
+    await expect(parseEstatData(f.source, f.table, f.body)).rejects.toThrow(
+      'estat_classification_unknown',
+    );
   });
   it.each([
     '品目_0101_合成品_A_生産数量_台',

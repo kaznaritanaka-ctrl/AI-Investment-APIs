@@ -261,15 +261,18 @@ const annualMeasures: Record<string, string> = {
 };
 function annualItem(name: unknown, tableCode: string) {
   // Greedy item name preserves embedded underscores; read letter/measure/unit from the right.
-  const match = text(name).match(/^製品_(\d{4})_(.+)_([A-Z])_([^_]+)_([^_]+)$/);
-  if (!match) throw new Error('estat_classification_unknown');
+  // 労務 (labour headcount) rows share the layout but are not product series; they are
+  // validated, kept in the signature, and excluded from observations.
+  const m = text(name).match(/^(製品|労務)_(\d{4})_(.+)_([A-Z])_([^_]+)_([^_]+)$/);
+  if (!m) throw new Error('estat_classification_unknown');
+  const product = m[1] === '製品';
   return {
-    item_code: id(tableCode + '_' + match[1]),
-    item_name_ja: text(match[2]),
-    measure_letter: match[3],
-    measure_name: text(match[4]),
-    measure: Object.hasOwn(annualMeasures, match[4]) ? annualMeasures[match[4]] : undefined,
-    unit_raw: text(match[5]),
+    item_code: id(tableCode + (product ? '_' : '_L') + m[2]),
+    item_name_ja: text(m[3]),
+    measure_letter: m[4],
+    measure_name: text(m[5]),
+    measure: product && Object.hasOwn(annualMeasures, m[5]) ? annualMeasures[m[5]] : undefined,
+    unit_raw: text(m[6]),
   };
 }
 function iipBaseYear(info: Obj, table: EstatTable): number {
