@@ -121,7 +121,7 @@ export async function estatRequest(
   const allowed =
     method === 'getStatsList'
       ? ['statsCode', 'searchWord', 'limit', 'startPosition']
-      : ['statsDataId', 'limit', 'startPosition', 'metaGetFlg'];
+      : ['statsDataId', 'limit', 'startPosition', 'metaGetFlg', 'cdCat01'];
   if (Object.keys(params).some((k) => !allowed.includes(k)))
     throw new Error('estat_request_invalid');
   const url = new URL(method, ESTAT_API);
@@ -251,11 +251,14 @@ const measures: Record<string, string> = {
   在庫率指数: 'inventory_ratio_index_sa',
 };
 function periodOf(name: string): string {
-  const m = name.match(/^(\d{4})年(?:(\d{1,2})月|(度))?$/);
+  const compact = name.match(/^(\d{4})(\d{2})$/);
+  const m = compact ?? name.match(/^(\d{4})年(?:(\d{1,2})月|(度))?$/);
   if (!m || (m[2] && (Number(m[2]) < 1 || Number(m[2]) > 12)))
     throw new Error('estat_period_invalid');
   return m[2] ? m[1] + '-' + m[2].padStart(2, '0') : m[1] + (m[3] ? 'FY' : '');
 }
+// These are coefficients, not observations. Do not infer a period from their code.
+const weightTime = (name: unknown) => /(?:ウエイト|ウェイト)$/.test(label(name).trim());
 export async function parseEstatData(
   s: Source,
   table: EstatTable,
@@ -276,11 +279,21 @@ export async function parseEstatData(
     const codes = list(d.CLASS).map((c) => id(object(c)['@code']));
     if (new Set(codes).size !== codes.length) throw new Error('estat_classification_unknown');
   }
-  const item = dimensions.filter((d) => /^(品目|品目別|品目分類)$/.test(label(d['@name'])));
+  const item = dimensions.filter((d) =>
+    /^(品目|品目別|品目分類)(_\d{4})?$/.test(label(d['@name'])),
+  );
   const time = dimensions.filter((d) => d['@id'] === 'time');
   const metric = dimensions.filter((d) => /^(表章項目|データ項目)$/.test(label(d['@name'])));
-  if (item.length !== 1 || time.length !== 1 || metric.length !== 1)
+  const impliedMeasure = s.estat!.implied_measures?.[table.group];
+  if (
+    item.length !== 1 ||
+    time.length !== 1 ||
+    metric.length > 1 ||
+    (metric.length === 0 && !impliedMeasure)
+  )
     throw new Error('estat_dimensions_unknown');
+  // Preserve the existing signature contract: exclude the entire time dimension,
+  // including weights and rolling periods; sort remaining dimension IDs and codes.
   const signatures = dimensions
     .filter((d) => d['@id'] !== 'time')
     .map((d) => ({
@@ -324,10 +337,12 @@ export async function parseEstatData(
       )
     )
       throw new Error('estat_dimensions_unknown');
+    // Exclude before parsing units/values/periods; weights need not be valid observations.
+    if (weightTime(selected.get('time')!['@name'])) continue;
     const it = selected.get(String(item[0]['@id']))!,
-      mt = selected.get(String(metric[0]['@id']))!;
-    let measure = measures[label(mt['@name'])];
-    if (s.estat!.release_kind === 'iip_monthly') {
+      mt = metric[0] ? selected.get(String(metric[0]['@id']))! : undefined;
+    let measure = mt ? measures[label(mt['@name'])] : impliedMeasure;
+    if (mt && s.estat!.release_kind === 'iip_monthly') {
       const expected = table.group === '在庫率' ? 'inventory_ratio_index_sa' : 'inventory_index_sa';
       if (!['指数', '季節調整済指数', table.group + '指数'].includes(label(mt['@name'])))
         throw new Error('estat_measure_unknown');
@@ -335,7 +350,7 @@ export async function parseEstatData(
     }
     if (!measure) throw new Error('estat_measure_unknown');
     const raw = text(v.$),
-      unit = text(v['@unit'] ?? mt['@unit']);
+      unit = text(v['@unit'] ?? mt?.['@unit']);
     const suppression = ['X', 'x', '-', '…', '...', '***', '秘匿'].includes(raw);
     const value = suppression ? null : estatDecimal(raw);
     const row: EstatRow = {
@@ -358,6 +373,7 @@ export async function parseEstatData(
     seen.add(key);
     rows.push(row);
   }
+  // Pagination always consumes the raw API count, including excluded weights.
   return { table, schema_signature, rows, next: nextKey(data.RESULT_INF, start, values.length) };
 }
 

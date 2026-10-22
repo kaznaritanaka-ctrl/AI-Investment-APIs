@@ -62,10 +62,26 @@
     "max_data_pages": 5,
     "page_size": 10000,
     "normalized_days": 1095,
-    "reviewed_schema_signatures": []
+    "reviewed_schema_signatures": [],
+    "search_words": [
+      "在庫",
+      "在庫率"
+    ],
+    "item_codes": [
+      "0076000",
+      "0083000",
+      "0140000",
+      "0145000",
+      "0146000",
+      "0147000"
+    ],
+    "implied_measures": {
+      "在庫": "inventory_index_sa",
+      "在庫率": "inventory_ratio_index_sa"
+    }
   },
   "policy": {
-    "version": "estat_meti_iip-20261022-v1",
+    "version": "estat_meti_iip-20261022-v2",
     "rights": {
       "automated_collection": "allowed",
       "private_storage": "allowed",

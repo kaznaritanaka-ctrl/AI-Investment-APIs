@@ -193,24 +193,37 @@ export async function collectEstat(
     };
     if (intake.phase === 'list') {
       if (intake.list_pages >= s.estat!.max_list_pages) throw new Error('estat_page_limit');
+      // During list discovery table_index identifies the group scan. Reset it to
+      // zero before data intake; existing checkpoints suffice without a migration.
+      const group = s.estat!.table_groups[intake.table_index];
+      const words = s.estat!.search_words;
       const response = await request('getStatsList', {
         statsCode: s.estat!.stats_code,
-        searchWord: s.estat!.release_kind === 'annual' ? '年報 時系列表' : '品目別 季節調整済',
+        searchWord: (Array.isArray(words) ? words[intake.table_index] : words?.[group]) ?? group,
         limit: String(Math.min(s.estat!.page_size, 100)),
         startPosition: String(intake.list_start),
       });
       const result = parseEstatList(s, response.body, intake.list_start);
-      const tables: EstatTable[] = [...JSON.parse(intake.tables_json), ...result.tables];
+      // Search results may overlap groups (notably 在庫/在庫率). Only retain
+      // this scan's group so each table is selected once, after all scans finish.
+      const tables: EstatTable[] = [
+        ...JSON.parse(intake.tables_json),
+        ...result.tables.filter((table) => table.group === group),
+      ];
       if (new Set(tables.map((t) => t.table_id)).size !== tables.length)
         throw new Error('estat_table_ambiguous');
       await assertPersistenceAllowed(env, s, clock());
+      const nextGroup = result.next ? intake.table_index : intake.table_index + 1;
+      const scanning = nextGroup < s.estat!.table_groups.length;
       await env.PRIVATE_DB.prepare(
-        'UPDATE sc_intakes SET tables_json=?,list_start=?,list_pages=list_pages+1,phase=?,request_reserved=0 WHERE run_id=?',
+        'UPDATE sc_intakes SET tables_json=?,list_start=?,list_pages=?,table_index=?,phase=?,request_reserved=0 WHERE run_id=?',
       )
         .bind(
-          stable(result.next ? tables : newestEstatTables(s, tables)),
+          stable(scanning ? tables : newestEstatTables(s, tables)),
           result.next ?? 1,
-          result.next ? 'list' : 'data',
+          result.next ? intake.list_pages + 1 : 0,
+          scanning ? nextGroup : 0,
+          scanning ? 'list' : 'data',
           run,
         )
         .run();
@@ -222,6 +235,7 @@ export async function collectEstat(
         limit: String(s.estat!.page_size),
         startPosition: String(intake.data_start),
         metaGetFlg: 'Y',
+        ...(s.estat!.item_codes ? { cdCat01: s.estat!.item_codes.join(',') } : {}),
       });
       const page = await parseEstatData(s, table, response.body, intake.data_start);
       const previous = await env.PRIVATE_DB.prepare(
