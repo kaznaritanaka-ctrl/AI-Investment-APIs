@@ -15,7 +15,7 @@ API Workerはpublic D1のみをbindし、GET/HEAD以外を拒否する。AI runt
 - R2のrun別固定キーに証拠envelopeを保存してからD1へ登録。DB登録前の失敗でも、同じキーを読んで再開できる。
 - observation IDはrun・entity・parser版・内容から決める。同日再処理は冪等、翌日同価格は別観測。訂正は旧ID参照の新行。
 - 公開batchをstagingで作り、全行挿入後にcompleteへ変更。読者はcomplete batchのみ参照。D1間の分散トランザクションは仮定しない。
-- 現在の公開policyと全入力lineageを毎回確認。失効時は公開を遮断し、APIはCache-Control: no-store。初期版はCDN/ブラウザキャッシュを使用しない。
+- 公開データは毎回既存の権利・lineage・保存期限ゲートを確認し、no-storeで返す。datasets/sourcesのみ公開制御表を毎回確認して期限内の内部キャッシュを使う（外部はno-store）。静的文書は3600秒、healthはキャッシュなし。利用制限はキャッシュ参照前に適用する。
 - ソース単位で例外を捕捉する。watchdogは未完了runを検出し、保存済み証拠の処理を再開できる。過去日に後刻の価格を偽装しない。
 - 通知outboxと日次summaryはprivate D1。Webhook未設定をsetup warningとし、送信済みにしない。
 

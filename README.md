@@ -57,3 +57,20 @@ P0追加: `dataset=ai_model_catalog` と `model_snapshot` フィルター、`/v1
 UTC予定slotと秒付き旧runの照合、保存済み証拠からの有限復旧、Admin専用read-only入口は本番にあります。今回の候補は既存summary/outboxを使い、異常・復旧・継続通知と安全な有効化条件を追加します。正常時は通知しません。外部監視/通知送達と新版7日間実測は未受け入れです。通常判定は決定的処理で、常駐LLMを必要としません。
 
 `pnpm collector:benchmark before` / `after` は合成データだけのNode/workerd性能検証です。[改善前後の測定とFree/Paid比較](docs/collector-performance.md)には、ローカル経過時間・CPU代理指標と本番Cloudflare CPUを分けて記録しています。Free適合や本番反映済みを示す結果ではありません。
+
+## Rate limits
+
+Each IP address has a general limit of 60 requests per minute. Data routes
+(`/health`, `/v1/datasets`, `/v1/sources`, `/v1/fx`, `/v1/gpu/*`, `/v1/models/*`,
+`/v1/latest`, `/v1/observations`, `/v1/changes`, `/v1/supply-chain` and its subroutes) also share a 20 requests per minute limit.
+IPv6 addresses share a /64 bucket. Cloudflare always supplies `CF-Connecting-IP`;
+requests without it defensively share a `noip` bucket subject to the tighter limit.
+A rejected request returns HTTP 429 with `Retry-After: 60` and `Cache-Control: no-store`.
+Production returns HTTP 503 if a required limiter is missing or unavailable.
+
+Limits apply before cache lookup. Rights-gated data routes and `/health` use
+`no-store` and bypass the cache. `/v1/datasets` and `/v1/sources` use an internal
+cache for at most 300 seconds, capped at policy and retention boundaries; each
+lookup rechecks current publication controls. These metadata responses remain
+`no-store` for downstream clients. Static API documentation and methodology use
+3600 seconds. HEAD requests and errors are not cached.
