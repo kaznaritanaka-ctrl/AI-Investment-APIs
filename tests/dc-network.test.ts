@@ -51,7 +51,7 @@ describe('approved DC sources and bounded synthetic transport (no network)', () 
       expect(() => assertResearchExport(c, 'raw')).toThrow('research_export_not_supported');
     }
     const wrangler = JSON.parse(readFileSync('wrangler.collector.jsonc', 'utf8'));
-    expect(wrangler.vars.DC_TRACKER_ENABLED).toBe('false');
+    expect(wrangler.vars.DC_TRACKER_ENABLED).toBe('true') // Kaz approval 2026-10-22T09:43Z: weekly DC collection enabled;
     expect(wrangler.triggers.crons).toEqual(['17 18 * * *', '47 18 * * *', '*/5 18-23 * * *']);
   });
   it('rejects unsafe live scopes and denied acquisition/storage/analysis before HTTP', async () => {
