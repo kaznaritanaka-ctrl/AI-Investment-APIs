@@ -1,6 +1,12 @@
 # 供給網統計（公開商品・e-Stat経由）— 2026-10-22
 
-状態: `codex/estat` のローカル実装。所有者承認 `Kaz owner approval 2026-10-22T09:43Z estat`（2026-10-22 18:43 JST）を反映。e-Stat 2統計を公開用sourceとして登録し、収集は両方 `enabled=false`、Workerの `ESTAT_ENABLED="false"`。今回のe-Stat実HTTP・Secret作成・commit・push・deploy・remote migrationは0件。
+状態: main（PR #31, fdea983）にマージ・本番デプロイ済み。public 0004 / private 0017 適用済み（2026-10-22 21:0x JST）。Worker Secret `ESTAT_APP_ID` 登録済み。収集は両source `enabled=false`、`ESTAT_ENABLED="false"` のまま（下記「実表の確認結果」の理由で有効化保留）。
+
+## 実表の確認結果（2026-10-22 21:15 JST、box から手動 10リクエスト、appIdマスク済み）
+- 鉱工業指数: 在庫 `0004052195` 27,590行、在庫率 `0004052196` 26,798行。分類は `cat01`「品目別_2020」365コードと `time`「統計項目A_2020_Match」100コード（先頭は「在庫ウエイト」）のみで、表章項目の軸がない。現行パーサは `estat_dimensions_unknown` で停止し、schema署名を算出できない。
+- 生産動態統計: 手動確認で取得した `getStatsList` の範囲（最大4ページ×100件）には対象4グループの年報時系列表がなく、`estat_selected_table_missing`。統計00550200は400表を超えるため、現行パイプラインでは先に `estat_page_limit` で停止する可能性がある。
+- 処理時間: 10行/回 × 最大72回/日 = 720行/日で、1表約38日。目標の7日以内を超えるため有効化しない。
+- 必要な修正案: (1) IIPの軸名 `品目別_\d{4}`・表章項目なし・ウエイト列除外に対応、(2) 生産動態はsearchWordで表を絞る（現状はパイプライン内の固定文字列で、source設定化が必要）、(3) 1回の保存行数を増やす（例: 500行/回のバッチ化で1表1日未満）か、取得範囲を対象品目に限定（cdCat01 指定。`estatRequest` のgetStatsData許可パラメータの追加が必要）する。
 
 元の `codex-task-supply-chain-stats.md` と `supply-chain-stats-design.md` をこの文書へ統合した。旧指示の別branch、config/proposalsへの配置、全権利review_required、未承認扱いのURL例外は、今回の所有者指示に置き換えた。
 
