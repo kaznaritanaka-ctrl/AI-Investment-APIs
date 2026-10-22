@@ -749,6 +749,85 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     });
     expect(rows[1]).toMatchObject({ value_decimal: null, value_flag: '…' });
   });
+  it('collects embedded annual measures in one data page and publishes only supported measures', async () => {
+    source.estat!.page_size = 10000;
+    const classifications = [
+      ['A', '生産数量', '台'],
+      ['B', '生産容量', 'kVA'],
+      ['C', '生産金額', '百万円'],
+      ['D', '受入数量', '台'],
+      ['E', '販売数量', '台'],
+      ['F', '販売容量', 'kVA'],
+      ['G', '販売金額', '百万円'],
+      ['H', '月末在庫数量', '台'],
+    ].map(([letter, measure, unit], i) => ({
+      '@code': String(2290010010 + i * 10),
+      '@name': `製品_0101_合成_変圧器_${letter}_${measure}_${unit}`,
+    }));
+    const times = [
+      { '@code': '2025000101', '@name': '202501' },
+      { '@code': '2025000202', '@name': '202502' },
+    ];
+    const transport = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('getStatsList')) {
+        const listing = listBody(2);
+        listing.GET_STATS_LIST.DATALIST_INF.NUMBER = 1;
+        return Response.json(listing);
+      }
+      return Response.json({
+        GET_STATS_DATA: {
+          RESULT: { STATUS: 0 },
+          STATISTICAL_DATA: {
+            TABLE_INF: { '@id': tableId(), STAT_NAME: { '@code': '00550200' } },
+            CLASS_INF: {
+              CLASS_OBJ: [
+                { '@id': 'cat01', '@name': '2021_2290_表側', CLASS: classifications },
+                { '@id': 'time', '@name': '2025_実数表_時間軸_表頭', CLASS: times },
+              ],
+            },
+            DATA_INF: {
+              VALUE: classifications.flatMap((c) =>
+                times.map((t, i) => ({
+                  '@cat01': c['@code'],
+                  '@time': t['@code'],
+                  $: i === 0 ? '12.3400' : 'X',
+                })),
+              ),
+            },
+            RESULT_INF: { TOTAL_NUMBER: 16 },
+          },
+        },
+      });
+    });
+    let result;
+    for (let i = 0; i < 5; i++) {
+      result = await collectSource(env(), source, slot, {
+        now: () => now,
+        synthetic: true,
+        network: { fetcher: transport },
+      });
+      if (result.state !== 'pending') break;
+    }
+    expect(result).toMatchObject({ state: 'complete', observations: 10 });
+    expect(transport).toHaveBeenCalledTimes(2);
+    const series = (await api('series')).data;
+    expect(series).toHaveLength(5);
+    for (const s of series) {
+      expect(s).toMatchObject({ item_code: '2290_0101', item_name_ja: '合成_変圧器' });
+      const rows = (await api(`series/${s.series_id}/observations`)).data;
+      expect(rows).toMatchObject([
+        { period: '2025-01', value_decimal: '12.3400', unit_raw: s.unit_raw },
+        { period: '2025-02', value_decimal: null, value_flag: 'X' },
+      ]);
+    }
+    for (const saved of local.objects.values()) {
+      expect(saved.body).not.toContain('生産容量');
+      expect(saved.body).not.toContain('販売容量');
+      expect(saved.body).not.toContain('受入数量');
+      expect(saved.body).not.toContain(secret);
+    }
+  });
   it('scans overlapping IIP groups once each and completes weight-only pages without saving weights', async () => {
     source = structuredClone(sources.find((s) => s.source_id === 'estat_meti_iip')!);
     source.enabled = true;
@@ -773,7 +852,7 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
               TABLE_INF: groups.map((group, i) => ({
                 '@id': ids[i],
                 STAT_NAME: { '@code': '00550300' },
-                TITLE: `2020年基準 品目別季節調整済【月次】${group}`,
+                TITLE: `品目別季節調整済指数【月次】${group}（2020＝100.0）`,
                 SURVEY_DATE: '2025',
               })),
             },
@@ -803,7 +882,6 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
               VALUE: times.slice(start - 1, start + 1).map((t) => ({
                 '@cat01': '0076000',
                 '@time': t['@code'],
-                '@unit': '指数',
                 $: t['@code'] === 'month' ? '98.700' : 'invalid-weight-value',
               })),
             },
@@ -845,7 +923,7 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     ]);
     for (const s of series)
       expect((await api(`series/${s.series_id}/observations`)).data).toMatchObject([
-        { period: '2018-01', value_decimal: '98.700' },
+        { period: '2018-01', value_decimal: '98.700', unit_raw: '2020=100', base_year: 2020 },
       ]);
     for (const saved of local.objects.values()) {
       expect(saved.body).not.toContain('ウエイト');

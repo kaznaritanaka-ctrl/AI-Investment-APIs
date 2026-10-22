@@ -81,7 +81,7 @@
     }
   },
   "policy": {
-    "version": "estat_meti_iip-20261022-v2",
+    "version": "estat_meti_iip-20261022-v3",
     "rights": {
       "automated_collection": "allowed",
       "private_storage": "allowed",
