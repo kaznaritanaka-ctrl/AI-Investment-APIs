@@ -458,6 +458,60 @@
                 "minLength": 1
               }
             },
+            "search_words": {
+              "anyOf": [
+                {
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              ]
+            },
+            "implied_measures": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "production_qty",
+                  "production_value",
+                  "sales_qty",
+                  "sales_value",
+                  "shipments_qty",
+                  "shipments_value",
+                  "inventory",
+                  "inventory_index_sa",
+                  "inventory_ratio_index_sa"
+                ]
+              }
+            },
+            "item_codes": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^\\d{1,12}$"
+              }
+            },
             "months_utc": {
               "minItems": 1,
               "maxItems": 12,

@@ -130,6 +130,7 @@ beforeEach(async () => {
   source.enabled = true;
   source.policy.valid_from = '2026-01-01T00:00:00.000Z';
   source.estat!.table_groups = ['静止電気機械器具'];
+  source.estat!.search_words = ['静止電気機械器具'];
   source.selection = ['静止電気機械器具'];
   source.estat!.page_size = 2;
   now = '2026-07-01T18:17:01.000Z';
@@ -184,6 +185,8 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
       'getStatsData',
       'getStatsData',
     ]);
+    for (const url of calls.filter((u) => u.pathname.endsWith('getStatsData')))
+      expect(url.searchParams.has('cdCat01')).toBe(false);
     const series = (await api('series')).data[0];
     const data = (await api(`series/${series.series_id}/observations`)).data;
     expect(data.map((r: any) => [r.value_decimal, r.value_flag])).toEqual([
@@ -219,6 +222,124 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     expect(artifacts).not.toContain(encodeURIComponent(secret));
     expect(artifacts).not.toContain('NOTE');
     expect(artifacts).toContain('REDACTED');
+  });
+  it.each(['list', 'map', 'default'])(
+    'scans each configured annual group once with %s search words and independent page budgets',
+    async (shape) => {
+      const groups = sources.find((s) => s.source_id === 'estat_meti_seidou')!.estat!.table_groups;
+      source.estat!.table_groups = source.selection = [...groups];
+      const words = groups.map((g) => (shape === 'default' ? g : g + ' 年報'));
+      if (shape === 'default') delete source.estat!.search_words;
+      else
+        source.estat!.search_words =
+          shape === 'list' ? words : Object.fromEntries(groups.map((g, i) => [g, words[i]]));
+      source.estat!.max_list_pages = 2;
+      const transport = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        const group = groups[words.indexOf(url.searchParams.get('searchWord')!)];
+        const start = Number(url.searchParams.get('startPosition'));
+        const listing = listBody(start);
+        listing.GET_STATS_LIST.DATALIST_INF.TABLE_INF['@id'] =
+          '99999999' + groups.indexOf(group) + (start === 1 ? '0' : '5');
+        listing.GET_STATS_LIST.DATALIST_INF.TABLE_INF.TITLE = `${start === 1 ? 2020 : 2025}年 時系列表(2290_機械器具月報（その２９）${group}（航空機用のものを除く))`;
+        return Response.json({
+          GET_STATS_LIST: {
+            ...listing.GET_STATS_LIST,
+            DATALIST_INF: {
+              ...listing.GET_STATS_LIST.DATALIST_INF,
+              TABLE_INF: {
+                ...listing.GET_STATS_LIST.DATALIST_INF.TABLE_INF,
+                STATISTICS_NAME: '経済産業省生産動態統計 年報 年報(2021年以降) 2025年 年報',
+              },
+            },
+          },
+        });
+      });
+      for (let i = 0; i < groups.length * 2; i++) {
+        expect(
+          await collectSource(env(), source, slot, {
+            now: () => now,
+            synthetic: true,
+            network: { fetcher: transport },
+          }),
+        ).toMatchObject({ state: 'pending' });
+        const intake = await local.env.PRIVATE_DB.prepare('SELECT * FROM sc_intakes').first<any>();
+        expect(intake.phase).toBe(i === groups.length * 2 - 1 ? 'data' : 'list');
+      }
+      expect(
+        transport.mock.calls.map(([input]) => {
+          const url = new URL(String(input));
+          return [url.searchParams.get('searchWord'), url.searchParams.get('startPosition')];
+        }),
+      ).toEqual(
+        words.flatMap((word) => [
+          [word, '1'],
+          [word, '2'],
+        ]),
+      );
+      const intake = await local.env.PRIVATE_DB.prepare('SELECT * FROM sc_intakes').first<any>();
+      expect(intake.table_index).toBe(0);
+      expect(JSON.parse(intake.tables_json).map((t: EstatTable) => [t.group, t.year])).toEqual(
+        groups.map((g) => [g, 2025]),
+      );
+    },
+  );
+
+  it('enforces the list-page ceiling again in a later group', async () => {
+    source.estat!.table_groups = source.selection = ['静止電気機械器具', '開閉制御装置'];
+    source.estat!.search_words = ['静止電気機械器具', '開閉制御装置'];
+    source.estat!.max_list_pages = 1;
+    const transport = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      const listing = listBody(url.searchParams.get('searchWord') === '静止電気機械器具' ? 2 : 1);
+      if (url.searchParams.get('searchWord') === '静止電気機械器具')
+        listing.GET_STATS_LIST.DATALIST_INF.NUMBER = 1;
+      return Response.json(listing);
+    });
+    const step = () =>
+      collectSource(env(), source, slot, {
+        now: () => now,
+        synthetic: true,
+        network: { fetcher: transport },
+      });
+    expect((await step()).state).toBe('pending');
+    expect((await step()).state).toBe('pending');
+    expect(await step()).toMatchObject({ state: 'failed', reason: 'estat_page_limit' });
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect((await api('series')).data).toEqual([]);
+  });
+
+  it('sends item codes on every data page and masks URLs containing cdCat01 in saved evidence', async () => {
+    source.estat!.item_codes = ['0076000', '0083000'];
+    expect((await finish()).state).toBe('complete');
+    const dataCalls = calls.filter((url) => url.pathname.endsWith('getStatsData'));
+    expect(dataCalls).toHaveLength(2);
+    for (const url of dataCalls) expect(url.searchParams.get('cdCat01')).toBe('0076000,0083000');
+    for (const saved of local.objects.values()) {
+      const url = new URL(JSON.parse(saved.body).request_url);
+      expect(url.searchParams.get('cdCat01')).toBe('0076000,0083000');
+      expect(url.searchParams.get('appId')).toBe('[REDACTED]');
+      expect(saved.body).not.toContain(secret);
+      expect(saved.body).not.toContain(encodeURIComponent(secret));
+    }
+    await expect(
+      estatRequest(
+        source,
+        env(),
+        'getStatsData',
+        { cdCat01: '0076000,0083000' },
+        {
+          now: () => now,
+          max_attempts: 1,
+          fetcher: async (input) => {
+            throw new Error(String(input));
+          },
+        },
+      ),
+    ).rejects.toThrow('estat_request_failed');
+    await expect(
+      estatRequest(source, env(), 'getStatsData', { cdCat02: '123' }, { now: () => now, fetcher }),
+    ).rejects.toThrow('estat_request_invalid');
   });
   it('records value revisions, retains history, and versions renamed items without joining definitions', async () => {
     await finish();
@@ -331,6 +452,30 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
     for (const token of [secret, encodeURIComponent(secret)]) expect(retained).not.toContain(token);
     consoleLog.mockRestore();
   });
+
+  it.each(['text/plain', 'text/html'])(
+    'rejects a JSON body served as %s before retaining or publishing it',
+    async (contentType) => {
+      const transport = vi.fn(
+        async () =>
+          new Response(JSON.stringify(listBody(1)), {
+            headers: { 'content-type': contentType },
+          }),
+      );
+      expect(
+        await collectSource(env(), source, slot, {
+          now: () => now,
+          synthetic: true,
+          network: { fetcher: transport },
+        }),
+      ).toMatchObject({ state: 'failed', reason: 'estat_request_failed' });
+      expect(transport).toHaveBeenCalledTimes(1);
+      const attempts = await local.env.PRIVATE_DB.prepare('SELECT code FROM fetch_attempts').all();
+      expect(attempts.results).toEqual([{ code: 'unexpected_content_type' }]);
+      expect(local.objects.size).toBe(0);
+      expect((await api('series')).data).toEqual([]);
+    },
+  );
 
   it.each(['expired policy', 'blocked policy', 'missing appId', 'not due', 'disabled source'])(
     'retires a pending run with %s and still resumes GPU work on the same tick',
@@ -603,6 +748,110 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
       release_kind: 'iip_monthly',
     });
     expect(rows[1]).toMatchObject({ value_decimal: null, value_flag: '…' });
+  });
+  it('scans overlapping IIP groups once each and completes weight-only pages without saving weights', async () => {
+    source = structuredClone(sources.find((s) => s.source_id === 'estat_meti_iip')!);
+    source.enabled = true;
+    source.policy.valid_from = '2026-01-01T00:00:00.000Z';
+    source.estat!.page_size = 2;
+    const groups = source.estat!.table_groups;
+    const ids = ['9999999991', '9999999992'];
+    const times = [
+      { '@code': 'weight1', '@name': '在庫ウエイト' },
+      { '@code': 'weight2', '@name': '在庫率ウエイト' },
+      { '@code': 'month', '@name': '201801' },
+    ];
+    const transport = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('getStatsList'))
+        return Response.json({
+          GET_STATS_LIST: {
+            RESULT: { STATUS: 0 },
+            DATALIST_INF: {
+              NUMBER: 2,
+              NEXT_KEY: 0,
+              TABLE_INF: groups.map((group, i) => ({
+                '@id': ids[i],
+                STAT_NAME: { '@code': '00550300' },
+                TITLE: `2020年基準 品目別季節調整済【月次】${group}`,
+                SURVEY_DATE: '2025',
+              })),
+            },
+          },
+        });
+      const start = Number(url.searchParams.get('startPosition'));
+      expect(url.searchParams.get('cdCat01')).toBe(source.estat!.item_codes!.join(','));
+      return Response.json({
+        GET_STATS_DATA: {
+          RESULT: { STATUS: 0 },
+          STATISTICAL_DATA: {
+            TABLE_INF: {
+              '@id': url.searchParams.get('statsDataId'),
+              STAT_NAME: { '@code': '00550300' },
+            },
+            CLASS_INF: {
+              CLASS_OBJ: [
+                {
+                  '@id': 'cat01',
+                  '@name': '品目別_2020',
+                  CLASS: { '@code': '0076000', '@name': '1106103010 合成変圧器' },
+                },
+                { '@id': 'time', '@name': '統計項目A_2020_Match', CLASS: times },
+              ],
+            },
+            DATA_INF: {
+              VALUE: times.slice(start - 1, start + 1).map((t) => ({
+                '@cat01': '0076000',
+                '@time': t['@code'],
+                '@unit': '指数',
+                $: t['@code'] === 'month' ? '98.700' : 'invalid-weight-value',
+              })),
+            },
+            RESULT_INF: { TOTAL_NUMBER: 3, NEXT_KEY: start === 1 ? 3 : 0 },
+          },
+        },
+      });
+    });
+    let result;
+    for (let i = 0; i < 12; i++) {
+      result = await collectSource(env(), source, slot, {
+        now: () => now,
+        synthetic: true,
+        network: { fetcher: transport },
+      });
+      if (result.state !== 'pending') break;
+    }
+    expect(result).toMatchObject({ state: 'complete', observations: 2 });
+    const urls = transport.mock.calls.map(([input]) => new URL(String(input)));
+    expect(
+      urls
+        .filter((u) => u.pathname.endsWith('getStatsList'))
+        .map((u) => u.searchParams.get('searchWord')),
+    ).toEqual(groups);
+    expect(
+      urls
+        .filter((u) => u.pathname.endsWith('getStatsData'))
+        .map((u) => [u.searchParams.get('statsDataId'), u.searchParams.get('startPosition')]),
+    ).toEqual(
+      ids.flatMap((id) => [
+        [id, '1'],
+        [id, '3'],
+      ]),
+    );
+    const series = (await api('series')).data;
+    expect(series.map((s: any) => s.measure).sort()).toEqual([
+      'inventory_index_sa',
+      'inventory_ratio_index_sa',
+    ]);
+    for (const s of series)
+      expect((await api(`series/${s.series_id}/observations`)).data).toMatchObject([
+        { period: '2018-01', value_decimal: '98.700' },
+      ]);
+    for (const saved of local.objects.values()) {
+      expect(saved.body).not.toContain('ウエイト');
+      expect(saved.body).not.toContain('invalid-weight-value');
+      expect(saved.body).not.toContain(secret);
+    }
   });
   it('withdraws expired history and evidence after disabling collection, with public deletion first', async () => {
     await finish();

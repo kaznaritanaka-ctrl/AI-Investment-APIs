@@ -57,10 +57,16 @@
     "max_data_pages": 5,
     "page_size": 10000,
     "normalized_days": 1095,
-    "reviewed_schema_signatures": []
+    "reviewed_schema_signatures": [],
+    "search_words": [
+      "静止電気機械器具",
+      "半導体製造装置及びFPD製造装置",
+      "運搬機械及び産業用ロボット",
+      "開閉制御装置"
+    ]
   },
   "policy": {
-    "version": "estat_meti_seidou-20261022-v1",
+    "version": "estat_meti_seidou-20261022-v2",
     "rights": {
       "automated_collection": "allowed",
       "private_storage": "allowed",
