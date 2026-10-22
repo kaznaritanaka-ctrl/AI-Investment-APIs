@@ -1,6 +1,6 @@
 # 供給網統計（公開商品・e-Stat経由）— 2026-10-22
 
-状態: 初版はmain（PR #31, fdea983）にマージ・本番デプロイ済み。public 0004 / private 0017 適用済み（2026-10-22 21:0x JST）。Worker Secret `ESTAT_APP_ID` 登録済み。以下は `codex/estat-real-layout` の実表対応。収集は両source `enabled=false`、`ESTAT_ENABLED="false"`、`reviewed_schema_signatures=[]` を維持し、有効化は保留。
+状態: 初版はmain（PR #31, fdea983）にマージ・本番デプロイ済み。public 0004 / private 0017 適用済み（2026-10-22 21:0x JST）。Worker Secret `ESTAT_APP_ID` 登録済み。以下は `codex/estat-real-layout` の実表対応。その後PR #35で審査済み署名を登録し、両source `enabled=true`・`ESTAT_ENABLED="true"` に有効化した（下記「有効化」）。
 
 ## 実表の確認結果とローカル修正（2026-10-22）
 
@@ -119,7 +119,7 @@ R2には生JSONではなく、マスク済み・正規化済みのページ投�
 - `tests/estat.test.ts`・`estat-shape.test.ts`・`estat-capacity.test.ts`・`supply-chain-api.test.ts` は4ファイル85件成功。Socket不要のSQLiteで既存データ相当のmigrationと実際のSQLも検証。`node --test scripts/resilience.test.mjs` も1件成功。
 - `node scripts/run.mjs build`（両WorkerのWrangler dry-run）成功。`WRANGLER_HIDE_BANNER=true` と `WRANGLER_SEND_METRICS=false` を指定し、更新確認とメトリクスを止めた。ログ先は既存runスクリプトのwork配下。
 - `node scripts/generate.mjs` と生成物3点の `git diff --exit-code` が成功。`config/source.schema.json` は現在のZod定義と一致し、スキーマ・OpenAPIに変更はない。
-- offline preflightはstatic_valid/ready=true、network_performed=false。`git diff --check` 成功。両sourceのenabled=false・署名リスト空・CollectorのESTAT_ENABLED=falseを合成テストで確認。
+- offline preflightはstatic_valid/ready=true、network_performed=false。`git diff --check` 成功。（当時は両source無効・署名リスト空。PR #35で有効化。）
 - 全件Vitest（`npx vitest run`、Node 24.22.0、box上）は539件成功。CIでも検証する。
 
 実表の署名承認・本番性能・認証成功を、ローカル合成テストの成功だけで実証したとは扱わない。
@@ -135,3 +135,5 @@ R2には生JSONではなく、マスク済み・正規化済みのページ投�
 - 審査済み署名: IIP 在庫/在庫率 `3cb4f263…`（同一分類のため1件）。生産動態2025年版 静止電気 `007a4354…`（732行）、半導体製造装置 `efc6fd88…`（120行）、運搬機械及び産業用ロボット `5397ab22…`（468行）、開閉制御装置 `4758d856…`（624行）。IIPは各99行。
 - 翌年の新しい年報表は分類が変われば署名が変わり隔離されるため、毎年7月の初回に署名審査が必要。
 - 保存は10行/tickで、IIPは各約10 ticks（1日以内）。生産動態は静止電気が約74 ticksでおよそ1〜2日、その他は1日以内。4表合計約200 ticksのため、7月1日の回は全表完了まで約3日。
+
+- 注意: 生産動態（estat_meti_seidou）は `months_utc: [7,8,9]` だが利用条件の `valid_until` は2027-01-22。延長しない限り、enabled=trueでも2027年7月までデータは入らない（fail-closed）。2027年7月前に利用条件の再確認・延長が必要。IIPも同じ `valid_until` のため、2027-01-22以降は収集が止まる（2027年1月までに再確認・延長が必要）。
