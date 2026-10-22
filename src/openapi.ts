@@ -76,6 +76,13 @@ export const PublicObservationSchema = z.object({
   lineage: z.array(z.string()).optional(),
 });
 export const methodology = {
+  'supply-chain-v1': {
+    id: 'supply-chain-v1',
+    description:
+      'METI production dynamics annual tables (with monthly values) and IIP monthly statistics via e-Stat. Not AI-specific statistics. Preserve source units, definition versions and immutable revisions. Suppressed or missing values remain null with their original flag; annual publication delay is not current monthly availability.',
+    rights:
+      'Current source rights, configuration hashes, complete publication batches and retention expiry are checked for every read. Revisions require both inputs to remain publishable.',
+  },
   'models-catalog-v1': {
     id: 'models-catalog-v1',
     description:
@@ -274,11 +281,35 @@ const gpuHistory = history
     ['dataset', 'source', 'sku', 'from', 'to', 'limit', 'cursor', 'as_of'].includes(p.name),
   )
   .concat([query('scope', { type: 'string', maxLength: 160 }, 'Exact search scope hash')]);
+const supplyChainPaging = [
+  query('limit', { type: 'integer', minimum: 1, maximum: 100, default: 100 }, 'Maximum records'),
+  query(
+    'cursor',
+    { type: 'string', maxLength: 2048 },
+    'Opaque continuation cursor; preserve path and period filters',
+  ),
+];
 const gpuArray = (schema: string) => ({
   ...arraySchema,
   properties: {
     ...arraySchema.properties,
     data: { type: 'array', items: { $ref: '#/components/schemas/' + schema } },
+  },
+});
+const supplyChainArray = (schema: string) => ({
+  ...gpuArray(schema),
+  required: [...arraySchema.required, 'api_credit', 'attribution'],
+  properties: {
+    ...gpuArray(schema).properties,
+    api_credit: {
+      type: 'string',
+      description: 'Verbatim e-Stat API credit; also present on empty and error responses.',
+    },
+    attribution: {
+      type: 'string',
+      description:
+        'METI and e-Stat attribution with source URL and processing notice; also present on errors.',
+    },
   },
 });
 export const openapi = {
@@ -290,6 +321,53 @@ export const openapi = {
       'Research observations, not recommendations. Decimal strings. No universal data license. Public cache disabled for rights revocation.',
   },
   paths: {
+    '/v1/supply-chain/series': {
+      get: operation(
+        'Supply-chain series, original units and definitions with current publishable observations',
+        supplyChainPaging,
+        supplyChainArray('SupplyChainSeries'),
+      ),
+    },
+    '/v1/supply-chain/series/{id}/observations': {
+      get: operation(
+        'Immutable annual or monthly source observations; null is not zero; includes superseded values',
+        [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,160}$' },
+          },
+          query(
+            'from',
+            { type: 'string', pattern: '^\\d{4}(?:-(?:0[1-9]|1[0-2])|FY)?$' },
+            'Inclusive source period, such as 2025-07, 2025 or 2025FY',
+          ),
+          query(
+            'to',
+            { type: 'string', pattern: '^\\d{4}(?:-(?:0[1-9]|1[0-2])|FY)?$' },
+            'Inclusive source period; keep the same period format as from',
+          ),
+          ...supplyChainPaging,
+        ],
+        supplyChainArray('SupplyChainObservation'),
+      ),
+    },
+    '/v1/supply-chain/series/{id}/revisions': {
+      get: operation(
+        'Source revisions with both original and replacement observations still publishable',
+        [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,160}$' },
+          },
+          ...supplyChainPaging,
+        ],
+        supplyChainArray('SupplyChainRevision'),
+      ),
+    },
     '/v1/models/coverage': {
       get: operation(
         'Model catalog snapshots; capture completeness is separate from price eligibility',
@@ -435,6 +513,41 @@ export const openapi = {
   },
   components: {
     schemas: {
+      SupplyChainSeries: {
+        type: 'object',
+        description:
+          'Source attribution, license, verbatim e-Stat API credit, fetched_at and the non-AI-specific note accompany each projection.',
+        properties: {
+          series_id: { type: 'string' },
+          unit_raw: { type: 'string' },
+          definition_version_id: { type: 'string' },
+          definitions: { type: 'array', items: { type: 'object' } },
+        },
+      },
+      SupplyChainObservation: {
+        type: 'object',
+        properties: {
+          obs_id: { type: 'string' },
+          series_id: { type: 'string' },
+          definition_version_id: { type: 'string' },
+          period: { type: 'string' },
+          value_decimal: { type: ['string', 'null'], pattern: '^-?[0-9]+(?:\\.[0-9]+)?$' },
+          value_flag: { type: ['string', 'null'] },
+          release_kind: { enum: ['annual', 'iip_monthly'] },
+          stats_data_id: { type: 'string' },
+          fetched_at: { type: 'string', format: 'date-time' },
+          supersedes_obs_id: { type: ['string', 'null'] },
+        },
+      },
+      SupplyChainRevision: {
+        type: 'object',
+        properties: {
+          revision_id: { type: 'string' },
+          before_obs_id: { type: 'string' },
+          after_obs_id: { type: 'string' },
+          detected_at: { type: 'string', format: 'date-time' },
+        },
+      },
       Observation: z.toJSONSchema(PublicObservationSchema, { target: 'draft-2020-12' }),
       ModelCatalog: z.toJSONSchema(ModelCatalogSchema),
       ModelCoverage: z.toJSONSchema(ModelCoverageSchema),

@@ -2,6 +2,11 @@
 
 **2026-10-22の現状更新（Kaz提示）**: 2026-10-22 07:53 JSTに、Kaz承認のもと、本番Collectorをmain `58f007f` + `PRIVATE_GPU_RESEARCH_ENABLED=true`でデプロイ済み。PR #27でmainの`wrangler.collector.jsonc`もtrueに一致した。Highresoのみenabled=true、Rebroはdeferredでenabled=false。2026-10-21 22:45 JSTのKaz承認、Highresoの保存済み実応答によるwire・指紋確認と365日保持の設定も引き続き有効。以下は配備前に用意した手順の記録として、コマンド・チェック項目をそのまま残す。個別の実施結果は別途確認する。運用方針はAGENTS.mdに従う。
 
+## e-Stat追加時の適用順序（未実施・2026-10-22）
+
+- [ ] [e-Stat設計・有効化境界](supply-chain-stats.md#9-実装と有効化の境界)と相互レビュー・CI・ローカル検証を確認する。適用順序は **public `0004_supply_chain_stats.sql` → private `0017_supply_chain_stats.sql`**。公開側の適用結果・台帳・追加テーブルを確認してから非公開側を適用する。0017を先行させず、既存migrationや設定を上書きしない。
+- [ ] 片側未適用でもe-Stat再開が `work:false` となり、既存GPUの再開・保守が続くことを確認する。public不足時は固定 `estat_schema_unavailable` を記録する。これはe-Stat有効化の許可ではなく、`ESTAT_ENABLED="false"`・両sourceの `enabled=false` を維持する。今回の作業ではmigration・deploy・Secret作成・実HTTPは行わない。
+
 <a id="dc-0016"></a>
 ## DC事業者8社の配備手順（未実施・2026-10-22）
 

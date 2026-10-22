@@ -1,5 +1,11 @@
 # ソース台帳 — Phase 0
 
+## 2026-10-22 e-Stat公開用2統計（所有者承認済み・収集無効）
+
+所有者承認 `Kaz owner approval 2026-10-22T09:43Z estat` を反映し、経済産業省生産動態統計00550200と鉱工業指数00550300を `config/sources/estat_meti_seidou.json` / `estat_meti_iip.json` に登録した。取得・非公開保存・内部分析・公開表示・正規化再配布・派生再配布・商用再配布はallowed、raw再配布と外部LLM処理はdenied。両sourceはenabled=false、ESTAT_ENABLEDもfalse。新しい実観測・実HTTP・Secret作成・本番操作は0件。
+
+提供済みの2026-10-22規約調査と所有者判断を根拠とし、対象をMETI自身の統計に限定する。外部DB・第三者コンテンツは含めず、出典・加工明示・APIクレジットを付ける。[統合設計と根拠](supply-chain-stats.md#rights)に利用条件・取得範囲・保持・マスク運用・未検証事項を記録した。従来の候補sourceに許諾を広げるものではない。
+
 ## 2026-10-21 ライセンスmetadataレビュー
 
 所有者委託の[ライセンス／再配布レビュー](license-review-20261021.md)を既存のterms_url/license_url、rights_checked_at、rights_evidence_ref、attribution_text、known_limitationsとpolicyへ記録しました。ライセンス名・再配布判断は下表とknown_limitations、機械判定は既存9権限で表現し、新schemaは追加しません。disabled設定の確認日時は`2026-10-21T00:00:00.000Z`です。これは提供元への再照会や実データ取得の日時ではありません。

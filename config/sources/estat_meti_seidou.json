@@ -1,0 +1,100 @@
+{
+  "source_id": "estat_meti_seidou",
+  "dataset_type": "supply_chain_stats",
+  "operator": "経済産業省",
+  "source_url": "https://www.e-stat.go.jp/stat-search/database?layout=datalist&toukei=00550200",
+  "documentation_url": "https://www.e-stat.go.jp/api/api-info/e-stat-manual3-0",
+  "terms_url": "https://www.e-stat.go.jp/api/terms-of-use",
+  "license_url": "https://www.e-stat.go.jp/terms-of-use",
+  "endpoint": "https://api.e-stat.go.jp/rest/3.0/app/json/",
+  "acquisition_method": "official_estat_api",
+  "authentication_required": true,
+  "native_currency": null,
+  "native_unit": "series_specific",
+  "geography": [
+    "JP"
+  ],
+  "native_frequency": "annual_monthly_values",
+  "expected_update_calendar": "Existing 18:17 UTC collection; first UTC day of July through September",
+  "expected_lag": "Annual time-series tables may lag up to approximately 18 months",
+  "rights_checked_at": "2026-10-22T09:43:00.000Z",
+  "rights_evidence_ref": "docs/supply-chain-stats.md#rights",
+  "attribution_text": "経済産業省生産動態統計（経済産業省）、政府統計の総合窓口(e-Stat)（https://www.e-stat.go.jp/）を加工して作成。このサービスは、政府統計総合窓口(e-Stat)のAPI機能を使用していますが、サービスの内容は国によって保証されたものではありません。",
+  "known_limitations": [
+    "AI向け専用統計ではない。",
+    "Source terms and rights basis supplied in owner-reviewed design dated 2026-10-22; no live access in this implementation.",
+    "Only METI-authored e-Stat database tables; excludes external databases and third-party content.",
+    "Raw redistribution and external LLM processing are denied.",
+    "Unknown classifications and unreviewed 2026 code systems are quarantined."
+  ],
+  "enabled": false,
+  "adapter": "estat",
+  "selection": [
+    "静止電気機械器具",
+    "半導体製造装置及びFPD製造装置",
+    "運搬機械及び産業用ロボット",
+    "開閉制御装置"
+  ],
+  "max_bytes": 16000000,
+  "max_records": 100,
+  "estat": {
+    "owner_approval_ref": "Kaz owner approval 2026-10-22T09:43Z estat",
+    "stats_code": "00550200",
+    "release_kind": "annual",
+    "table_groups": [
+      "静止電気機械器具",
+      "半導体製造装置及びFPD製造装置",
+      "運搬機械及び産業用ロボット",
+      "開閉制御装置"
+    ],
+    "months_utc": [
+      7,
+      8,
+      9
+    ],
+    "day_utc": 1,
+    "max_list_pages": 4,
+    "max_data_pages": 5,
+    "page_size": 10000,
+    "normalized_days": 1095,
+    "reviewed_schema_signatures": []
+  },
+  "policy": {
+    "version": "estat_meti_seidou-20261022-v1",
+    "rights": {
+      "automated_collection": "allowed",
+      "private_storage": "allowed",
+      "internal_analysis": "allowed",
+      "external_llm_processing": "denied",
+      "public_display": "allowed",
+      "raw_redistribution": "denied",
+      "normalized_redistribution": "allowed",
+      "derived_redistribution": "allowed",
+      "commercial_redistribution": "allowed"
+    },
+    "fields": [
+      "estat_projection_v1",
+      "Selected METI series: item, measure, original unit, period, decimal or suppression flag, definition, revision, source table and update metadata"
+    ],
+    "conditions": [
+      "Cite METI and e-Stat with source URL; explicitly label processing and do not imply government endorsement.",
+      "このサービスは、政府統計総合窓口(e-Stat)のAPI機能を使用していますが、サービスの内容は国によって保証されたものではありません。",
+      "Exclude external database integrations and third-party authored content.",
+      "No raw redistribution or external LLM processing.",
+      "Mask appId in every log, evidence, persisted URL and error.",
+      "Kaz owner approval 2026-10-22T09:43Z estat"
+    ],
+    "valid_from": "2026-10-22T09:43:00.000Z",
+    "valid_until": "2027-01-22T00:00:00.000Z",
+    "retention_days": 90,
+    "retention_limit_days": null,
+    "decision_actor": "Kaz owner approval 2026-10-22T09:43Z estat",
+    "evidence_version": "e-Stat terms/API terms and supplied rights review 2026-10-22",
+    "evidence_refs": [
+      "docs/supply-chain-stats.md#rights",
+      "https://www.e-stat.go.jp/terms-of-use",
+      "https://www.e-stat.go.jp/api/terms-of-use",
+      "https://www.e-stat.go.jp/api/api-info/credit"
+    ]
+  }
+}

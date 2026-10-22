@@ -65,11 +65,34 @@ export function validPolicy(source: Source, now: string): boolean {
   const p = source.policy;
   return source.enabled && now >= p.valid_from && (!p.valid_until || now < p.valid_until);
 }
+export function estatAuthorizationReady(source: Source): boolean {
+  if (!source.estat && source.adapter !== 'estat' && source.dataset_type !== 'supply_chain_stats')
+    return true;
+  const e = source.estat;
+  return (
+    !!e &&
+    source.adapter === 'estat' &&
+    source.dataset_type === 'supply_chain_stats' &&
+    source.endpoint === 'https://api.e-stat.go.jp/rest/3.0/app/json/' &&
+    !!e.owner_approval_ref &&
+    source.policy.fields.includes('estat_projection_v1') &&
+    ((e.stats_code === '00550200' &&
+      e.release_kind === 'annual' &&
+      source.source_id === 'estat_meti_seidou') ||
+      (e.stats_code === '00550300' &&
+        e.release_kind === 'iip_monthly' &&
+        source.source_id === 'estat_meti_iip')) &&
+    stable(e.table_groups) === stable(source.selection) &&
+    new Set(e.table_groups).size === e.table_groups.length &&
+    (!source.policy.retention_limit_days || e.normalized_days <= source.policy.retention_limit_days)
+  );
+}
 export function canCollect(source: Source, now: string): boolean {
   return (
     validPolicy(source, now) &&
     gpuAuthorizationReady(source) &&
     modelsAuthorizationReady(source) &&
+    estatAuthorizationReady(source) &&
     ['automated_collection', 'private_storage', 'internal_analysis'].every(
       (k) => source.policy.rights[k as keyof typeof source.policy.rights] === 'allowed',
     )
@@ -103,6 +126,6 @@ export async function assertPersistenceAllowed(
     .first<{ suspended: number; enabled: number; policy_version: string; config_json: string }>();
   if (!row || row.suspended || !row.enabled || row.policy_version !== source.policy.version)
     throw new Error('source_suspended_or_policy_changed');
-  if (source.models && stable(JSON.parse(row.config_json)) !== stable(source))
+  if ((source.models || source.estat) && stable(JSON.parse(row.config_json)) !== stable(source))
     throw new Error('model_scope_changed');
 }

@@ -3,6 +3,7 @@ import type { SourceObserver } from './telemetry';
 import { expireModels } from './models-retention';
 import { resumeModelRuns } from './models-pipeline';
 import { resumeGPURuns } from './gpu-pipeline';
+import { resumeEstat } from './estat-pipeline';
 
 // A continuation spends its ingestion budget on one workload. Existing Models
 // collection/retention keeps priority; private GPU capture uses the remaining slots.
@@ -16,5 +17,7 @@ export async function resumeCollections(
   if (retired) return { results: [], models_work: true };
   const models = await resumeModelRuns(env, sources, now, false, observer);
   if (models.length) return { results: models, models_work: true };
+  const estat = await resumeEstat(env, sources, now, observer);
+  if (estat.work) return { results: estat.results, models_work: false, estat_work: true };
   return { results: await resumeGPURuns(env, sources, now, false, observer), models_work: false };
 }

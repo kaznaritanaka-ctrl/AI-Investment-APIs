@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EstatConfigSchema } from './estat-schema';
 import { ModelScopeSchema, ModelsConfigSchema, type ModelCatalog } from './models-schema';
 import type { GPURental, GPUSecondary } from './gpu';
 
@@ -82,6 +83,7 @@ export const SourceSchema = z
       'rates_credit',
       'capex_utilization',
       'gpu_index',
+      'supply_chain_stats',
     ]),
     operator: z.string(),
     source_url: z.url(),
@@ -111,9 +113,11 @@ export const SourceSchema = z
       'sakura_dok',
       'ebay_browse',
       'price_of_compute',
+      'estat',
     ]),
     gpu: GPUConfigSchema.optional(),
     models: ModelsConfigSchema.optional(),
+    estat: EstatConfigSchema.optional(),
     selection: z.array(z.string()),
     max_bytes: z.number().int().positive().max(32000000),
     max_records: z.number().int().positive().max(100),
@@ -265,6 +269,8 @@ export type CollectorEnv = {
   GPU_RESUME_CRON?: string;
   PRIVATE_GPU_RESEARCH_ENABLED?: string;
   DC_TRACKER_ENABLED?: string;
+  ESTAT_ENABLED?: string;
+  ESTAT_APP_ID?: string;
   LAMBDA_API_KEY?: string;
   SAKURA_ACCESS_TOKEN?: string;
   SAKURA_ACCESS_SECRET?: string;

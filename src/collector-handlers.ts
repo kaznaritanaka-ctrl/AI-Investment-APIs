@@ -67,12 +67,13 @@ export default {
         const resumed = await resumeCollections(env, activeSources, now, observer);
         results = resumed.results;
         // A full GPU page and a full retention batch have separate SQL budgets.
-        gpuMaintenance = !resumed.models_work && resumed.results.length === 0;
+        gpuMaintenance =
+          !resumed.models_work && !resumed.estat_work && resumed.results.length === 0;
       } else if (controller.cron === env.WATCHDOG_CRON) {
         results = [
           ...(await watchdog(
             env,
-            activeSources.filter((s) => !s.gpu),
+            activeSources.filter((s) => !s.gpu && !s.estat),
             dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
             now,
             observer,

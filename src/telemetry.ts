@@ -22,6 +22,20 @@ export const observe = (
 
 // Never log arbitrary Error.message or arbitrary result properties, even if they look like a code.
 const codes = new Set([
+  'estat_disabled',
+  'estat_resume_failed',
+  'estat_schema_unavailable',
+  'estat_cleanup_failed',
+  'estat_app_id_missing',
+  'estat_not_due',
+  'estat_operation_failed',
+  'estat_request_failed',
+  'estat_request_interrupted',
+  'estat_evidence_invalid',
+  'estat_schema_changed',
+  'estat_schema_invalid',
+  'estat_page_limit',
+  'estat_scope_changed',
   'operation_failed',
   'research_schema_unavailable',
   'dc_schema_unavailable',
@@ -131,11 +145,13 @@ export function sourceObserver(
       started = clock();
     const base = {
       collector_version: COLLECTOR_VERSION,
-      configured_parser_version: source.models
-        ? MODELS_PARSER
-        : source.gpu
-          ? gpuParser(source)
-          : PARSER_VERSION,
+      configured_parser_version: source.estat
+        ? 'estat-v1'
+        : source.models
+          ? MODELS_PARSER
+          : source.gpu
+            ? gpuParser(source)
+            : PARSER_VERSION,
       process_kind: process,
       run_kind: 'collection',
       source_id: source.source_id,

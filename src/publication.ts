@@ -2,6 +2,7 @@ import type { CollectorEnv, Source, Observation } from './schema';
 import { canPublish, canPublishDerived } from './policy';
 import { batches, stable, hash } from './util';
 import { crossRate } from './fx';
+import { estatConfigurationHash } from './estat';
 export const MIT_NOTICE =
   'MIT License\n\nCopyright (c) 2025 models.dev\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.';
 export function publicSource(s: Source) {
@@ -21,16 +22,18 @@ export function publicSource(s: Source) {
 }
 export async function syncSource(env: CollectorEnv, s: Source, now: string) {
   const policy = stable(s.policy),
-    policyHash = await hash(
-      stable({
-        policy: s.policy,
-        adapter: s.adapter,
-        endpoint: s.endpoint,
-        selection: s.selection,
-        ...(s.gpu ? { gpu: s.gpu } : {}),
-        ...(s.models ? { models: s.models } : {}),
-      }),
-    );
+    policyHash = s.estat
+      ? await estatConfigurationHash(s)
+      : await hash(
+          stable({
+            policy: s.policy,
+            adapter: s.adapter,
+            endpoint: s.endpoint,
+            selection: s.selection,
+            ...(s.gpu ? { gpu: s.gpu } : {}),
+            ...(s.models ? { models: s.models } : {}),
+          }),
+        );
   const old = await env.PRIVATE_DB.prepare(
     'SELECT configuration_hash FROM source_policy_versions WHERE source_id=? AND version=?',
   )
@@ -53,6 +56,15 @@ export async function syncSource(env: CollectorEnv, s: Source, now: string) {
     ).bind(s.source_id, s.policy.version, s.enabled ? 1 : 0, stable(s)),
   ]);
   await env.PUBLIC_DB.batch([
+    ...(s.estat
+      ? [
+          env.PUBLIC_DB.prepare('INSERT OR IGNORE INTO sc_policy_versions VALUES (?,?,?)').bind(
+            s.source_id,
+            s.policy.version,
+            policyHash,
+          ),
+        ]
+      : []),
     env.PUBLIC_DB.prepare(
       'UPDATE source_publications SET active=0 WHERE source_id=? AND policy_version<>?',
     ).bind(s.source_id, s.policy.version),
