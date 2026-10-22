@@ -8,6 +8,7 @@ import { openapi, methodology } from './openapi';
 export type APIEnv = {
   PUBLIC_DB: D1Database;
   ENVIRONMENT?: string;
+  RATE_LIMITER_HEAVY?: { limit: (o: { key: string }) => Promise<{ success: boolean }> };
   RATE_LIMITER?: { limit: (o: { key: string }) => Promise<{ success: boolean }> };
 };
 const json = (value: unknown, status = 200) =>
@@ -100,7 +101,105 @@ async function visibleMax(env: APIEnv, kind: string): Promise<number> {
   }>();
   return row?.n ?? 0;
 }
+// Canonicalize compressed/expanded IPv6 addresses before grouping by /64.
+function clientKey(ip: string | null): string {
+  if (!ip) return 'noip';
+  if (!ip.includes(':')) return ip;
+  try {
+    const canonical = new URL('http://[' + ip + ']/').hostname.slice(1, -1);
+    const halves = canonical.split('::');
+    const left = halves[0] ? halves[0].split(':') : [];
+    const right = halves[1] ? halves[1].split(':') : [];
+    const groups =
+      halves.length === 2
+        ? [...left, ...Array(8 - left.length - right.length).fill('0'), ...right]
+        : left;
+    return (
+      groups
+        .slice(0, 4)
+        .map((v) => Number.parseInt(v, 16).toString(16))
+        .join(':') + '::/64'
+    );
+  } catch {
+    return 'noip';
+  }
+}
+function heavyRoute(path: string): boolean {
+  return (
+    ['/health', '/v1/datasets', '/v1/sources', '/v1/fx'].includes(path) ||
+    ['/v1/gpu/', '/v1/models/', '/v1/supply-chain/'].some((prefix) => path.startsWith(prefix)) ||
+    path === '/v1/supply-chain'
+  );
+}
+function cacheTTL(path: string): number {
+  if (path === '/health') return 60;
+  if (path === '/openapi.json' || path === '/llms.txt' || path.startsWith('/v1/methodology/'))
+    return 3600;
+  return heavyRoute(path) ? 300 : 0;
+}
 export async function handle(
+  request: Request,
+  env: APIEnv,
+  now = new Date().toISOString(),
+): Promise<Response> {
+  const path = new URL(request.url).pathname;
+  // Preserve method/length validation before limiter consumption.
+  if (!['GET', 'HEAD'].includes(request.method) || request.url.length > 8192)
+    return route(request, env, now);
+  const replyError = (code: string, status: number) =>
+    path === '/v1/supply-chain' || path.startsWith('/v1/supply-chain/')
+      ? supplyChainJSON({ error: { code } }, status)
+      : error(code, status);
+  const key = clientKey(request.headers.get('CF-Connecting-IP'));
+  const required = [env.RATE_LIMITER];
+  // Cloudflare sets CF-Connecting-IP; missing addresses share a defensive 20/min bucket.
+  if (heavyRoute(path) || key === 'noip') required.push(env.RATE_LIMITER_HEAVY);
+  if (env.ENVIRONMENT === 'production' && required.some((limiter) => !limiter))
+    return replyError('rate_limiter_unavailable', 503);
+  try {
+    for (const limiter of required) {
+      if (limiter && !(await limiter.limit({ key })).success) {
+        const response = replyError('rate_limited', 429);
+        response.headers.set('Retry-After', '60');
+        return response;
+      }
+    }
+  } catch {
+    return replyError('rate_limiter_unavailable', 503);
+  }
+  const ttl = cacheTTL(path);
+  const cache =
+    request.method === 'GET' && ttl && typeof caches !== 'undefined' ? caches.default : undefined;
+  const cacheKey = new Request(request.url);
+  try {
+    const hit = await cache?.match(cacheKey);
+    if (hit) {
+      const response = new Response(hit.body, hit);
+      if (path === '/health') response.headers.set('Cache-Control', 'no-store');
+      return response;
+    }
+  } catch {
+    /* Cache failure must not make the public store unavailable. */
+  }
+  const response = await route(request, env, now);
+  if (response.status === 200 && ttl) {
+    response.headers.set(
+      'Cache-Control',
+      path === '/health' ? 'no-store' : `public, max-age=${ttl}`,
+    );
+    if (cache) {
+      const stored = response.clone();
+      stored.headers.set('Cache-Control', `public, max-age=${ttl}`);
+      try {
+        await cache.put(cacheKey, stored);
+      } catch {
+        /* Best-effort cache. */
+      }
+    }
+  }
+  return response;
+}
+async function route(
   request: Request,
   env: APIEnv,
   now = new Date().toISOString(),
@@ -122,18 +221,6 @@ export async function handle(
     });
   if (request.url.length > 8192) return replyError('invalid_query', 400);
   try {
-    if (
-      env.RATE_LIMITER &&
-      !(
-        await env.RATE_LIMITER.limit({
-          key: request.headers.get('CF-Connecting-IP') ?? 'anonymous',
-        })
-      ).success
-    ) {
-      const response = replyError('rate_limited', 429);
-      response.headers.set('Retry-After', '60');
-      return response;
-    }
     if (path.startsWith('/v1/gpu/')) return await gpuAPI(url, env, now);
     if (path.startsWith('/v1/models/')) return await modelsAPI(url, env, now);
     if (supplyChain) return await supplyChainAPI(url, env, now);

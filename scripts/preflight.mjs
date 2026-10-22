@@ -139,7 +139,7 @@ if (args.includes('--cloudflare-read-only')) {
         r.bindings?.every(
           (b) =>
             (b.type === 'd1' && b.name === 'PUBLIC_DB' && b.id === a.d1_databases[0].database_id) ||
-            (b.type === 'ratelimit' && b.name === 'RATE_LIMITER') ||
+            (b.type === 'ratelimit' && ['RATE_LIMITER', 'RATE_LIMITER_HEAVY'].includes(b.name)) ||
             (b.type === 'plain_text' && b.name === 'ENVIRONMENT'),
         ),
       );

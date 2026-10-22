@@ -142,7 +142,15 @@ describe('e-Stat public projection and migration (synthetic only)', () => {
       { definition_version_id: 'synthetic-definition', unit_raw: '台' },
     ]);
     const first = await api('series/synthetic-series/observations?from=2025-07&to=2025-09&limit=1');
+    // Direct module responses remain no-store; the outer API handler applies edge caching.
     expect(first.response.headers.get('cache-control')).toBe('no-store');
+    const outer = await handle(
+      new Request('https://local.test/v1/supply-chain/series'),
+      { PUBLIC_DB: local.env.PUBLIC_DB },
+      now,
+    );
+    expect(outer.status).toBe(200);
+    expect(outer.headers.get('cache-control')).toBe('public, max-age=300');
     expect(first.body.data[0]).toMatchObject({
       value_decimal: '1.2300',
       value_flag: null,

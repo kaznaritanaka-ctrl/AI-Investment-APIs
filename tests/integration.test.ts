@@ -46,7 +46,7 @@ describe('Cloudflare D1/R2 integration (synthetic only)', () => {
     expect(body.data.lineage).toHaveLength(2);
     expect(body.data.data_origin).toBe('synthetic');
     expect(JSON.stringify(body)).not.toMatch(/raw_artifact|payload_hash|lease_token|evidence\//);
-    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(r.headers.get('cache-control')).toBe('public, max-age=300');
   });
   it('is idempotent in one slot but records same price next day; absence is distinct', async () => {
     const fetcher = vi.fn(fxFetch());

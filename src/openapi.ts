@@ -226,7 +226,14 @@ const operation = (summary: string, parameters: unknown[], schema: unknown) => (
   summary,
   parameters,
   responses: {
-    '200': response(schema, 'Success; null is not zero.'),
+    '200': {
+      ...response(schema, 'Success; null is not zero.'),
+      headers: {
+        'Cache-Control': {
+          schema: { enum: ['no-store', 'public, max-age=300', 'public, max-age=3600'] },
+        },
+      },
+    },
     '400': response(errorSchema, 'Invalid filters, interval or cursor.'),
     '404': response(errorSchema, 'No matching data or resource.'),
     '405': {
@@ -236,8 +243,17 @@ const operation = (summary: string, parameters: unknown[], schema: unknown) => (
         'Cache-Control': { schema: { const: 'no-store' } },
       },
     },
-    '429': response(errorSchema, 'Configured rate limiter rejected request.'),
-    '503': response(errorSchema, 'Public D1 unavailable; private state is not disclosed.'),
+    '429': {
+      ...response(errorSchema, 'Configured rate limiter rejected request.'),
+      headers: {
+        'Cache-Control': { schema: { const: 'no-store' } },
+        'Retry-After': { schema: { const: '60' } },
+      },
+    },
+    '503': response(
+      errorSchema,
+      'Public D1 or required rate limiter unavailable; private state is not disclosed.',
+    ),
   },
 });
 const generic = { type: 'object' };
