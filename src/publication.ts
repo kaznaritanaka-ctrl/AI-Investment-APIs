@@ -29,6 +29,7 @@ export async function syncSource(env: CollectorEnv, s: Source, now: string) {
         selection: s.selection,
         ...(s.gpu ? { gpu: s.gpu } : {}),
         ...(s.models ? { models: s.models } : {}),
+        ...(s.estat ? { estat: s.estat } : {}),
       }),
     );
   const old = await env.PRIVATE_DB.prepare(

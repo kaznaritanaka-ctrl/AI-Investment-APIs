@@ -72,7 +72,7 @@ export default {
         results = [
           ...(await watchdog(
             env,
-            activeSources.filter((s) => !s.gpu),
+            activeSources.filter((s) => !s.gpu && !s.estat),
             dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
             now,
             observer,

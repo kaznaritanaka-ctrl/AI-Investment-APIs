@@ -1,5 +1,6 @@
 import { gpuAPI } from './gpu-api';
 import { modelsAPI } from './models-api';
+import { supplyChainAPI } from './supply-chain-api';
 import { visibleSQL, visibleJoin, MIT_NOTICE } from './publication';
 import { freshness } from './fx';
 import { hash, stable, isoTime } from './util';
@@ -127,6 +128,7 @@ export async function handle(
     }
     if (path.startsWith('/v1/gpu/')) return await gpuAPI(url, env, now);
     if (path.startsWith('/v1/models/')) return await modelsAPI(url, env, now);
+    if (path.startsWith('/v1/supply-chain/')) return await supplyChainAPI(url, env, now);
     if (path === '/openapi.json') return json(openapi);
     if (path === '/llms.txt')
       return new Response(

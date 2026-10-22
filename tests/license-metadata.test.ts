@@ -4,6 +4,7 @@ import { SourceSchema } from '../src/schema';
 import { ResearchConfigSchema } from '../src/research/schema';
 import { canCollect, canPublish } from '../src/policy';
 import { hash, stable } from '../src/util';
+import { ESTAT_CREDIT } from '../src/estat-schema';
 
 const reviewDate = '2026-10-21T00:00:00.000Z';
 const reviewPath = 'docs/license-review-20261021.md';
@@ -43,6 +44,9 @@ describe('owner-commissioned license metadata (offline)', () => {
         .sort(),
     ).toEqual(['ecb', 'models_dev', 'price_of_compute']);
     for (const s of sources.filter((s) => !s.enabled)) {
+      expect(canCollect(s, reviewDate)).toBe(false);
+      expect(canPublish(s, reviewDate, true)).toBe(false);
+      if (s.estat) continue; // The separately approved 2026-10-22 scope is checked below.
       expect(s.rights_checked_at).toBe(reviewDate);
       expect(s.rights_evidence_ref).toBe(reviewPath + '#' + s.source_id);
       expect(review).toContain('<a id="' + s.source_id + '"></a>');
@@ -65,6 +69,26 @@ describe('owner-commissioned license metadata (offline)', () => {
     }
     expect(sources.some((s) => s.source_id === 'rebro')).toBe(false);
     expect(register).toContain('| Rebro (G3) |');
+  });
+
+  it('registers the two owner-approved e-Stat public scopes while keeping collection disabled', () => {
+    const approved = sources.filter((s) => s.estat);
+    expect(approved.map((s) => s.source_id).sort()).toEqual([
+      'estat_meti_iip',
+      'estat_meti_seidou',
+    ]);
+    for (const s of approved) {
+      expect(s.enabled).toBe(false);
+      expect(s.estat!.owner_approval_ref).toBe('Kaz owner approval 2026-10-22T09:43Z estat');
+      expect(s.attribution_text).toContain(ESTAT_CREDIT);
+      expect(s.rights_evidence_ref).toBe('docs/supply-chain-stats.md#rights');
+      for (const [right, status] of Object.entries(s.policy.rights))
+        expect(status).toBe(
+          ['raw_redistribution', 'external_llm_processing'].includes(right) ? 'denied' : 'allowed',
+        );
+      expect(canCollect(s, '2026-10-22T09:43:00.000Z')).toBe(false);
+      expect(canPublish(s, '2026-10-22T09:43:00.000Z')).toBe(false);
+    }
   });
 
   it('preserves the license review metadata and existing private-only PoC approval', async () => {

@@ -20,7 +20,8 @@
             "electricity",
             "rates_credit",
             "capex_utilization",
-            "gpu_index"
+            "gpu_index",
+            "supply_chain_stats"
           ]
         },
         "operator": {
@@ -140,7 +141,8 @@
             "lambda",
             "sakura_dok",
             "ebay_browse",
-            "price_of_compute"
+            "price_of_compute",
+            "estat"
           ]
         },
         "gpu": {
@@ -423,6 +425,94 @@
             "owner_approval_ref",
             "runtime_review_ref",
             "retention"
+          ],
+          "additionalProperties": false
+        },
+        "estat": {
+          "type": "object",
+          "properties": {
+            "owner_approval_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stats_code": {
+              "type": "string",
+              "enum": [
+                "00550200",
+                "00550300"
+              ]
+            },
+            "release_kind": {
+              "type": "string",
+              "enum": [
+                "annual",
+                "iip_monthly"
+              ]
+            },
+            "table_groups": {
+              "minItems": 1,
+              "maxItems": 4,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "months_utc": {
+              "minItems": 1,
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12
+              }
+            },
+            "day_utc": {
+              "type": "number",
+              "const": 1
+            },
+            "max_list_pages": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4
+            },
+            "max_data_pages": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "page_size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "normalized_days": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 3650
+            },
+            "reviewed_schema_signatures": {
+              "maxItems": 16,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          },
+          "required": [
+            "owner_approval_ref",
+            "stats_code",
+            "release_kind",
+            "table_groups",
+            "months_utc",
+            "day_utc",
+            "max_list_pages",
+            "max_data_pages",
+            "page_size",
+            "normalized_days",
+            "reviewed_schema_signatures"
           ],
           "additionalProperties": false
         },
