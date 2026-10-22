@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { dcCollectionSlot } from './dc-contract';
+import { fetchDCTrackerPage } from './dc-network';
 import { DCTrackerPageSchema, parseDCTracker, dcTrackerFingerprint } from './dc-tracker-schema';
 import { emitLog } from '../telemetry';
 import {
@@ -42,6 +44,7 @@ export type ResearchEnv = {
   EVIDENCE: R2Bucket;
   ENVIRONMENT: 'test' | 'development' | 'production';
   PRIVATE_GPU_RESEARCH_ENABLED?: string;
+  DC_TRACKER_ENABLED?: string;
 };
 type Options = Omit<NetworkOptions, 'onBody' | 'validators'> & {
   current_terms_version: string;
@@ -107,8 +110,10 @@ export async function collectResearchPage(
   opt: Options,
 ) {
   assertResearchConfigExecution(env, config);
-  if (config.adapter === 'dc_tracker' && opt.synthetic_text === undefined)
-    throw new Error('dc_tracker_live_transport_not_integrated');
+  const dcLive = config.adapter === 'dc_tracker' && opt.synthetic_text === undefined;
+  if (dcLive && !config.dc_access) throw new Error('dc_tracker_live_scope_unreviewed');
+  if (config.adapter === 'dc_tracker' && config.dc_access && !dcCollectionSlot(scheduled))
+    throw new Error('dc_weekly_slot_required');
   const now = opt.now ?? (() => new Date().toISOString()),
     at = now();
   assertResearchAllowed(config, at, opt.current_terms_version);
@@ -211,7 +216,7 @@ export async function collectResearchPage(
         observed = now();
       } else {
         if (!opt.allow_network) throw new Error('research_network_opt_in_required');
-        const plan = gpu ? null : researchRequest(config, query, pageNumber);
+        const plan = gpu || dcLive ? null : researchRequest(config, query, pageNumber);
         const boundedFetcher: typeof fetch = async (url, init) => {
           await checkCurrent(env, config, configHash, opt);
           const budget = await env.PRIVATE_DB.prepare(
@@ -228,14 +233,16 @@ export async function collectResearchPage(
           onBody: undefined,
           validators: undefined,
         };
-        const r = gpu
-          ? await fetchPublicGpuPage(config, network)
-          : await fetchBounded(
-              source,
-              plan!,
-              network,
-              config.adapter === 'jepx_spot' ? 'csv' : 'json',
-            );
+        const r = dcLive
+          ? await fetchDCTrackerPage(config, network)
+          : gpu
+            ? await fetchPublicGpuPage(config, network)
+            : await fetchBounded(
+                source,
+                plan!,
+                network,
+                config.adapter === 'jepx_spot' ? 'csv' : 'json',
+              );
         if (r.status !== 200) throw new Error('research_unexpected_status');
         text = r.text;
         observed = r.observed_at;
@@ -326,6 +333,12 @@ export async function collectResearchPage(
       if (seen.has(r.record_key)) throw new Error('research_duplicate_record');
       seen.add(r.record_key);
     }
+    if (
+      config.adapter === 'dc_tracker' &&
+      page.coverage === 'complete' &&
+      seen.size !== page.reported_total
+    )
+      throw new Error('dc_tracker_coverage_mismatch');
     const statements: D1PreparedStatement[] = [];
     const priorCutoff =
       retention.normalized_days === null
@@ -478,12 +491,6 @@ export async function collectResearchPage(
       .first<{ n: number }>();
     if (count?.n !== statements.length) throw new Error('research_checkpoint_mismatch');
     await checkCurrent(env, config, configHash, opt);
-    if (
-      config.adapter === 'dc_tracker' &&
-      page.coverage === 'complete' &&
-      seen.size !== page.reported_total
-    )
-      throw new Error('dc_tracker_coverage_mismatch');
     const state = page.coverage === 'complete' && page.next_page === null ? 'complete' : 'partial';
     await env.PRIVATE_DB.batch([
       env.PRIVATE_DB.prepare(
@@ -503,7 +510,7 @@ export async function collectResearchPage(
         now(),
       ),
       env.PRIVATE_DB.prepare(
-        `UPDATE research_runs SET state=?,next_page=?,http_page_attempts=${gpu ? 'http_page_attempts' : '0'},observation_count=(SELECT COUNT(*) FROM ${table} WHERE run_id=?),last_error=?,retry_at=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?`,
+        `UPDATE research_runs SET state=?,next_page=?,http_page_attempts=${gpu || dcLive ? 'http_page_attempts' : '0'},observation_count=(SELECT COUNT(*) FROM ${table} WHERE run_id=?),last_error=?,retry_at=NULL,lease_token=NULL,lease_until=NULL WHERE run_id=? AND lease_token=? AND lease_until>?`,
       ).bind(state, page.next_page, runId, page.reasons.join(',') || null, runId, lease, now()),
     ]);
     const result = await env.PRIVATE_DB.prepare(

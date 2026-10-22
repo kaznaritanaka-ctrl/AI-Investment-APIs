@@ -24,6 +24,13 @@ export const observe = (
 const codes = new Set([
   'operation_failed',
   'research_schema_unavailable',
+  'dc_schema_unavailable',
+  'dc_robots_disallowed',
+  'dc_robots_invalid',
+  'dc_weekly_slot_required',
+  'dc_tracker_live_scope_unreviewed',
+  'dc_tracker_coverage_mismatch',
+  'research_request_budget_exhausted',
   'research_config_version_invalid',
   'research_cursor_invalid',
   'research_collection_stopped',

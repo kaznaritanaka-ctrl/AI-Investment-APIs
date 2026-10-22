@@ -19,6 +19,7 @@
     "ENVIRONMENT": "production",
     "AGENT_ENABLED": "false",
     "PRIVATE_GPU_RESEARCH_ENABLED": "true",
+    "DC_TRACKER_ENABLED": "true",
     "COLLECTION_CRON": "17 18 * * *",
     "COLLECTION_ENABLED": "true",
     "WATCHDOG_CRON": "47 18 * * *",

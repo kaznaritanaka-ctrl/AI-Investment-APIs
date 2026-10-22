@@ -7,7 +7,7 @@ import {
 import { dcReviewWeek, dcWeeklyReviewDue } from '../src/research/dc-tracker';
 import { ResearchConfigSchema, assertResearchAllowed } from '../src/research/schema';
 import { dcConfig, dcPage, dcRecord, dcTime } from './dc-tracker-helpers';
-import proposal from '../config/proposals/research/meti_dc_tracker.json';
+import proposal from './fixtures/research/dc-config.synthetic.json';
 
 describe('DC tracker offline contracts (no D1 runtime)', () => {
   it('enforces official evidence, exact scope, quoted AI drafts, reason unknown and disclosed financing', async () => {

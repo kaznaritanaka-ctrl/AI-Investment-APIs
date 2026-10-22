@@ -1,0 +1,134 @@
+{
+  "source": {
+    "source_id": "dc_softbank",
+    "dataset_type": "capex_utilization",
+    "operator": "ソフトバンク",
+    "source_url": "https://www.softbank.jp/sbnews/entry/20250421_01",
+    "documentation_url": "https://www.softbank.jp/sbnews/entry/20250421_01",
+    "terms_url": "https://www.softbank.jp/help/sitepolicy/",
+    "license_url": null,
+    "endpoint": "https://www.softbank.jp/sbnews/entry/20250421_01",
+    "acquisition_method": "Fixed operator primary URLs only; current robots each run; 3 total HTTP requests per UTC week",
+    "authentication_required": false,
+    "native_currency": null,
+    "native_unit": null,
+    "geography": [
+      "JP"
+    ],
+    "native_frequency": "event",
+    "expected_update_calendar": "Monday UTC at existing 18:17 UTC collection slot only",
+    "expected_lag": "unknown",
+    "rights_checked_at": "2026-10-22T09:43:00.000Z",
+    "rights_evidence_ref": "docs/dc-source-terms-20261022.md",
+    "attribution_text": "Source: ソフトバンク; private research only; preserve primary URL and source dates",
+    "known_limitations": [
+      "200; no news/IR disallow",
+      "Owner-approved private research; no public display, redistribution or page text/quotes to external AI",
+      "No live wire verification performed in this implementation; synthetic transport tests only",
+      "Draft disclosure capture only; no inferred capacity, progress or financing"
+    ],
+    "enabled": true,
+    "adapter": "candidate",
+    "selection": [],
+    "max_bytes": 131072,
+    "max_records": 20,
+    "policy": {
+      "version": "dc_softbank-20261022-private-v1",
+      "rights": {
+        "automated_collection": "allowed",
+        "private_storage": "allowed",
+        "internal_analysis": "allowed",
+        "external_llm_processing": "denied",
+        "public_display": "denied",
+        "raw_redistribution": "denied",
+        "normalized_redistribution": "denied",
+        "derived_redistribution": "denied",
+        "commercial_redistribution": "denied"
+      },
+      "fields": [
+        "dc_tracker_projection_v1"
+      ],
+      "conditions": [
+        "Owner-approved private research only; independent rights and retention gates required",
+        "AI candidates contain URL, title, date only regardless of future grants",
+        "365-day normalized history, 7-day evidence, no archive; Time Travel may retain deleted copies for 30 additional days"
+      ],
+      "valid_from": "2026-10-22T09:43:00.000Z",
+      "valid_until": null,
+      "retention_days": 7,
+      "retention_limit_days": null,
+      "decision_actor": "Kaz approval / supplied terms assessment",
+      "evidence_version": "dc_softbank-20261022-private-v1",
+      "evidence_refs": [
+        "Kaz owner approval 2026-10-22T09:43Z dc-sources",
+        "docs/dc-source-terms-20261022.md"
+      ]
+    }
+  },
+  "adapter": "dc_tracker",
+  "visibility": "private_only",
+  "method_version": "dc-tracker-v1",
+  "owner_approval_ref": "Kaz owner approval 2026-10-22T09:43Z dc-sources",
+  "wire_contract_review_ref": "docs/dc-project-tracker.md#dc-sources-20261022",
+  "history_access": [],
+  "terms": {
+    "version": "dc_softbank-20261022-private-v1",
+    "checked_at": "2026-10-22T09:43:00.000Z",
+    "review_after": "2027-01-15T00:00:00.000Z",
+    "evidence_refs": [
+      "docs/dc-source-terms-20261022.md",
+      "https://www.softbank.jp/robots.txt",
+      "https://www.softbank.jp/help/sitepolicy/"
+    ]
+  },
+  "scope": {
+    "kind": "dc_tracker",
+    "project_ids": [
+      "softbank_tomakomai",
+      "softbank_sakai"
+    ]
+  },
+  "limits": {
+    "page_size": 20,
+    "max_pages": 1,
+    "max_input_rows": 20
+  },
+  "retention": {
+    "strategy": "d1_history",
+    "target_days": 1095,
+    "evidence_days": 7,
+    "archive_days": 0,
+    "normalized_days": 365,
+    "normalized_mode": "fixed_days",
+    "ongoing_storage": null,
+    "storage_review_hold": null,
+    "backup_days": 30,
+    "time_travel_days": 30,
+    "lifecycle_review_ref": "docs/private-gpu-deploy-checklist.md#dc-0016",
+    "reviewed_ref": "Kaz owner approval 2026-10-22T09:43Z dc-sources"
+  },
+  "maintenance": {
+    "collection_stopped": false,
+    "revoke_at": null,
+    "delete_requests": []
+  },
+  "dc_access": {
+    "robots_finding": "200; no news/IR disallow",
+    "projects": [
+      {
+        "candidate_number": 1,
+        "project_id": "softbank_tomakomai",
+        "title": "北海道苫小牧AIデータセンター",
+        "prefecture": "北海道",
+        "url": "https://www.softbank.jp/sbnews/entry/20250421_01"
+      },
+      {
+        "candidate_number": 2,
+        "project_id": "softbank_sakai",
+        "title": "堺AIデータセンター（旧シャープ堺工場）",
+        "prefecture": "大阪府",
+        "url": "https://www.softbank.jp/corp/news/press/sbkk/2025/20250314_01/"
+      }
+    ]
+  }
+}

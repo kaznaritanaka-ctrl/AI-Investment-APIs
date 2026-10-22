@@ -77,6 +77,7 @@ export const DCTrackerRecordSchema = z
     site: DCSiteSchema.omit({ evidence: true }).nullable(),
     phase: DCPhaseSchema.omit({ evidence: true }).nullable(),
     field: z.enum([
+      'disclosure',
       'status',
       'planned_service_date',
       'actual_service_date',
@@ -98,7 +99,7 @@ export const DCTrackerRecordSchema = z
     }),
     evidence_sha256: z.string().regex(/^[a-f0-9]{64}$/),
     evidence_level: z.enum(['primary_disclosure', 'official_registry']),
-    source_quote: quote,
+    source_quote: quote.nullable(),
     drafted_by: z.enum(['deterministic', 'ai_codex', 'ai_claude', 'kaz']),
     status: z.literal('draft'),
     change: DCChangeSchema.nullable(),
@@ -107,6 +108,7 @@ export const DCTrackerRecordSchema = z
   .strict()
   .superRefine((v, c) => {
     const issue = (message: string) => c.addIssue({ code: 'custom', message });
+    if (v.field !== 'disclosure' && !v.source_quote) issue('dc_quote_required');
     if (v.site && v.site.project_id !== v.project.project_id) issue('dc_site_scope_mismatch');
     if (v.phase && (!v.site || v.phase.site_id !== v.site.site_id))
       issue('dc_phase_scope_mismatch');
@@ -159,7 +161,7 @@ export const DCTrackerPageSchema = z
   .strict();
 
 // This is a reviewed projection format, not an invented provider wire format.
-// All live transport remains closed until a separately reviewed adapter exists.
+// The live adapter emits this projection; source pages cannot supply records directly.
 export async function parseDCTracker(config: ResearchConfig, text: string, pageNumber: number) {
   if (config.scope.kind !== 'dc_tracker' || pageNumber < 0 || pageNumber >= config.limits.max_pages)
     throw new Error('dc_tracker_scope_invalid');
@@ -224,5 +226,12 @@ export async function parseDCTracker(config: ResearchConfig, text: string, pageN
 export async function dcTrackerFingerprint(record: DCTrackerRecord) {
   const { observed_at: _observed, evidence_ref: _ref, ...evidence } = record.evidence;
   const { drafted_by: _author, ...facts } = record;
-  return hash(stable({ ...facts, evidence }));
+  return hash(
+    stable({
+      ...facts,
+      // Disclosure capture has no publisher as-of date; the crawl day is metadata.
+      ...(record.field === 'disclosure' ? { as_of_date: null } : {}),
+      evidence,
+    }),
+  );
 }

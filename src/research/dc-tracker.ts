@@ -77,7 +77,7 @@ export async function dcMorningBrief(
   };
 }
 
-// Body/quotes leave the private reader only with the independent external-LLM grant.
+// Hard boundary: AI receives only URL, title and date, regardless of any future grant.
 export async function dcAICandidates(
   env: ResearchEnv,
   config: ResearchConfig,
@@ -89,15 +89,12 @@ export async function dcAICandidates(
     source_url: record.evidence.source_url,
     title: record.project.name,
     published_at: record.evidence.published_at,
-    ...(config.source.policy.rights.external_llm_processing === 'allowed'
-      ? { source_quote: record.source_quote }
-      : {}),
   }));
 }
 const needsIndividual = (r: z.infer<typeof DCTrackerRecordSchema>) =>
   r.change?.kind === 'cancel' || r.change?.kind === 'downsize' || r.phase?.status === 'cancelled';
 
-// Local library only. No Admin write method, Worker route, source registration or scheduler.
+// Local review library only. No Admin write method, Worker route or automatic approval.
 export async function createDCReviewBatch(
   env: ResearchEnv,
   config: ResearchConfig,

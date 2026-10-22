@@ -21,7 +21,7 @@ import {
 import { assertResearchAllowed, ResearchConfigSchema } from '../src/research/schema';
 import { handle } from '../src/api';
 import { dcConfig, dcOpt, dcPage, dcRecord, dcTime } from './dc-tracker-helpers';
-import proposal from '../config/proposals/research/meti_dc_tracker.json';
+import proposal from './fixtures/research/dc-config.synthetic.json';
 const query = { kind: 'dc_tracker' } as const;
 
 describe('private DC tracker, synthetic evidence only', () => {
@@ -113,7 +113,7 @@ describe('private DC tracker, synthetic evidence only', () => {
         allow_network: true,
         fetcher,
       }),
-    ).rejects.toThrow('dc_tracker_live_transport_not_integrated');
+    ).rejects.toThrow('dc_tracker_live_scope_unreviewed');
     expect(fetcher).not.toHaveBeenCalled();
     expect(
       await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM research_sources').first(),
@@ -245,6 +245,48 @@ describe('private DC tracker, synthetic evidence only', () => {
     } finally {
       await local.mf.dispose();
       local = originalLocal;
+    }
+  });
+  it('rejects a cross-page coverage mismatch before inserting any observations', async () => {
+    const isolated = await localEnv();
+    try {
+      const config = dcConfig();
+      config.limits.page_size = 1;
+      const at = '2026-11-01T01:00:00.000Z';
+      const one = await dcRecord(at),
+        two = await dcRecord(at, 'planned_mw');
+      const result = await collectResearchPage(isolated.env, config, query, at, {
+        ...dcOpt(at, config),
+        synthetic_text: dcPage([one], 0, 2, 1, 'partial'),
+      });
+      // Simulate incomplete restoration: page metadata survives but its observation is missing.
+      await isolated.env.PRIVATE_DB.prepare(
+        "UPDATE research_runs SET state='purging' WHERE run_id=?",
+      )
+        .bind(result.run_id)
+        .run();
+      await isolated.env.PRIVATE_DB.prepare('DELETE FROM research_observations WHERE run_id=?')
+        .bind(result.run_id)
+        .run();
+      await isolated.env.PRIVATE_DB.prepare(
+        "UPDATE research_runs SET state='partial' WHERE run_id=?",
+      )
+        .bind(result.run_id)
+        .run();
+      await expect(
+        collectResearchPage(isolated.env, config, query, at, {
+          ...dcOpt(at, config),
+          synthetic_text: dcPage([two], 1, 2),
+        }),
+      ).rejects.toThrow('dc_tracker_coverage_mismatch');
+      for (const table of ['research_observations', 'dc_observations', 'dc_projects'])
+        expect(
+          await isolated.env.PRIVATE_DB.prepare(`SELECT COUNT(*) n FROM ${table} WHERE run_id=?`)
+            .bind(result.run_id)
+            .first(),
+        ).toEqual({ n: 0 });
+    } finally {
+      await isolated.mf.dispose();
     }
   });
   it('expands batch-scoped all OK, requires individual cancellation/downsize decisions, keeps hold and absent replies draft', async () => {
@@ -402,6 +444,17 @@ describe('private DC tracker, synthetic evidence only', () => {
     expect(
       await local.env.EVIDENCE.head(runDeletionKey(c.source.source_id, run.run_id)),
     ).not.toBeNull();
+    expect(
+      await local.env.PRIVATE_DB.prepare('SELECT * FROM dc_review_batches WHERE batch_id=?')
+        .bind(batch.batch_id)
+        .first(),
+    ).toEqual({
+      batch_id: batch.batch_id,
+      created_at: at,
+      item_count: 2,
+      decided_at: null,
+      decision_summary: 'pending',
+    });
     await expect(
       recordDCReview(local.env, c, batch.batch_id, { kind: 'all_ok' }, opt),
     ).rejects.toThrow('dc_review_batch_incomplete');
@@ -429,6 +482,33 @@ describe('private DC tracker, synthetic evidence only', () => {
       [],
     );
   });
+});
+
+it('sends only URL, title and date to AI, even with an allowed external processing grant', async () => {
+  for (const grant of ['denied', 'allowed'] as const) {
+    const { env, mf } = await localEnv();
+    try {
+      const c = dcConfig();
+      c.source.policy.rights.external_llm_processing = grant;
+      const record = await dcRecord();
+      record.source_quote = '合成：外部AIへ送ってはいけない本文';
+      const run = await collectResearchPage(env, c, query, dcTime, {
+        ...dcOpt(dcTime, c),
+        synthetic_text: dcPage([record]),
+      });
+      const candidates = await dcAICandidates(env, c, run.run_id, dcOpt(dcTime, c));
+      expect(candidates).toEqual([
+        {
+          source_url: record.evidence.source_url,
+          title: record.project.name,
+          published_at: record.evidence.published_at,
+        },
+      ]);
+      expect(JSON.stringify(candidates)).not.toContain(record.source_quote);
+    } finally {
+      await mf.dispose();
+    }
+  }
 });
 
 // More than one purge chunk, including a failed R2 DELETE: no false success or orphan payloads.
