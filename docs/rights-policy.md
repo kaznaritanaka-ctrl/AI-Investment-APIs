@@ -4,7 +4,7 @@
 
 `Kaz owner approval 2026-10-22T09:43Z estat` により、METI生産動態統計00550200・鉱工業指数00550300の公開用source登録と、e-Stat appIdを送信URLに入れる仕様の例外を承認済み。7権利はallowed、raw再配布・外部LLM処理はdenied。出典・加工明示・指定APIクレジットを必ず付け、対象はMETI自身の統計に限定する。[統合設計](supply-chain-stats.md#rights)を参照。
 
-appIdはWorker Secret `ESTAT_APP_ID`だけから読み、ログ・証拠・保存URL・エラーからマスクする。他source（EIA等）のURL-key承認へ転用しない。sourceはenabled=false、flagは厳密なtrue以外無効。今回Secretを作成せず、実取得・本番操作もしない。既存sourceの許諾と設定は変更しない。
+appIdはWorker Secret `ESTAT_APP_ID`だけから読み、ログ・証拠・保存URL・エラーからマスクする。他source（EIA等）のURL-key承認へ転用しない。当初はsource enabled=false・Secret未作成。2026-10-22夜にSecret登録、PR #35で両source enabled=true・ESTAT_ENABLED=trueに有効化。flagは厳密なtrue以外無効。既存sourceの許諾と設定は変更しない。
 
 2026-10-21: 所有者委託の[ライセンスレビュー](license-review-20261021.md)を[source台帳](source-register.md#2026-10-21-ライセンスmetadataレビュー)と既存metadataへ反映しました。明示禁止・書面許諾必要のOpenRouter/Runpod/CCIRは新policy版で公開5権限をdeniedとし、他の未確認権限はreview_requiredのままです。記載なし・曖昧をallowedにせず、研究案のEIA public domain記録もgrantにはしません。稼働ECB/Models.dev設定は変更せず、新規収集・保存・公開の承認や有効化はありません。
 

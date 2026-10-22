@@ -1,6 +1,6 @@
 # ソース台帳 — Phase 0
 
-## 2026-10-22 e-Stat公開用2統計（所有者承認済み・収集無効）
+## 2026-10-22 e-Stat公開用2統計（所有者承認済み・収集有効 PR #35）
 
 所有者承認 `Kaz owner approval 2026-10-22T09:43Z estat` を反映し、経済産業省生産動態統計00550200と鉱工業指数00550300を `config/sources/estat_meti_seidou.json` / `estat_meti_iip.json` に登録した。取得・非公開保存・内部分析・公開表示・正規化再配布・派生再配布・商用再配布はallowed、raw再配布と外部LLM処理はdenied。（当初は両source enabled=false。2026-10-22夜、PR #35で署名登録のうえ両source enabled=true・ESTAT_ENABLED=trueに変更。詳細は supply-chain-stats.md「有効化」）。新しい実観測・実HTTP・Secret作成・本番操作は0件。
 
