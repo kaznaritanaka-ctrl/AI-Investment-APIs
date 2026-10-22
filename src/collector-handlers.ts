@@ -1,4 +1,5 @@
 import type { CollectorEnv } from './schema';
+import { runDCTracker, maintainDCTracker } from './research/dc-collector';
 import { privateGpuResearchTurn, runPrivateGpuResearch } from './research/collector';
 import { activeSources } from './sources';
 import { collectAll } from './pipeline';
@@ -97,6 +98,7 @@ export default {
       }
       await expireEvidence(env, now);
       if (gpuMaintenance) {
+        await maintainDCTracker(env, eventScheduled, now);
         if (privateGpuResearchTurn(env, eventScheduled) === null)
           await expireGPUData(env, activeSources, now);
         else {
@@ -107,6 +109,8 @@ export default {
           }
         }
       }
+      // Existing collection cron only; DC has its own strict flag and Monday UTC gate.
+      if (controller.cron === env.COLLECTION_CRON) await runDCTracker(env, eventScheduled, now);
       await env.PUBLIC_DB.prepare(
         'INSERT INTO public_health(singleton,last_collector_completed_at,collection_enabled,monitor_connected) VALUES (1,?,1,0) ON CONFLICT(singleton) DO UPDATE SET last_collector_completed_at=excluded.last_collector_completed_at,collection_enabled=1',
       )

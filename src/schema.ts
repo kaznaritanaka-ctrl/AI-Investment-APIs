@@ -264,6 +264,7 @@ export type CollectorEnv = {
   WATCHDOG_CRON?: string;
   GPU_RESUME_CRON?: string;
   PRIVATE_GPU_RESEARCH_ENABLED?: string;
+  DC_TRACKER_ENABLED?: string;
   LAMBDA_API_KEY?: string;
   SAKURA_ACCESS_TOKEN?: string;
   SAKURA_ACCESS_SECRET?: string;

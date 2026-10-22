@@ -788,6 +788,61 @@
       ],
       "additionalProperties": false
     },
+    "dc_access": {
+      "type": "object",
+      "properties": {
+        "robots_finding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "projects": {
+          "minItems": 1,
+          "maxItems": 2,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "candidate_number": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "project_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "prefecture": {
+                "type": "string",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "candidate_number",
+              "project_id",
+              "title",
+              "prefecture",
+              "url"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "robots_finding",
+        "projects"
+      ],
+      "additionalProperties": false
+    },
     "maintenance": {
       "type": "object",
       "properties": {

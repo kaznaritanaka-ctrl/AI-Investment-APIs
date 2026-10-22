@@ -34,7 +34,7 @@ const fixedEndpoints: Record<string, string> = {
   models_dev: 'https://models.dev/api.json?type=all',
   openrouter: 'https://openrouter.ai/api/v1/models',
 };
-async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+export async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) throw new FetchFailure('timeout');
   return new Promise<T>((resolve, reject) => {
     const abort = () => reject(new FetchFailure('timeout'));

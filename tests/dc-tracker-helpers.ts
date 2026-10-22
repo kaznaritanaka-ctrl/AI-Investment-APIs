@@ -1,4 +1,4 @@
-import proposal from '../config/proposals/research/meti_dc_tracker.json';
+import proposal from './fixtures/research/dc-config.synthetic.json';
 import { ResearchConfigSchema } from '../src/research/schema';
 import { hash, stable } from '../src/util';
 import type { DCTrackerRecord } from '../src/research/dc-tracker-schema';
@@ -70,7 +70,7 @@ export async function dcRecord(
     as_of_date: at.slice(0, 10),
     evidence: {
       source_id: c.source.source_id,
-      source_url: 'https://www.meti.go.jp/synthetic-release',
+      source_url: 'https://dc.example.invalid/synthetic-release',
       source_policy_version: c.source.policy.version,
       observed_at: at,
       published_at: null,

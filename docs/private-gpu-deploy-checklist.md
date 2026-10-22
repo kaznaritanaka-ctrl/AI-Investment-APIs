@@ -2,9 +2,113 @@
 
 **2026-10-22の現状更新（Kaz提示）**: 2026-10-22 07:53 JSTに、Kaz承認のもと、本番Collectorをmain `58f007f` + `PRIVATE_GPU_RESEARCH_ENABLED=true`でデプロイ済み。PR #27でmainの`wrangler.collector.jsonc`もtrueに一致した。Highresoのみenabled=true、Rebroはdeferredでenabled=false。2026-10-21 22:45 JSTのKaz承認、Highresoの保存済み実応答によるwire・指紋確認と365日保持の設定も引き続き有効。以下は配備前に用意した手順の記録として、コマンド・チェック項目をそのまま残す。個別の実施結果は別途確認する。運用方針はAGENTS.mdに従う。
 
-## DCローカル案の追加（2026-10-22）
+<a id="dc-0016"></a>
+## DC事業者8社の配備手順（未実施・2026-10-22）
 
-private `0016_dc_tracker.sql`を追加したがremote未適用。0015以前の適用状況はこの変更で再確認していない。今後「未適用は0015のみ」と仮定せず、実際のmigration台帳と照合する。DC機能は本番未接続であり、既存GPU稼働のためのmigration一覧やCronのschema gateには0016を追加しない。DCの適用は相互レビュー・既存データ相当のローカル検証後の別releaseで行う。
+承認ref: **Kaz owner approval 2026-10-22T09:43Z dc-sources**。これは8社の取得・非公開保存・内部分析のgrant承認であり、本作業でdeploy・remote migration・実HTTPを行ったという意味ではない。DC_TRACKER_ENABLEDは`"false"`。相互レビュー・CI・全必須テストと既存データ相当の0016ローカル検証が揃ってから担当AIが実施する。Kazにコマンド操作は依頼しない。既存GPUのschema gateへ0016を追加しない。以下の後ろにある0015手順は過去の配備記録であり、「未適用は0015のみ」という条件を今回のDC配備へ流用しない。
+
+### DC-1: 現行状態と保持環境を固定
+
+- [ ] [対象案件・週次制限](dc-project-tracker.md#dc-sources-20261022)、[提供された規約評価](dc-source-terms-20261022.md)、8 JSONを照合する。指示の案件番号は11件（13という件数とは不一致）。19はTKY12へ置換、TKY11は含めない。外部AIへの本文・引用送信と公開5権限はdenied。
+- [ ] 現行Collector version IDを控え、main/PoC/Models/Highreso設定と今回差分を照合する。PRIVATE_GPU_RESEARCH_ENABLED=`"true"`、AGENT_ENABLED=`"false"`、既存COLLECTION_ENABLED・3 Cron・binding・Secret・domain/Accessを維持する。古いmain構成を上書きしない。DC追加だけならAPIを再配備しない。
+- [ ] `pnpm check`、`pnpm test`、`pnpm test:runtime`、`pnpm build`、offline preflight、生成schema一致、0016のmigration/FK/不変trigger/purge試験、Claudeとの相互レビューとCI完了を確認する。SQLite補助試験をD1/workerd合格に読み替えない。
+- [ ] 下記コマンドで実際のmigration台帳と通常設定の未適用を確認する。0007/0008/0009/0014/0015および既存基盤が適用済み、**未適用が0016の1件のみ**であること。違う場合は停止して差分・releaseを再レビューする。0016が既適用の場合も再適用せず、適用SQLと配備対象の同一性を照合する。既適用SQLを書き換えて差分を吸収しない。
+- [ ] 初回登録前にdc_8社のresearch_sourcesが未登録であること。登録済みの場合はhash・現行権利・停止/取消しマーカーを照合し、承認更新は新policy版とadoptReviewedResearchConfigで明示する。Cronは自動昇格しない。
+- [ ] D1の365日履歴と7日R2最小投影、30日Time Travel/backupを区別する。`research/dc_softbank/`等8社のprefixに期限を超える保管・本文archiveがないこと、保守Cronと削除backlogを確認する。R2 lifecycleは7日以下の補助削除を確認し、実設定結果を非公開記録へ残す。この文書の参照は実設定済みの証明ではない。`research-control/`は削除ルール・復元の対象から除外する。
+
+```bash
+pnpm exec wrangler deployments list -c wrangler.collector.jsonc
+pnpm exec wrangler d1 time-travel info ai-investment-private -c wrangler.collector.jsonc --json
+pnpm exec wrangler d1 migrations list ai-investment-private --remote -c wrangler.collector.jsonc
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT name FROM d1_migrations ORDER BY id"
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT source_id,policy_version,config_hash,suspended FROM research_sources WHERE source_id GLOB 'dc_*'"
+```
+
+version ID・bookmark・日時・対象DB・確認結果は非公開作業記録に残す。bookmarkは復元や消去ではない。月額3リポジトリ合計20ドル超の見込みならKazへ相談する。
+
+### DC-2: 0016だけを一時migrationディレクトリで適用
+
+0015と同じ単一ファイル・既存台帳の方式。0016はまだremote未適用として準備した追加migrationであり、公開DBには一切適用しない。一時設定はprivate DBだけをbindし、Worker deployには使わない。
+
+```bash
+set -euo pipefail
+dc_migration_dir=$(mktemp -d /tmp/private-dc-0016.XXXXXX)
+mkdir "$dc_migration_dir/migrations"
+cp migrations/private/0016_dc_tracker.sql "$dc_migration_dir/migrations/0016_dc_tracker.sql"
+cmp migrations/private/0016_dc_tracker.sql "$dc_migration_dir/migrations/0016_dc_tracker.sql"
+cat > "$dc_migration_dir/wrangler.json" <<'JSON'
+{
+  "name": "private-dc-0016-migration",
+  "account_id": "0f9bb71bb987011462a91596f7cc9e6f",
+  "d1_databases": [
+    {
+      "binding": "PRIVATE_DB",
+      "database_name": "ai-investment-private",
+      "database_id": "f9239883-9929-4137-8079-5a03d9a8beb2",
+      "migrations_dir": "./migrations",
+      "migrations_table": "d1_migrations"
+    }
+  ]
+}
+JSON
+ls -1 "$dc_migration_dir/migrations"
+pnpm exec wrangler d1 migrations list ai-investment-private --remote --config "$dc_migration_dir/wrangler.json"
+```
+
+- [ ] 一時dirの内容・専用設定の未適用一覧がともに0016の1件だけで、account/DB ID/台帳が現行対象と一致すること。専用設定だけで通常設定の全体照合を代替しない。失敗・不一致ならapplyしない。
+
+直前bookmarkを再取得・保存してから、専用設定でのみapplyする。通常設定による一括apply、台帳を迂回する`execute --file`は使わない。
+
+```bash
+pnpm exec wrangler d1 time-travel info ai-investment-private -c wrangler.collector.jsonc --json
+pnpm exec wrangler d1 migrations apply ai-investment-private --remote --config "$dc_migration_dir/wrangler.json"
+pnpm exec wrangler d1 time-travel info ai-investment-private -c wrangler.collector.jsonc --json
+pnpm exec wrangler d1 migrations list ai-investment-private --remote -c wrangler.collector.jsonc
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT name FROM d1_migrations WHERE name IN ('0007_private_research.sql','0008_research_retention.sql','0009_research_retention_states.sql','0014_research_assessments_append_only.sql','0015_private_gpu_daily.sql','0016_dc_tracker.sql') ORDER BY name"
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "PRAGMA foreign_key_check"
+```
+
+- [ ] 直後bookmark・適用結果を保存。通常設定の未適用0件、上記6件の台帳、FK違反0を確認する。失敗なら配備を停止する。0016はadditiveで、down migrationや既存履歴の書換えをしない。
+
+### DC-3: falseで配備してから週次取得を有効化
+
+```bash
+pnpm exec wrangler deploy -c wrangler.collector.jsonc
+```
+
+- [ ] 最初はDC_TRACKER_ENABLED=`"false"`で配備し、version IDと実効変数を確認。既存GPUフラグはtrueのまま。通常の収集・公開・healthを確認し、DCのHTTP/新規runが0であることをprivate台帳で確認する。
+- [ ] 配備条件が全て揃ったらDC_TRACKER_ENABLEDだけを`"true"`へ変更し、check・相互レビュー後に上記deployを再実行する。新Cron、手動live smoke、追加Secretは使わない。既存`17 18 * * *`の**月曜18:17 UTC（火曜03:17 JST）**を待つ。他曜日・watchdog・continuationでは取得しない。
+- [ ] DC用schema gateは0007/0008/0009/0014/0016を照合し、足りなければdc_schema_unavailableでskipする。既存GPU用gateは従来の5件のまま。robotsは毎run再確認し、禁止/確認失敗ではページを取らない。3要求にはrobotsを含み、同じrunの失敗後も予算をリセットしない。
+
+### DC-4: 初回・次週・PUBLIC_DBの確認
+
+```bash
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT source_id,scheduled_for,synthetic,state,http_page_attempts,observation_count,last_error FROM research_runs WHERE source_id GLOB 'dc_*' ORDER BY scheduled_for DESC,source_id LIMIT 16"
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT source_id,status,COUNT(*) n FROM dc_observations GROUP BY source_id,status"
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT COUNT(*) n FROM dc_observation_reviews"
+pnpm exec wrangler d1 execute ai-investment-private --remote -c wrangler.collector.jsonc --command "SELECT source_id,scheduled_for,retention_snapshot_json,evidence_expires_at,normalized_expires_at FROM research_runs WHERE source_id GLOB 'dc_*' ORDER BY scheduled_for DESC LIMIT 8"
+pnpm exec wrangler d1 execute ai-investment-public --remote -c wrangler.collector.jsonc --command "SELECT COUNT(*) AS research_dc_tables FROM sqlite_master WHERE type='table' AND (name GLOB 'research_*' OR name GLOB 'dc_*')"
+pnpm exec wrangler d1 execute ai-investment-public --remote -c wrangler.collector.jsonc --command "SELECT COUNT(*) AS research_dc_rows FROM published_observations WHERE source_id GLOB 'dc_*' OR source_id IN ('highreso_public','rebro_public','highreso','rebro','meti_dc_tracker')"
+pnpm exec wrangler d1 execute ai-investment-public --remote -c wrangler.collector.jsonc --command "SELECT COUNT(*) AS research_dc_policies FROM source_publications WHERE source_id GLOB 'dc_*' OR source_id IN ('highreso_public','rebro_public','highreso','rebro','meti_dc_tracker')"
+```
+
+- [ ] 最終3件の**PUBLIC_DB結果は全て0**。APIはPUBLIC_DBだけをbindし、DC経路を追加していないことも照合する。0でなければ有効化を止め、原因を調べて切戻す。
+- [ ] 完了時の8社runはsynthetic=0、月曜slot、1 source/UTC週1run、http_page_attemptsは2〜3。ページが現行構造に適合すれば合計11件のdisclosure draft、Kaz未回答ならreview行0。robots拒否/redirect/サイズ超過等のpartialを完了として報告しない。実ページの適合は今回未確認であり、固定件数に合わせて取得上限・パーサを緩めない。
+- [ ] PDFはhashのみ、日付・容量・理由は補完されない。AI候補はURL・タイトル・日付の3キーだけ。元観測のstatusはdraftのまま、承認はKaz回答のレビュー追記による。次週に別runと新robots確認、同slotの再配送でHTTP追加0を確認する。
+- [ ] snapshotはfixed_days/365日、証拠7日、backup/Time Travel30日。idle枠で8社の期限保守が進むこととR2削除backlogを確認する。Collector全体のhealthだけでDC成功としない。DCエラーは本文を含まない固定コードとprivateのlast_errorを照合する。
+
+### DC-5: 切戻し・保持継続
+
+通常の取得停止は各configのmaintenance.collection_stopped=true（DCフラグtrueを維持）。緊急時はDC_TRACKER_ENABLED=`"false"`へ戻して再配備、またはDC-1で控えた**直前Collector version ID**へ切戻す。GPU有効化前の古いversionを流用しない。
+
+```bash
+pnpm exec wrangler d1 time-travel info ai-investment-private -c wrangler.collector.jsonc --json
+pnpm exec wrangler rollback <DC配備直前のCollector-version-id> -c wrangler.collector.jsonc --message "DC tracker rollback"
+```
+
+- [ ] 実際の切戻しversion/実効DCフラグと既存Highreso/Models/PoC・公開応答を確認し、失敗原因と結果をKazへ報告する。ローカルfalseだけでremote停止としない。今回APIは変更しないのでAPI切戻しも不要。
+- [ ] 0016とデータは残し、DROP・down migration・D1全体復元を自動実行しない。Worker切戻しはD1/R2を戻さない。DCフラグfalse/旧版はDC期限保守も停止するので、保存済みデータがあれば元の7日/365日期限内に担当AIが代替保守・保守版復旧を確保する。元期限を延長しない。
+- [ ] 復元は別途影響を確認し、research-control/を戻さず全run再評価・再削除、元deleted_at/backup期限を維持する。dc_review_batchesのhash/created_at/item_countと固定pending/nullはsource contentを含まないためpurge後も残る。manifest/本文/レビュー判断は消え、不完全batchで「全部OK」は拒否する。D1 DELETEをTime Travelコピーの消去と報告しない。
 
 ## 配備・有効化前
 

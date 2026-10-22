@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { SourceSchema } from '../schema';
 import { canCollect, validPolicy } from '../policy';
 import { D, isoDate, isoTime } from '../util';
+import { isDCSource } from './dc-contract';
 import {
   isPublicGpu,
   publicGpuEndpoints,
@@ -31,6 +32,26 @@ export const ResearchConfigSchema = z
       'domestic-gpu-html-v2',
     ]),
     public_access: PublicAccessReviewSchema.optional(),
+    dc_access: z
+      .object({
+        robots_finding: z.string().min(1),
+        projects: z
+          .array(
+            z
+              .object({
+                candidate_number: z.number().int().positive(),
+                project_id: z.string().min(1).max(120),
+                title: z.string().min(1).max(500),
+                prefecture: z.string().min(1),
+                url: z.url(),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(2),
+      })
+      .strict()
+      .optional(),
     // Restrictive controls only; bundled non-secret config, never a grant or HTTP input.
     maintenance: z
       .object({
@@ -173,6 +194,35 @@ export const ResearchConfigSchema = z
         new Set(v.scope.project_ids).size !== v.scope.project_ids.length)
     )
       c.addIssue({ code: 'custom', message: 'dc_tracker_scope_invalid' });
+    if (v.dc_access) {
+      const projects = v.dc_access.projects;
+      if (
+        v.scope.kind !== 'dc_tracker' ||
+        !isDCSource(v.source.source_id) ||
+        v.limits.max_pages !== 1 ||
+        v.limits.page_size < projects.length ||
+        v.limits.max_input_rows < projects.length ||
+        v.source.authentication_required ||
+        v.source.endpoint !== v.source.source_url ||
+        projects[0]?.url !== v.source.source_url ||
+        v.source.max_bytes > 131072 ||
+        projects.length !== v.scope.project_ids.length ||
+        projects.some((p) => {
+          const target = new URL(p.url);
+          return (
+            v.scope.kind !== 'dc_tracker' ||
+            !v.scope.project_ids.includes(p.project_id) ||
+            target.origin !== u.origin ||
+            target.username ||
+            target.password ||
+            target.search ||
+            target.hash
+          );
+        }) ||
+        new Set(projects.map((p) => p.project_id)).size !== projects.length
+      )
+        c.addIssue({ code: 'custom', message: 'dc_tracker_live_scope_invalid' });
+    }
     if (isPublicGpu(v.adapter)) {
       if (
         v.scope.kind === 'highreso_public' &&

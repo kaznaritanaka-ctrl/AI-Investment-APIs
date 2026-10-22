@@ -1,11 +1,11 @@
 {
   "source": {
-    "source_id": "meti_dc_tracker",
+    "source_id": "synthetic_dc_tracker",
     "dataset_type": "capex_utilization",
-    "operator": "経済産業省（DC案件・審査候補）",
-    "source_url": "https://www.meti.go.jp/",
+    "operator": "Synthetic DC operator",
+    "source_url": "https://dc.example.invalid/",
     "documentation_url": null,
-    "terms_url": "https://www.meti.go.jp/main/rules.html",
+    "terms_url": "https://dc.example.invalid/terms",
     "license_url": null,
     "endpoint": null,
     "acquisition_method": "Reviewed private projection only; live wire adapter unimplemented",
@@ -19,8 +19,8 @@
     "expected_update_calendar": "Proposed weekly UTC review; no scheduled job",
     "expected_lag": "unknown",
     "rights_checked_at": "2026-10-22T00:00:00.000Z",
-    "rights_evidence_ref": "docs/dc-project-tracker.md",
-    "attribution_text": "出典：経済産業省。原文URL・公表日・容量定義を保持する。",
+    "rights_evidence_ref": "synthetic-unapproved-review",
+    "attribution_text": "Synthetic source; no real data or live acquisition",
     "known_limitations": [
       "No real wire or terms verification in this change; all rights require source-specific review",
       "Grant decisions do not prove contracted, energized or IT operational capacity",
@@ -33,7 +33,7 @@
     "max_bytes": 131072,
     "max_records": 20,
     "policy": {
-      "version": "meti_dc_tracker-20261022-proposal-v1",
+      "version": "synthetic_dc_tracker-20261022-proposal-v1",
       "rights": {
         "automated_collection": "review_required",
         "private_storage": "review_required",
@@ -57,9 +57,9 @@
       "retention_days": 7,
       "retention_limit_days": null,
       "decision_actor": "pending_owner_review",
-      "evidence_version": "meti_dc_tracker-unreviewed-20261022",
+      "evidence_version": "synthetic_dc_tracker-unreviewed-20261022",
       "evidence_refs": [
-        "docs/dc-project-tracker.md"
+        "synthetic-unapproved-review"
       ]
     }
   },
@@ -70,11 +70,11 @@
   "wire_contract_review_ref": null,
   "history_access": [],
   "terms": {
-    "version": "meti_dc_tracker-unreviewed-20261022",
+    "version": "synthetic_dc_tracker-unreviewed-20261022",
     "checked_at": "2026-10-22T00:00:00.000Z",
     "review_after": "2026-11-22T00:00:00.000Z",
     "evidence_refs": [
-      "docs/dc-project-tracker.md"
+      "synthetic-unapproved-review"
     ]
   },
   "scope": {
