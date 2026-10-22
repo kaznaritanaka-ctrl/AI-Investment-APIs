@@ -3,29 +3,32 @@
 方法: 各サイト robots.txt を1回だけ取得（UA「AI-Investment-APIs-terms-check/0.1 (+repo URL; 連絡先)」、リダイレクト追従なし・再試行なし）。サイト規約は検索インデックスで確認（各サイトへの追加アクセスなし）。案件データは取得していない。
 共通の前提: 日付・MW・金額・所在地などの**事実は著作権の対象外**。本文の保存・分析は著作権法30条の4（情報解析）の範囲と考えられるが、**再配布（公開）は全社不可扱い**（全社が無断転載・複製を禁止）。
 
-| 案件# | 情報源（一次URL） | robots.txt | サイト規約の要点 | 取得 | 保存 | 外部AIへ送信 | 再配布 | 判定 |
-|---|---|---|---|---|---|---|---|---|
-| 1,2 | ソフトバンク softbank.jp（[規約](https://www.softbank.jp/help/sitepolicy/)） | 200・ニュース/IRは禁止なし | 無断転用・転載禁止 | 可 | 可（事実＋evidence非公開） | 要方針 | 不可 | 研究登録可 |
-| 3 | KDDI newsroom.kddi.com（[規約](https://www.kddi.com/terms/sitepolicy/)） | 404（＝制限なし扱い） | 複製・配布・転載は事前許可（法令範囲除く） | 可 | 可 | 要方針 | 不可 | 研究登録可 |
-| 4,5 | さくらインターネット sakura.ad.jp（[規約](https://www.sakura.ad.jp/corporate/usage/)） | 200・/search のみ禁止 | 法令範囲外の転用・複製・転載は書面承諾 | 可 | 可 | 要方針 | 不可 | 研究登録可 |
-| 6 | ハイレゾ highreso.jp | 200・禁止なし | サイト規約見当たらず（GPUSOROBAN規約は既存review済み） | 可 | 可（記載なし→研究） | 要方針 | 不可 | 研究登録可 |
-| 7 | GMOインターネット internet.gmo（[規約](https://internet.gmo/terms/sitepolicy/)）※一次URL: https://internet.gmo/news/article/240/ | 200・禁止なし | 私的使用・引用以外の複製・公衆送信禁止 | 可 | 可 | 要方針 | 不可 | 研究登録可 |
-| 10 | RUTILEA rutilea.com | 200・一般は lightbox のみ禁止 | サイト規約見当たらず。**案件の自社発表も未発見** | 可 | 可 | 要方針 | 不可 | 一次資料が見つかるまで保留 |
-| 11 | MCデジタル・リアルティ mc-digitalrealty.com ※一次URL: https://www.mc-digitalrealty.com/kix15project | 200・禁止なし | サイト規約見当たらず | 可 | 可（記載なし→研究） | 要方針 | 不可 | 研究登録可 |
-| 12 | 東京建物 tatemono.com（[規約](https://tatemono.com/guide.html)） | 404 | 許可なき複製・転用・頒布禁止。**自社サイト上の同発表URLは未特定**（PR TIMESのみ） | 可 | 可 | 要方針 | 不可 | 一次URL特定後に登録 |
-| 13 | EdgeConneX edgeconnex.com（[AUP](https://www.edgeconnex.com/aup/)） | 200・/resources/ 禁止（ニュースは可） | サイト利用規約見当たらず（AUPはサービス用） | 可 | 可 | 要方針 | 不可 | 研究登録可 |
-| 14,15 | AirTrunk airtrunk.com（[T&C](https://airtrunk.com/policies-reports/terms-conditions/)） | 200・全許可 | **閲覧・DL・印刷は個人・非商用のみ**、他用途は書面同意 | 可 | 個人研究の範囲なら可と解するが曖昧 | 不可扱い | 不可 | **要確認（問い合わせ候補）** |
-| 16,19 | NTTデータ nttdata.com（[規約](https://www.nttdata.com/global/ja/info/term-of-use/)）※一次URL: https://www.nttdata.com/global/en/news/press-release/2026/april/040900 、TKY11/TKY12: https://www.nttdata.com/global/ja/news/release/2026/041700/ | 200・/-/media/etc/ と SemrushBot のみ禁止 | 個人の非営利・組織内部利用は可、他は事前書面許可 | 可 | 可（内部利用） | 要方針 | 不可 | 研究登録可（内部利用の範囲） |
+| 案件# | 情報源（一次URL）                                                                                                                                                                                                                               | robots.txt                                | サイト規約の要点                                                                  | 取得 | 保存                               | 外部AIへ送信 | 再配布 | 判定                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------- | ---- | ---------------------------------- | ------------ | ------ | ---------------------------- |
+| 1,2   | ソフトバンク softbank.jp（[規約](https://www.softbank.jp/help/sitepolicy/)）                                                                                                                                                                    | 200・ニュース/IRは禁止なし                | 無断転用・転載禁止                                                                | 可   | 可（事実＋evidence非公開）         | 要方針       | 不可   | 研究登録可                   |
+| 3     | KDDI newsroom.kddi.com（[規約](https://www.kddi.com/terms/sitepolicy/)）                                                                                                                                                                        | 404（＝制限なし扱い）                     | 複製・配布・転載は事前許可（法令範囲除く）                                        | 可   | 可                                 | 要方針       | 不可   | 研究登録可                   |
+| 4,5   | さくらインターネット sakura.ad.jp（[規約](https://www.sakura.ad.jp/corporate/usage/)）                                                                                                                                                          | 200・/search のみ禁止                     | 法令範囲外の転用・複製・転載は書面承諾                                            | 可   | 可                                 | 要方針       | 不可   | 研究登録可                   |
+| 6     | ハイレゾ highreso.jp                                                                                                                                                                                                                            | 200・禁止なし                             | サイト規約見当たらず（GPUSOROBAN規約は既存review済み）                            | 可   | 可（記載なし→研究）                | 要方針       | 不可   | 研究登録可                   |
+| 7     | GMOインターネット internet.gmo（[規約](https://internet.gmo/terms/sitepolicy/)）※一次URL: https://internet.gmo/news/article/240/                                                                                                                | 200・禁止なし                             | 私的使用・引用以外の複製・公衆送信禁止                                            | 可   | 可                                 | 要方針       | 不可   | 研究登録可                   |
+| 10    | RUTILEA rutilea.com                                                                                                                                                                                                                             | 200・一般は lightbox のみ禁止             | サイト規約見当たらず。**案件の自社発表も未発見**                                  | 可   | 可                                 | 要方針       | 不可   | 一次資料が見つかるまで保留   |
+| 11    | MCデジタル・リアルティ mc-digitalrealty.com ※一次URL: https://www.mc-digitalrealty.com/kix15project                                                                                                                                             | 200・禁止なし                             | サイト規約見当たらず                                                              | 可   | 可（記載なし→研究）                | 要方針       | 不可   | 研究登録可                   |
+| 12    | 東京建物 tatemono.com（[規約](https://tatemono.com/guide.html)）                                                                                                                                                                                | 404                                       | 許可なき複製・転用・頒布禁止。**自社サイト上の同発表URLは未特定**（PR TIMESのみ） | 可   | 可                                 | 要方針       | 不可   | 一次URL特定後に登録          |
+| 13    | EdgeConneX edgeconnex.com（[AUP](https://www.edgeconnex.com/aup/)）                                                                                                                                                                             | 200・/resources/ 禁止（ニュースは可）     | サイト利用規約見当たらず（AUPはサービス用）                                       | 可   | 可                                 | 要方針       | 不可   | 研究登録可                   |
+| 14,15 | AirTrunk airtrunk.com（[T&C](https://airtrunk.com/policies-reports/terms-conditions/)）                                                                                                                                                         | 200・全許可                               | **閲覧・DL・印刷は個人・非商用のみ**、他用途は書面同意                            | 可   | 個人研究の範囲なら可と解するが曖昧 | 不可扱い     | 不可   | **要確認（問い合わせ候補）** |
+| 16,19 | NTTデータ nttdata.com（[規約](https://www.nttdata.com/global/ja/info/term-of-use/)）※一次URL: https://www.nttdata.com/global/en/news/press-release/2026/april/040900 、TKY11/TKY12: https://www.nttdata.com/global/ja/news/release/2026/041700/ | 200・/-/media/etc/ と SemrushBot のみ禁止 | 個人の非営利・組織内部利用は可、他は事前書面許可                                  | 可   | 可（内部利用）                     | 要方針       | 不可   | 研究登録可（内部利用の範囲） |
+
 - #19（栃木TCG11）の自社一次URLは未特定。上記041700リリースはTKY11/TKY12（印西・白井 約250MW）が対象 → **候補19を「TKY12（印西・白井 約200MW）」に差し替え推奨**。
 - PR配信のみだった7・11は自社URLへ置換済み。12は未置換。
 
 ## 推奨
+
 - **今すぐ研究登録してよい（10件分・8社）**: ソフトバンク(1,2)、KDDI(3)、さくら(4,5)、ハイレゾ(6)、GMO(7)、MCDR(11)、EdgeConneX(13)、NTTデータ(16, 差替19)。保存は事実項目＋非公開evidenceのみ、公開しない。
 - **確認・保留**: AirTrunk(14,15)は規約が個人・非商用に限定 → 事実だけ手作業メモで扱うか、問い合わせるか。東京建物(12)・RUTILEA(10)は自社一次URLが見つかってから。
 - **避ける**: 該当なし（自動取得を禁止するサイトはなかった）。PR TIMES・時事・日経などの配信/報道サイトは使わない。
 - **外部AIへの本文送信**: 全社「要方針」。既定は「URL・タイトル・日付のみAIへ、本文は送らない」。本文を送るかは方針としてKazが決める。
 
 ## 2026-10-22 18:43 JST Kaz決定（確定）
+
 - 登録: 8社（研究用・再配布不可。ハイレゾ・MCDR・EdgeConneXはサイト規約なしのため非公開研究のみ）。案件は11件（1,2,3,4,5,6,7,11,13,16と、19をNTTデータTKY12へ差し替え）。
 - 除外: AirTrunk（14,15）。東京建物（12）とRUTILEA（10）は、自社の発表が出るまで外す。
 - 外部AIに渡すのはURL・タイトル・日付だけ。ページ本文は渡さない（コードで強制）。
