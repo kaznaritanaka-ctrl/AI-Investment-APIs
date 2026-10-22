@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DecimalString } from './schema';
-const evidence = z
+export const DCEvidenceSchema = z
   .object({
     source_id: z.string(),
     source_url: z.url(),
@@ -27,7 +27,7 @@ const capacity = z
     scope: z.enum(['project', 'site', 'phase']),
     scope_id: z.string(),
     as_of_date: z.iso.date().nullable(),
-    evidence,
+    evidence: DCEvidenceSchema,
   })
   .strict();
 export const DCProjectSchema = z
@@ -41,7 +41,7 @@ export const DCProjectSchema = z
       .string()
       .regex(/^[A-Z]{2}$/)
       .nullable(),
-    evidence,
+    evidence: DCEvidenceSchema,
   })
   .strict();
 export const DCSiteSchema = z
@@ -51,7 +51,7 @@ export const DCSiteSchema = z
     name: z.string(),
     region: z.string().nullable(),
     location_evidence_ref: z.string().nullable(),
-    evidence,
+    evidence: DCEvidenceSchema,
   })
   .strict();
 export const DCPhaseSchema = z
@@ -61,6 +61,9 @@ export const DCPhaseSchema = z
     phase_label: z.string(),
     status: z.enum([
       'proposed',
+      'land',
+      'permit',
+      'grid_connection',
       'power_application',
       'power_contracted',
       'permitted',
@@ -75,7 +78,7 @@ export const DCPhaseSchema = z
     ]),
     planned_service_date: z.iso.date().nullable(),
     actual_service_date: z.iso.date().nullable(),
-    evidence,
+    evidence: DCEvidenceSchema,
   })
   .strict();
 export const DCRelationshipSchema = z
@@ -113,7 +116,7 @@ export const DCRelationshipSchema = z
     site_id: z.string().nullable(),
     phase_id: z.string().nullable(),
     delivery_date: z.iso.date().nullable(),
-    evidence,
+    evidence: DCEvidenceSchema,
   })
   .strict()
   .superRefine((v, c) => {

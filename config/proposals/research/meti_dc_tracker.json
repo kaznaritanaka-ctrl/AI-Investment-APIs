@@ -1,0 +1,105 @@
+{
+  "source": {
+    "source_id": "meti_dc_tracker",
+    "dataset_type": "capex_utilization",
+    "operator": "経済産業省（DC案件・審査候補）",
+    "source_url": "https://www.meti.go.jp/",
+    "documentation_url": null,
+    "terms_url": "https://www.meti.go.jp/main/rules.html",
+    "license_url": null,
+    "endpoint": null,
+    "acquisition_method": "Reviewed private projection only; live wire adapter unimplemented",
+    "authentication_required": false,
+    "native_currency": null,
+    "native_unit": null,
+    "geography": [
+      "JP"
+    ],
+    "native_frequency": "event",
+    "expected_update_calendar": "Proposed weekly UTC review; no scheduled job",
+    "expected_lag": "unknown",
+    "rights_checked_at": "2026-10-22T00:00:00.000Z",
+    "rights_evidence_ref": "docs/dc-project-tracker.md",
+    "attribution_text": "出典：経済産業省。原文URL・公表日・容量定義を保持する。",
+    "known_limitations": [
+      "No real wire or terms verification in this change; all rights require source-specific review",
+      "Grant decisions do not prove contracted, energized or IT operational capacity",
+      "Third-party material is excluded; no registration, grant or active collection",
+      "rights_checked_at records this local unapproved metadata review, not a network or terms verification"
+    ],
+    "enabled": false,
+    "adapter": "candidate",
+    "selection": [],
+    "max_bytes": 131072,
+    "max_records": 20,
+    "policy": {
+      "version": "meti_dc_tracker-20261022-proposal-v1",
+      "rights": {
+        "automated_collection": "review_required",
+        "private_storage": "review_required",
+        "internal_analysis": "review_required",
+        "external_llm_processing": "review_required",
+        "public_display": "review_required",
+        "raw_redistribution": "review_required",
+        "normalized_redistribution": "review_required",
+        "derived_redistribution": "review_required",
+        "commercial_redistribution": "review_required"
+      },
+      "fields": [
+        "dc_tracker_projection_v1"
+      ],
+      "conditions": [
+        "Private proposal only; no grant or source registration",
+        "No real data, live adapter, automatic review or public projection"
+      ],
+      "valid_from": "2026-10-22T00:00:00.000Z",
+      "valid_until": null,
+      "retention_days": 7,
+      "retention_limit_days": null,
+      "decision_actor": "pending_owner_review",
+      "evidence_version": "meti_dc_tracker-unreviewed-20261022",
+      "evidence_refs": [
+        "docs/dc-project-tracker.md"
+      ]
+    }
+  },
+  "adapter": "dc_tracker",
+  "visibility": "private_only",
+  "method_version": "dc-tracker-v1",
+  "owner_approval_ref": null,
+  "wire_contract_review_ref": null,
+  "history_access": [],
+  "terms": {
+    "version": "meti_dc_tracker-unreviewed-20261022",
+    "checked_at": "2026-10-22T00:00:00.000Z",
+    "review_after": "2026-11-22T00:00:00.000Z",
+    "evidence_refs": [
+      "docs/dc-project-tracker.md"
+    ]
+  },
+  "scope": {
+    "kind": "dc_tracker",
+    "project_ids": [
+      "pending-owner-selection"
+    ]
+  },
+  "limits": {
+    "page_size": 20,
+    "max_pages": 3,
+    "max_input_rows": 60
+  },
+  "retention": {
+    "strategy": "d1_history",
+    "target_days": 1825,
+    "evidence_days": 7,
+    "archive_days": 0,
+    "normalized_days": null,
+    "normalized_mode": "unapproved",
+    "ongoing_storage": null,
+    "storage_review_hold": null,
+    "backup_days": 30,
+    "time_travel_days": null,
+    "lifecycle_review_ref": null,
+    "reviewed_ref": null
+  }
+}

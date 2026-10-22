@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DCTrackerPageSchema, parseDCTracker, dcTrackerFingerprint } from './dc-tracker-schema';
 import { emitLog } from '../telemetry';
 import {
   assertResearchExecution,
@@ -50,7 +51,11 @@ type Options = Omit<NetworkOptions, 'onBody' | 'validators'> & {
 };
 const envelopeSchema = z
   .object({
-    version: z.enum(['electricity-projection-v1', 'domestic-gpu-projection-v1']),
+    version: z.enum([
+      'electricity-projection-v1',
+      'domestic-gpu-projection-v1',
+      'dc-tracker-projection-v1',
+    ]),
     config_hash: z.string(),
     query_hash: z.string(),
     source_id: z.string(),
@@ -60,7 +65,7 @@ const envelopeSchema = z
     observed_at: z.iso.datetime(),
     synthetic: z.boolean(),
     payload_hash: z.string(),
-    page: z.union([ResearchPageSchema, PublicGpuPageSchema]),
+    page: z.union([ResearchPageSchema, PublicGpuPageSchema, DCTrackerPageSchema]),
   })
   .strict();
 async function checkCurrent(
@@ -102,6 +107,8 @@ export async function collectResearchPage(
   opt: Options,
 ) {
   assertResearchConfigExecution(env, config);
+  if (config.adapter === 'dc_tracker' && opt.synthetic_text === undefined)
+    throw new Error('dc_tracker_live_transport_not_integrated');
   const now = opt.now ?? (() => new Date().toISOString()),
     at = now();
   assertResearchAllowed(config, at, opt.current_terms_version);
@@ -233,13 +240,21 @@ export async function collectResearchPage(
         text = r.text;
         observed = r.observed_at;
       }
-      const page = gpu
-        ? await parsePublicGpu(config, text, observed, synthetic)
-        : parseElectricity(config, query, text, pageNumber);
+      const page =
+        config.adapter === 'dc_tracker'
+          ? await parseDCTracker(config, text, pageNumber)
+          : gpu
+            ? await parsePublicGpu(config, text, observed, synthetic)
+            : parseElectricity(config, query, text, pageNumber);
       if (page.records.length > config.limits.page_size) throw new Error('research_page_limit');
       encoded = stable(
         envelopeSchema.parse({
-          version: gpu ? 'domestic-gpu-projection-v1' : 'electricity-projection-v1',
+          version:
+            config.adapter === 'dc_tracker'
+              ? 'dc-tracker-projection-v1'
+              : gpu
+                ? 'domestic-gpu-projection-v1'
+                : 'electricity-projection-v1',
           config_hash: configHash,
           query_hash: queryHash,
           source_id: source.source_id,
@@ -269,7 +284,12 @@ export async function collectResearchPage(
       page = e.page;
     if (
       e.config_hash !== configHash ||
-      e.version !== (gpu ? 'domestic-gpu-projection-v1' : 'electricity-projection-v1') ||
+      e.version !==
+        (config.adapter === 'dc_tracker'
+          ? 'dc-tracker-projection-v1'
+          : gpu
+            ? 'domestic-gpu-projection-v1'
+            : 'electricity-projection-v1') ||
       e.query_hash !== queryHash ||
       page.page !== pageNumber ||
       e.source_id !== source.source_id ||
@@ -281,7 +301,9 @@ export async function collectResearchPage(
       e.observed_at > now()
     )
       throw new Error('research_evidence_mismatch');
-    (gpu ? PublicGpuPageSchema : ResearchPageSchema).parse(page);
+    if (config.adapter === 'dc_tracker')
+      await parseDCTracker(config, JSON.stringify(page), pageNumber);
+    else (gpu ? PublicGpuPageSchema : ResearchPageSchema).parse(page);
     if (plusDays(e.observed_at, config.retention.evidence_days) <= now())
       throw new Error('research_evidence_expired');
     const previousPages = await env.PRIVATE_DB.prepare(
@@ -361,7 +383,11 @@ export async function collectResearchPage(
     }
     for (const record of page.records) {
       const fingerprint =
-        'offer' in record ? await gpuRecordFingerprint(record) : await hash(stable(record));
+        'disclosure_id' in record
+          ? await dcTrackerFingerprint(record)
+          : 'offer' in record
+            ? await gpuRecordFingerprint(record)
+            : await hash(stable(record));
       const prior = priorRecords.results.find(
         (r) => r.record_key === record.record_key && !deletedPrior.has(r.run_id),
       );
@@ -452,6 +478,12 @@ export async function collectResearchPage(
       .first<{ n: number }>();
     if (count?.n !== statements.length) throw new Error('research_checkpoint_mismatch');
     await checkCurrent(env, config, configHash, opt);
+    if (
+      config.adapter === 'dc_tracker' &&
+      page.coverage === 'complete' &&
+      seen.size !== page.reported_total
+    )
+      throw new Error('dc_tracker_coverage_mismatch');
     const state = page.coverage === 'complete' && page.next_page === null ? 'complete' : 'partial';
     await env.PRIVATE_DB.batch([
       env.PRIVATE_DB.prepare(

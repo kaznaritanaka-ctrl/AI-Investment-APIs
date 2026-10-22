@@ -22,9 +22,10 @@ export const StorageReviewHoldSchema = z
 export const ResearchConfigSchema = z
   .object({
     source: SourceSchema,
-    adapter: z.enum(['eia_retail', 'jepx_spot', 'highreso_public', 'rebro_public']),
+    adapter: z.enum(['eia_retail', 'jepx_spot', 'highreso_public', 'rebro_public', 'dc_tracker']),
     visibility: z.literal('private_only'),
     method_version: z.enum([
+      'dc-tracker-v1',
       'electricity-research-v1',
       'domestic-gpu-html-v1',
       'domestic-gpu-html-v2',
@@ -72,6 +73,12 @@ export const ResearchConfigSchema = z
       })
       .strict(),
     scope: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('dc_tracker'),
+          project_ids: z.array(z.string().min(1)).min(1).max(20),
+        })
+        .strict(),
       z
         .object({ kind: z.literal('eia_retail'), state: z.literal('CO'), sector: z.literal('IND') })
         .strict(),
@@ -142,10 +149,14 @@ export const ResearchConfigSchema = z
           ? 'gpu_rental'
           : v.adapter === 'rebro_public'
             ? 'gpu_secondary'
-            : 'electricity') ||
+            : v.adapter === 'dc_tracker'
+              ? 'capex_utilization'
+              : 'electricity') ||
       (isPublicGpu(v.adapter)
         ? !['domestic-gpu-html-v1', 'domestic-gpu-html-v2'].includes(v.method_version)
-        : v.method_version !== 'electricity-research-v1') ||
+        : v.adapter === 'dc_tracker'
+          ? v.method_version !== 'dc-tracker-v1'
+          : v.method_version !== 'electricity-research-v1') ||
       v.source.adapter !== 'candidate' ||
       v.scope.kind !== v.adapter ||
       v.source.gpu ||
@@ -154,6 +165,14 @@ export const ResearchConfigSchema = z
       (v.adapter === 'jepx_spot' && (v.limits.page_size !== 48 || v.limits.max_pages !== 1))
     )
       c.addIssue({ code: 'custom', message: 'research_scope_invalid' });
+    if (
+      v.scope.kind === 'dc_tracker' &&
+      (v.limits.max_pages > 3 ||
+        v.limits.page_size > 20 ||
+        v.limits.max_input_rows > 60 ||
+        new Set(v.scope.project_ids).size !== v.scope.project_ids.length)
+    )
+      c.addIssue({ code: 'custom', message: 'dc_tracker_scope_invalid' });
     if (isPublicGpu(v.adapter)) {
       if (
         v.scope.kind === 'highreso_public' &&
@@ -185,6 +204,7 @@ export type ResearchConfig = z.infer<typeof ResearchConfigSchema>;
 
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 export const ResearchQuerySchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('dc_tracker') }).strict(),
   z.object({ kind: z.literal('eia_retail'), from: month, to: month }).strict(),
   z.object({ kind: z.literal('jepx_spot'), delivery_date: z.string().refine(isoDate) }).strict(),
   z.object({ kind: z.literal('highreso_public') }).strict(),
@@ -243,7 +263,11 @@ function assertResearchAuthority(
     !config.wire_contract_review_ref ||
     !r.reviewed_ref ||
     !s.policy.fields.includes(
-      isPublicGpu(config.adapter) ? 'domestic_gpu_projection_v1' : 'electricity_projection_v1',
+      isPublicGpu(config.adapter)
+        ? 'domestic_gpu_projection_v1'
+        : config.adapter === 'dc_tracker'
+          ? 'dc_tracker_projection_v1'
+          : 'electricity_projection_v1',
     )
   )
     throw new Error('research_review_required');

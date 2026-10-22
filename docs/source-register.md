@@ -95,3 +95,7 @@ Models.devの現在の生成仕様・MIT・provider設定をcommit `747925c4fb01
 | Runpod / Highreso / CCIR | 既存候補・調査のみ | 未確定 | disabled、仕様/権利待ち | 未実行 / 未開始 |
 
 後続分野を重複台帳や大量のdisabledファイルとして増やしません。P1のrate limit/tierは公開条件とアカウント固有枠を分離、agent/tool価格はrequest・時間・storage単位の拡張が必要です。P2メモリーは規格/spot/contract/retailと利用契約、電力はEIA等の正式仕様・キー・改定履歴、benchmarkは版・測定条件・データ配布権を確認してから接続します。今回それらの最新権利調査・adapter追加は未実施です。P3金利/信用/DC案件も既存候補のままです。これらをP0の実装・レビューの前提にはしません。
+
+## 2026-10-22 DC案件トラッカー（非公開・審査中）
+
+[統合設計](dc-project-tracker.md)にprivate schema/code/testsのみ追加。METI候補は`config/proposals/research/meti_dc_tracker.json`でenabled=false、全9権限review_required、保持unapproved。config/sourcesへの登録・新grant・実取得・Cron・公開API変更なし。事業者IR、TDnet、EDINET、自治体、OCCTOは候補リストのみで、個別の規約/wire/保持/所有者承認前に取得も保存もしない。新聞・業界誌・調査会社は対象外。

@@ -2,6 +2,10 @@
 
 **2026-10-22の現状更新（Kaz提示）**: 2026-10-22 07:53 JSTに、Kaz承認のもと、本番Collectorをmain `58f007f` + `PRIVATE_GPU_RESEARCH_ENABLED=true`でデプロイ済み。PR #27でmainの`wrangler.collector.jsonc`もtrueに一致した。Highresoのみenabled=true、Rebroはdeferredでenabled=false。2026-10-21 22:45 JSTのKaz承認、Highresoの保存済み実応答によるwire・指紋確認と365日保持の設定も引き続き有効。以下は配備前に用意した手順の記録として、コマンド・チェック項目をそのまま残す。個別の実施結果は別途確認する。運用方針はAGENTS.mdに従う。
 
+## DCローカル案の追加（2026-10-22）
+
+private `0016_dc_tracker.sql`を追加したがremote未適用。0015以前の適用状況はこの変更で再確認していない。今後「未適用は0015のみ」と仮定せず、実際のmigration台帳と照合する。DC機能は本番未接続であり、既存GPU稼働のためのmigration一覧やCronのschema gateには0016を追加しない。DCの適用は相互レビュー・既存データ相当のローカル検証後の別releaseで行う。
+
 ## 配備・有効化前
 
 - [ ] 現行本番のCollector/PoC/Modelsのコード・設定・migration状態を固定する。古いmain版を新しい本番構成へ上書きしない。既存Cron、公開範囲、Admin、Secrets、binding、NASを維持する。
