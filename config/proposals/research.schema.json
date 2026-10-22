@@ -705,7 +705,8 @@
         "eia_retail",
         "jepx_spot",
         "highreso_public",
-        "rebro_public"
+        "rebro_public",
+        "dc_tracker"
       ]
     },
     "visibility": {
@@ -715,6 +716,7 @@
     "method_version": {
       "type": "string",
       "enum": [
+        "dc-tracker-v1",
         "electricity-research-v1",
         "domestic-gpu-html-v1",
         "domestic-gpu-html-v2"
@@ -926,6 +928,29 @@
     },
     "scope": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "dc_tracker"
+            },
+            "project_ids": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "project_ids"
+          ],
+          "additionalProperties": false
+        },
         {
           "type": "object",
           "properties": {

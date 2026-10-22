@@ -227,8 +227,7 @@ export async function parsePublicGpu(
     digest = await hash(html),
     records: PublicGpuRecord[] = [];
   const selected = (product: string) =>
-    c.scope.kind !== 'eia_retail' &&
-    c.scope.kind !== 'jepx_spot' &&
+    (c.scope.kind === 'highreso_public' || c.scope.kind === 'rebro_public') &&
     c.scope.models.some((model) => new RegExp('\\b' + model + '\\b', 'i').test(product));
   const make = (
     offer: DomesticGPUIntake,
