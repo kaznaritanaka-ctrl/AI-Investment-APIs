@@ -266,6 +266,8 @@ function annualItem(name: unknown, tableCode: string) {
   return {
     item_code: id(tableCode + '_' + match[1]),
     item_name_ja: text(match[2]),
+    measure_letter: match[3],
+    measure_name: text(match[4]),
     measure: Object.hasOwn(annualMeasures, match[4]) ? annualMeasures[match[4]] : undefined,
     unit_raw: text(match[5]),
   };
@@ -273,8 +275,8 @@ function annualItem(name: unknown, tableCode: string) {
 function iipBaseYear(info: Obj, table: EstatTable): number {
   const metadata = [label(info.STATISTICS_NAME), label(info.TITLE), table.title].join(' ');
   const years = new Set(
-    [...metadata.matchAll(/(\d{4})(?:年基準|\s*[＝=]\s*100(?:\.0+)?(?=[）)\s]|$))/g)].map((m) =>
-      Number(m[1]),
+    [...metadata.matchAll(/(?<!\d)(\d{4})(?:年基準|\s*[＝=]\s*100(?:\.0+)?(?=[）)\s]|$))/g)].map(
+      (m) => Number(m[1]),
     ),
   );
   if (years.size !== 1) throw new Error('estat_base_year_unknown');
@@ -328,16 +330,21 @@ export async function parseEstatData(
   )
     throw new Error('estat_dimensions_unknown');
   const tableCode = embeddedTableCode(item[0]);
+  if (tableCode && !table.title.includes(`${tableCode}_`)) throw new Error('estat_table_mismatch');
   const embeddedItems = tableCode
     ? new Map(
         list(item[0].CLASS).map((c) => {
           const cls = object(c);
-          return [id(cls['@code']), annualItem(cls['@name'], tableCode)] as const;
+          const parsed = annualItem(cls['@name'], tableCode);
+          if (Object.hasOwn(cls, '@unit') && cls['@unit'] !== parsed.unit_raw)
+            throw new Error('estat_unit_mismatch');
+          return [id(cls['@code']), parsed] as const;
         }),
       )
     : undefined;
   // Preserve the existing signature contract: exclude the entire time dimension,
   // including weights and rolling periods; sort remaining dimension IDs and codes.
+  // Positional annual codes also need their parsed product/measure/unit meaning.
   const signatures = dimensions
     .filter((d) => d['@id'] !== 'time')
     .map((d) => ({
@@ -345,6 +352,21 @@ export async function parseEstatData(
       codes: list(d.CLASS)
         .map((c) => id(object(c)['@code']))
         .sort(),
+      ...(embeddedItems && d === item[0]
+        ? {
+            items: [...embeddedItems.keys()].sort().map((code) => {
+              const parsed = embeddedItems.get(code)!;
+              return [
+                code,
+                parsed.item_code,
+                parsed.item_name_ja,
+                parsed.measure_letter,
+                parsed.measure_name,
+                parsed.unit_raw,
+              ];
+            }),
+          }
+        : {}),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   const schema_signature = await hash(stable(signatures));
@@ -363,6 +385,8 @@ export async function parseEstatData(
   );
   const rows: EstatRow[] = [];
   const seen = new Set<string>();
+  // Resolve lazily so empty/weight-only pages still skip observation metadata checks.
+  let baseYear: number | null = null;
   for (const entry of values) {
     const v = object(entry),
       selected = new Map<string, Obj>();
@@ -386,6 +410,8 @@ export async function parseEstatData(
     const it = selected.get(String(item[0]['@id']))!,
       mt = metric[0] ? selected.get(String(metric[0]['@id']))! : undefined;
     const embedded = embeddedItems?.get(id(it['@code']));
+    if (embedded && Object.hasOwn(v, '@unit') && v['@unit'] !== embedded.unit_raw)
+      throw new Error('estat_unit_mismatch');
     if (embedded && !embedded.measure) continue;
     let measure = embedded ? embedded.measure : mt ? measures[label(mt['@name'])] : impliedMeasure;
     if (mt && s.estat!.release_kind === 'iip_monthly') {
@@ -395,7 +421,8 @@ export async function parseEstatData(
       measure = expected;
     }
     if (!measure) throw new Error('estat_measure_unknown');
-    const baseYear = s.estat!.release_kind === 'iip_monthly' ? iipBaseYear(info, table) : null;
+    if (s.estat!.release_kind === 'iip_monthly' && baseYear === null)
+      baseYear = iipBaseYear(info, table);
     const raw = text(v.$),
       unit = text(
         embedded?.unit_raw ??

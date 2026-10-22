@@ -773,6 +773,7 @@ describe('e-Stat bounded monthly collection (no network; synthetic transport onl
       if (url.pathname.endsWith('getStatsList')) {
         const listing = listBody(2);
         listing.GET_STATS_LIST.DATALIST_INF.NUMBER = 1;
+        listing.GET_STATS_LIST.DATALIST_INF.TABLE_INF.TITLE = `${tableYear}年 年報 時系列表(2290_静止電気機械器具)`;
         return Response.json(listing);
       }
       return Response.json({

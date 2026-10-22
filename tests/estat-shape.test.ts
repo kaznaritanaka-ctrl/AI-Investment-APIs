@@ -94,6 +94,8 @@ describe('e-Stat verified shape support (synthetic, offline)', () => {
     '品目別季節調整済【月次】在庫',
     '在庫（2020＝200.0）',
     '2020年基準 在庫（2015＝100.0）',
+    '在庫（12020＝100.0）',
+    '12020年基準 在庫',
   ])('rejects an absent or inconsistent base year: %s', async (title) => {
     const f = fixture();
     f.table.title = title;
@@ -390,8 +392,72 @@ describe('e-Stat annual embedded product measures (synthetic, offline)', () => {
     f.item['@name'] = '2026_2290_表側';
     expect((await parseEstatData(f.source, f.table, f.body)).rows[0].item_code).toBe('2290_0101');
     f.item['@name'] = '2021_2570_表側';
+    f.table.title = f.table.title.replace('2290_', '2570_');
     expect((await parseEstatData(f.source, f.table, f.body)).rows[0].item_code).toBe('2570_0101');
   });
+  it.each([
+    '製品_0102_合成_変圧器_A_生産数量_台',
+    '製品_0101_改名_変圧器_A_生産数量_台',
+    '製品_0101_合成_変圧器_Z_生産数量_台',
+    '製品_0101_合成_変圧器_A_出荷数量_台',
+    '製品_0101_合成_変圧器_A_生産数量_基',
+  ])('changes the signature when an embedded product meaning changes: %s', async (name) => {
+    const f = annualFixture();
+    const baseline = (await parseEstatData(f.source, f.table, f.body)).schema_signature;
+    f.item.CLASS[0]['@name'] = name;
+    expect((await parseEstatData(f.source, f.table, f.body)).schema_signature).not.toBe(baseline);
+  });
+  it('sorts annual signature inputs, excludes the time axis, and detects class code changes', async () => {
+    const f = annualFixture();
+    const baseline = (await parseEstatData(f.source, f.table, f.body)).schema_signature;
+    f.item.CLASS.reverse();
+    f.time.CLASS.reverse();
+    f.time['@name'] = '変更した時間軸';
+    f.time.CLASS.push({ '@code': 'future', '@name': '202601' });
+    f.data.CLASS_INF.CLASS_OBJ.reverse();
+    expect((await parseEstatData(f.source, f.table, f.body)).schema_signature).toBe(baseline);
+    const previousCode = f.item.CLASS[0]['@code'];
+    f.item.CLASS[0]['@code'] = 'newCode';
+    for (const v of f.data.DATA_INF.VALUE)
+      if (v['@cat01'] === previousCode) v['@cat01'] = 'newCode';
+    expect((await parseEstatData(f.source, f.table, f.body)).schema_signature).not.toBe(baseline);
+  });
+  it('accepts matching VALUE and class units for an embedded product', async () => {
+    const f = annualFixture();
+    Object.assign(f.item.CLASS[0], { '@unit': '台' });
+    Object.assign(f.data.DATA_INF.VALUE[0], { '@unit': '台' });
+    expect((await parseEstatData(f.source, f.table, f.body)).rows[0].unit_raw).toBe('台');
+  });
+  it.each(['value', 'class'])(
+    'rejects conflicting %s units, including empty units',
+    async (location) => {
+      for (const unit of ['t', '']) {
+        const f = annualFixture();
+        Object.assign(location === 'value' ? f.data.DATA_INF.VALUE[0] : f.item.CLASS[0], {
+          '@unit': unit,
+        });
+        await expect(parseEstatData(f.source, f.table, f.body)).rejects.toThrow(
+          'estat_unit_mismatch',
+        );
+      }
+    },
+  );
+  it('rejects a conflicting class unit even without values for that class', async () => {
+    const f = annualFixture();
+    Object.assign(f.item.CLASS[1], { '@unit': '台' }); // Name specifies kVA; excluded measure.
+    f.data.DATA_INF.VALUE = f.data.DATA_INF.VALUE.slice(0, 1);
+    await expect(parseEstatData(f.source, f.table, f.body)).rejects.toThrow('estat_unit_mismatch');
+  });
+  it.each(['時系列表(2570_合成表)', '時系列表(2290合成表)', '時系列表(22900_合成表)'])(
+    'rejects a title without the dimension table code followed by underscore: %s',
+    async (title) => {
+      const f = annualFixture();
+      f.table.title = title;
+      await expect(parseEstatData(f.source, f.table, f.body)).rejects.toThrow(
+        'estat_table_mismatch',
+      );
+    },
+  );
   it('handles a constructed 81-class / 972-value annual table in one data page', async () => {
     const f = annualFixture();
     const template = [...f.item.CLASS];
