@@ -106,7 +106,7 @@ R2には生JSONではなく、マスク済み・正規化済みのページ投�
 - 未適用0017/0004に `expires_at,obs_id`、観測→定義、定義→系列、batchおよびrevision両入力の索引を追加し、期限走査・孤立行検査・削除参照を支える。SQLiteのEXPLAINで期限・孤立行の内側の検索が索引を使うことを検証する。private intakeのbatch検索にも索引を付ける。
 - 継続処理はpublic migrationも確認し、その他の再開失敗は `estat_resume_failed`、失敗状態記録やlease解放の失敗は `estat_cleanup_failed` をログへ出す。例外本文は出さない。policy失効・拒否、appId不足、予定日対象外、source無効によって再開できないpending runは、固定コード `estat_resume_skipped` で `failed` にし、checkpointを残して `work:false` で同じ回のGPU再開・保守へ進む。次回は後続のe-Stat runを選べる。有効なleaseがあるrunは選ばない。期限削除や失敗した保守がtickを使った場合は `estat_work=true` とし、同じtickでGPU収集・期限処理・研究収集を始めない。
 - **e-Statは既存watchdogのstaleness（予定からの遅れ）判定の対象外**（N3）。日次watchdogをそのまま適用すると、月次/年報を毎日missing扱いするため除外している。自動の遅延警報・復旧は今回追加しない。継続runのpending/failed/quarantined、`sc_intakes` のphase/row_index、collection_runsのエラー、継続処理ログで確認する。pendingが動かないことへの自動警報は未対応であり、collector全体の完了時刻だけでe-Statが新鮮とは判定しない。
-- source設定は追加したが、フラグとsourceは無効のまま。有効化・実HTTP・Secret作成・本番操作は今回の対象外。生成スキーマ・OpenAPIも同期する。
+- source設定は追加したが、当初はフラグ・sourceとも無効だった（有効化・実HTTP・Secret作成・本番操作は初版の対象外）。PR #35で有効化（下記「有効化」）。生成スキーマ・OpenAPIも同期する。
 - public migration未適用の場合、新3 endpointだけ固定JSON `public_store_unavailable` / 503を返す。既存health/sources/datasets/FX/Models/GPU等のSQLは新テーブルを参照せず、APIのbindingもPUBLIC_DBだけのまま。
 
 ## 10. 検証とレビュー
