@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { gpuRetryAt } from './retry';
 import { dcCollectionSlot } from './dc-contract';
 import { fetchDCTrackerPage } from './dc-network';
 import { DCTrackerPageSchema, parseDCTracker, dcTrackerFingerprint } from './dc-tracker-schema';
@@ -210,7 +211,23 @@ export async function collectResearchPage(
       if (stored.size > 131072) throw new Error('research_evidence_too_large');
       encoded = await stored.text();
     } else {
+      if (gpu && !fixtureBody) {
+        if (!opt.allow_network) throw new Error('research_network_opt_in_required');
+        // Existing private attempt ledger; no schema or immutable retention changes.
+        await env.PRIVATE_DB.prepare(
+          "INSERT OR IGNORE INTO collection_runs(run_id,source_id,scheduled_for,state) VALUES (?,?,?,'research')",
+        )
+          .bind(runId, source.source_id, scheduled)
+          .run();
+        const admission = await env.PRIVATE_DB.prepare(
+          "INSERT INTO fetch_attempts(run_id,attempt,started_at,code,duration_ms) SELECT ?,COUNT(*)+1,?,'research_gpu_sequence',0 FROM fetch_attempts WHERE run_id=? AND code='research_gpu_sequence' HAVING COUNT(*)<3 AND EXISTS(SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>? AND (http_page_attempts=0 OR EXISTS(SELECT 1 FROM fetch_attempts WHERE run_id=? AND code='research_gpu_sequence')))",
+        )
+          .bind(runId, at, runId, runId, lease, at, runId)
+          .run();
+        if (!admission.meta.changes) throw new FetchFailure('research_request_budget_exhausted');
+      }
       let text: string, observed: string;
+      let gpuRequests = 0;
       if (fixtureBody) {
         text = opt.synthetic_text!;
         observed = now();
@@ -219,8 +236,11 @@ export async function collectResearchPage(
         const plan = gpu || dcLive ? null : researchRequest(config, query, pageNumber);
         const boundedFetcher: typeof fetch = async (url, init) => {
           await checkCurrent(env, config, configHash, opt);
+          if (gpu && ++gpuRequests > 3) throw new FetchFailure('research_request_budget_exhausted');
           const budget = await env.PRIVATE_DB.prepare(
-            'UPDATE research_runs SET http_page_attempts=http_page_attempts+1 WHERE run_id=? AND next_page=? AND lease_token=? AND lease_until>? AND http_page_attempts<3',
+            gpu
+              ? 'UPDATE research_runs SET http_page_attempts=MIN(http_page_attempts+1,3) WHERE run_id=? AND next_page=? AND lease_token=? AND lease_until>?'
+              : 'UPDATE research_runs SET http_page_attempts=http_page_attempts+1 WHERE run_id=? AND next_page=? AND lease_token=? AND lease_until>? AND http_page_attempts<3',
           )
             .bind(runId, pageNumber, lease, now())
             .run();
@@ -523,9 +543,19 @@ export async function collectResearchPage(
     return { run_id: runId, state };
   } catch (e) {
     const code = gpu && e instanceof z.ZodError ? 'public_gpu_schema_invalid' : errorCode(e);
+    const attempts = gpu
+      ? await env.PRIVATE_DB.prepare(
+          "SELECT COUNT(*) sequence_attempts FROM fetch_attempts WHERE run_id=? AND code='research_gpu_sequence'",
+        )
+          .bind(runId)
+          .first<{ sequence_attempts: number }>()
+      : null;
     const retryAt =
       gpu && (e instanceof FetchFailure || (gpuReviewErrors as readonly string[]).includes(code))
-        ? [plusDays(at, 1), e instanceof FetchFailure ? e.retry_at : null]
+        ? [
+            gpuRetryAt(at, code, attempts?.sequence_attempts ?? 3),
+            e instanceof FetchFailure ? e.retry_at : null,
+          ]
             .filter((v): v is string => v !== null)
             .sort()
             .at(-1)!
