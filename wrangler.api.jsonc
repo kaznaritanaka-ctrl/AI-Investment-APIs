@@ -22,6 +22,7 @@
       "migrations_dir": "migrations/public"
     }
   ],
+  "analytics_engine_datasets": [{ "binding": "USAGE", "dataset": "api_usage_v1" }],
   "ratelimits": [
     {
       "name": "RATE_LIMITER",

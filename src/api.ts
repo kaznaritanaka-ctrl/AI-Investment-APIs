@@ -1,3 +1,4 @@
+import { recordUsage } from './usage';
 import { gpuAPI } from './gpu-api';
 import { modelsAPI } from './models-api';
 import { supplyChainAPI, supplyChainJSON } from './supply-chain-api';
@@ -7,6 +8,7 @@ import { hash, stable, isoTime } from './util';
 import { openapi, methodology } from './openapi';
 export type APIEnv = {
   PUBLIC_DB: D1Database;
+  USAGE?: AnalyticsEngineDataset;
   ENVIRONMENT?: string;
   RATE_LIMITER_HEAVY?: { limit: (o: { key: string }) => Promise<{ success: boolean }> };
   RATE_LIMITER?: { limit: (o: { key: string }) => Promise<{ success: boolean }> };
@@ -551,8 +553,14 @@ async function route(
   }
 }
 export default {
-  async fetch(request: Request, env: APIEnv) {
+  async fetch(request: Request, env: APIEnv, ctx: ExecutionContext) {
+    const startedAt = performance.now();
     const response = await handle(request, env);
+    try {
+      ctx.waitUntil(Promise.resolve().then(() => recordUsage(env, request, response, startedAt)));
+    } catch {
+      // Telemetry scheduling must never affect the response.
+    }
     return request.method === 'HEAD'
       ? new Response(null, { status: response.status, headers: response.headers })
       : response;

@@ -3,6 +3,8 @@ import api from '../src/api';
 import { handle } from '../src/api';
 import { localEnv } from '../scripts/local-env';
 
+const ctx = { waitUntil: vi.fn() } as unknown as ExecutionContext;
+
 it('rejects unsupported methods, oversized URLs and throttled requests before any D1 query', async () => {
   const prepare = vi.fn(() => {
     throw new Error('unexpected_database_access');
@@ -10,17 +12,23 @@ it('rejects unsupported methods, oversized URLs and throttled requests before an
   const db = { prepare } as unknown as D1Database;
   const blocked = { PUBLIC_DB: db, RATE_LIMITER: { limit: async () => ({ success: false }) } };
   expect(
-    (await api.fetch(new Request('https://api.test/v1/latest', { method: 'POST' }), blocked))
+    (await api.fetch(new Request('https://api.test/v1/latest', { method: 'POST' }), blocked, ctx))
       .status,
   ).toBe(405);
   expect(
-    (await api.fetch(new Request('https://api.test/v1/latest?source=' + 'x'.repeat(8192)), blocked))
-      .status,
+    (
+      await api.fetch(
+        new Request('https://api.test/v1/latest?source=' + 'x'.repeat(8192)),
+        blocked,
+        ctx,
+      )
+    ).status,
   ).toBe(400);
   for (const method of ['GET', 'HEAD']) {
     const response = await api.fetch(
       new Request('https://api.test/v1/latest', { method }),
       blocked,
+      ctx,
     );
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe('60');
