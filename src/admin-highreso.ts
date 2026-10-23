@@ -1,7 +1,7 @@
 import highreso from '../config/proposals/research/highreso_public.json';
 import { HighresoLimit, HighresoRuns, HighresoLatestPrices } from './admin-highreso-contract';
 import { ResearchConfigSchema, type ResearchConfig } from './research/schema';
-import { readResearchRun, type ResearchEnv } from './research/pipeline';
+import { readAdminGpuSnapshots, readResearchRun, type ResearchEnv } from './research/pipeline';
 import { PublicGpuRecordSchema } from './research/public-gpu-html';
 
 import { safeLogCode } from './telemetry';
@@ -62,17 +62,7 @@ export function highresoReader(
       });
     },
     async highresoLatestPrices() {
-      const candidates = await runs(31, true);
-      const complete = candidates.slice(0, 30).filter((r) => r.state === 'complete');
-      const snapshots: {
-        run: (typeof complete)[number];
-        rows: Awaited<ReturnType<typeof readResearchRun>>['results'];
-      }[] = [];
-      for (const run of complete)
-        snapshots.push({
-          run,
-          rows: (await readResearchRun(env, config, run.run_id, opt)).results,
-        });
+      const { snapshots, truncated } = await readAdminGpuSnapshots(env, config, opt);
       const latest = snapshots[0];
       const prices = (latest?.rows ?? [])
         .filter((r) => r.change_kind !== 'not_seen')
@@ -100,7 +90,7 @@ export function highresoReader(
         source,
         run_id: latest?.run.run_id ?? null,
         observed_at: latest?.rows[0]?.observed_at ?? null,
-        history_truncated: candidates.length > 30,
+        history_truncated: truncated,
         prices,
       });
     },

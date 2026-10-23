@@ -62,7 +62,9 @@ Prices come from the latest complete real run; history scans the latest 30 compl
 fallback to stale snapshots when the selected snapshot is hidden/expired.
 Disappeared quotes are excluded. At most 192 prices. Current source rights,
 config hash/history approval, retained deadlines, and R2 revocation/deletion
-markers apply through readResearchRun; denied/unavailable reads reject. The
+markers apply through the bounded research snapshot reader; denied/unavailable reads reject.
+The reader uses two D1 queries for up to 30 snapshots (current policy plus snapshot data).
+Expired snapshots or observation-count mismatches reject, including missing rows for a nonempty run. The
 Admin must show an unavailable state, never convert an RPC failure into success.
 An authorized empty history returns null run/timestamp and an empty price list.
 

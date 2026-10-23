@@ -571,6 +571,61 @@ export async function collectResearchPage(
   }
 }
 
+// One bounded snapshot query plus one current-policy query, independent of history size.
+export async function readAdminGpuSnapshots(
+  env: ResearchEnv,
+  config: ResearchConfig,
+  opt: Options,
+) {
+  assertResearchConfigExecution(env, config);
+  if (!isPublicGpu(config.adapter)) throw new Error('daily_history_scope');
+  const digest = await hash(stable(config));
+  await checkCurrent(env, config, digest, opt, false);
+  const now = (opt.now ?? (() => new Date().toISOString()))();
+  const candidates = (
+    await env.PRIVATE_DB.prepare(
+      `
+    SELECT r.*, (SELECT json_group_array(json_object(
+      'record_key', o.record_key, 'domain_json', o.domain_json,
+      'change_kind', o.change_kind, 'observed_at', o.observed_at
+    )) FROM (SELECT * FROM research_gpu_observations WHERE run_id=r.run_id LIMIT 193) o) observations_json
+    FROM research_runs r WHERE source_id=? AND synthetic=0 AND state='complete'
+    ORDER BY scheduled_for DESC,run_id DESC LIMIT 31
+  `,
+    )
+      .bind(config.source.source_id)
+      .all<
+        RetainedRun & {
+          observation_count: number;
+          observations_json: string;
+        }
+      >()
+  ).results;
+  const snapshots = await Promise.all(
+    candidates.slice(0, 30).map(async (run) => {
+      await assertNotRevoked(env, config.source.source_id, run.run_id);
+      if (
+        run.config_hash !== digest &&
+        !config.history_access.some((h) => h.config_hash === run.config_hash)
+      )
+        throw new Error('research_history_scope_unreviewed');
+      const expiry = historyExpiry(config, run);
+      if (expiry !== null && expiry <= now) throw new Error('research_history_unavailable');
+      const rows = JSON.parse(run.observations_json) as {
+        record_key: string;
+        domain_json: string;
+        change_kind: string;
+        observed_at: string;
+      }[];
+      if (rows.length !== run.observation_count || rows.length > 192)
+        throw new Error('research_history_unavailable');
+      rows.sort((a, b) => a.record_key.localeCompare(b.record_key));
+      return { run, rows };
+    }),
+  );
+  return { snapshots, truncated: candidates.length > 30 };
+}
+
 export async function readResearchRun(
   env: ResearchEnv,
   config: ResearchConfig,
