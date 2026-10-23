@@ -84,3 +84,5 @@
 - Read docs/collector-reliability-release.md before release. codex/watchdog-only works on 0001/0002; the full P0 branch needs 0003 even with expansion disabled. Do not replace enabled production settings with bootstrap defaults. Log only approved metadata; no payloads, arbitrary error text or Secret values. Local CPU proxies are not Cloudflare CPU.
 
 - API usage v1: optional `USAGE` Analytics Engine binding only; fixed route templates, no IP/query/UA/caller hash. Keep `INCLUDE_COLO = false` and empty colo; cache state is `none` unless reliably known. Record outside `handle` with best-effort `waitUntil` so limiter 429/503 are covered; preserve rate limiting and responses. Do not change public privacy text as part of this work.
+
+- 2026-10-23 Kaz approved GPU daily retries: up to three fetch sequences (robots + terms + page), at most 9 HTTP requests per daily run; other adapters retain the three-attempt rule.

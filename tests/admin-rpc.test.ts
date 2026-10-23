@@ -28,7 +28,7 @@ it('serves the named read-only RPC entrypoint while the Collector HTTP surface s
         modules: true,
         compatibilityDate: '2026-07-30',
         script:
-          "export default {async fetch(request,env){const r=await env.ADMIN_READ.read('overview',{});return Response.json(r)}}",
+          "export default {async fetch(request,env){if(new URL(request.url).pathname==='/highreso'){const results=[];for(const call of [()=>env.ADMIN_READ.highresoRuns(31),()=>env.ADMIN_READ.highresoLatestPrices()]){try{await call();results.push('unexpected')}catch(e){results.push(e.message)}}return Response.json(results)}const r=await env.ADMIN_READ.read('overview',{});return Response.json(r)}}",
         serviceBindings: { ADMIN_READ: { name: 'collector-test', entrypoint: 'AdminRead' } },
       },
       {
@@ -59,7 +59,11 @@ it('serves the named read-only RPC entrypoint while the Collector HTTP surface s
     const report = AdminReport.parse(await response.json());
     expect(report.state).toBe('ready');
     expect(report.overview!.sources.length).toBeGreaterThan(2);
+    const rpcErrors = await (await mf.dispatchFetch('https://synthetic.test/highreso')).json();
+    expect(rpcErrors).toHaveLength(2);
+    expect(JSON.stringify(rpcErrors)).not.toMatch(/not a function|unexpected/);
     const collector = await mf.getWorker('collector-test');
+    expect((await collector.fetch('https://synthetic.test/highreso')).status).toBe(404);
     expect((await collector.fetch('https://synthetic.test/api/overview')).status).toBe(404);
     const db = await mf.getD1Database('PRIVATE_DB', 'collector-test');
     for (const table of [
