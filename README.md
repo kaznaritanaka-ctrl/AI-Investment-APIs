@@ -74,3 +74,7 @@ cache for at most 300 seconds, capped at policy and retention boundaries; each
 lookup rechecks current publication controls. These metadata responses remain
 `no-store` for downstream clients. Static API documentation and methodology use
 3600 seconds. HEAD requests and errors are not cached.
+
+## API利用集計（開発・運用）
+
+API Workerの任意binding `USAGE` は Analytics Engine `api_usage_v1` に応答後の集計を送ります。固定ルート、国、ステータス区分、HTTPメソッド、件数・応答コード・所要時間を記録し、キャッシュ状態は `none`、coloは無効（空文字）です。IP・クエリ・User-Agent・呼出元ハッシュは保存しません。binding未設定や書込失敗は応答に影響しません。
