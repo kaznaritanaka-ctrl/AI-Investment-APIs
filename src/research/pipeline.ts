@@ -113,8 +113,11 @@ export async function collectResearchPage(
   assertResearchConfigExecution(env, config);
   const dcLive = config.adapter === 'dc_tracker' && opt.synthetic_text === undefined;
   if (dcLive && !config.dc_access) throw new Error('dc_tracker_live_scope_unreviewed');
-  if (config.adapter === 'dc_tracker' && config.dc_access && !dcCollectionSlot(scheduled))
-    throw new Error('dc_weekly_slot_required');
+  if (config.adapter === 'dc_tracker' && config.dc_access) {
+    const slot = dcCollectionSlot(scheduled);
+    if (!slot) throw new Error('dc_weekly_slot_required');
+    scheduled = slot;
+  }
   const now = opt.now ?? (() => new Date().toISOString()),
     at = now();
   assertResearchAllowed(config, at, opt.current_terms_version);

@@ -18,7 +18,8 @@ export function dcTrackerTurn(
 }
 
 export async function runDCTracker(env: CollectorEnv, scheduled: string, now: string) {
-  if (!dcTrackerTurn(env, scheduled)) return;
+  const slot = dcCollectionSlot(scheduled);
+  if (!slot || !dcTrackerTurn(env, slot)) return;
   // Do not add 0016 to the independent GPU gate or perform automatic migration.
   const required = [
     '0007_private_research.sql',
@@ -43,7 +44,7 @@ export async function runDCTracker(env: CollectorEnv, scheduled: string, now: st
   for (const config of dcResearchConfigs) {
     try {
       if (!(await maintainPrivateGpuResearch(env, config, now))) continue;
-      await collectResearchPage(env, config, { kind: 'dc_tracker' }, scheduled, {
+      await collectResearchPage(env, config, { kind: 'dc_tracker' }, slot, {
         current_terms_version: config.terms.version,
         allow_network: true,
       });

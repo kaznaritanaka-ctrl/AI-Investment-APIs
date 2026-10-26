@@ -20,6 +20,8 @@ describe('DC weekly runs and durable HTTP budget (synthetic fetch only)', () => 
         '2026-10-25T18:17:00.000Z',
         '2026-10-26T18:20:00.000Z',
         '2026-10-27T18:17:00.000Z',
+        '2026-10-26T18:20:16.915Z',
+        '2026-10-27T18:17:16.915Z',
       ])
         await expect(
           collectResearchPage(env, c, query, at, {
@@ -53,11 +55,17 @@ describe('DC weekly runs and durable HTTP budget (synthetic fetch only)', () => 
         allow_network: true,
         fetcher,
       });
-      const first = await collectResearchPage(env, c, query, monday, options(monday));
+      const event = '2026-10-26T18:17:16.915Z';
+      const first = await collectResearchPage(env, c, query, event, options(event));
       expect(first.state).toBe('complete');
       expect(fetcher).toHaveBeenCalledTimes(3);
-      expect(await collectResearchPage(env, c, query, monday, options(monday))).toEqual(first);
+      expect(await collectResearchPage(env, c, query, monday, options(event))).toEqual(first);
+      const replay = '2026-10-26T18:17:59.999Z';
+      expect(await collectResearchPage(env, c, query, replay, options(replay))).toEqual(first);
       expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(
+        await env.PRIVATE_DB.prepare('SELECT run_id,scheduled_for FROM research_runs').all(),
+      ).toMatchObject({ results: [{ run_id: first.run_id, scheduled_for: monday }] });
       const next = '2026-11-02T18:17:00.000Z';
       const second = await collectResearchPage(env, c, query, next, options(next));
       expect(second.run_id).not.toBe(first.run_id);
@@ -118,9 +126,10 @@ describe('DC weekly runs and durable HTTP budget (synthetic fetch only)', () => 
       };
       await expect(collectResearchPage(env, c, query, monday, opt)).rejects.toThrow('http_503');
       expect(fetcher).toHaveBeenCalledTimes(3);
-      await expect(collectResearchPage(env, c, query, monday, opt)).rejects.toThrow(
-        'research_request_budget_exhausted',
-      );
+      const replay = '2026-10-26T18:17:16.915Z';
+      await expect(
+        collectResearchPage(env, c, query, replay, { ...opt, now: () => replay }),
+      ).rejects.toThrow('research_request_budget_exhausted');
       expect(fetcher).toHaveBeenCalledTimes(3);
       expect(
         await env.PRIVATE_DB.prepare(

@@ -1,4 +1,5 @@
 import { isoTime } from '../util';
+import { minuteSlot } from '../run-identity';
 
 export const dcSourceIds = [
   'dc_softbank',
@@ -13,8 +14,11 @@ export const dcSourceIds = [
 export const isDCSource = (id: string) => dcSourceIds.some((source) => source === id);
 
 // Only the existing daily cron's Monday 18:17 UTC slot. No continuations or catch-up days.
+// Ignore event seconds/milliseconds and use one normalized collection identity.
 export function dcCollectionSlot(scheduled: string) {
   if (!isoTime(scheduled)) return null;
   const date = new Date(scheduled);
-  return date.getUTCDay() === 1 && scheduled.slice(11) === '18:17:00.000Z' ? scheduled : null;
+  return date.getUTCDay() === 1 && date.getUTCHours() === 18 && date.getUTCMinutes() === 17
+    ? minuteSlot(scheduled)
+    : null;
 }
