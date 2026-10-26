@@ -384,19 +384,20 @@ export async function collectResearchPage(
           );
     const highresoV3 =
       config.adapter === 'highreso_public' && config.method_version === HIGHRESO_METHOD;
-    const previousGpu = gpu
-      ? await env.PRIVATE_DB.prepare(
-          "SELECT run_id FROM research_runs WHERE source_id=? AND query_hash=? AND synthetic=? AND state='complete' AND recorded_at<? AND config_hash IN (SELECT value FROM json_each(?)) ORDER BY recorded_at DESC,run_id DESC LIMIT 1",
-        )
-          .bind(
-            source.source_id,
-            queryHash,
-            Number(synthetic),
-            e.observed_at,
-            JSON.stringify([configHash, ...config.history_access.map((h) => h.config_hash)]),
+    const previousGpu =
+      gpu && (highresoV3 || page.coverage === 'complete')
+        ? await env.PRIVATE_DB.prepare(
+            "SELECT run_id FROM research_runs WHERE source_id=? AND query_hash=? AND synthetic=? AND state='complete' AND recorded_at<? AND config_hash IN (SELECT value FROM json_each(?)) ORDER BY recorded_at DESC,run_id DESC LIMIT 1",
           )
-          .first<{ run_id: string }>()
-      : null;
+            .bind(
+              source.source_id,
+              queryHash,
+              Number(synthetic),
+              e.observed_at,
+              JSON.stringify([configHash, ...config.history_access.map((h) => h.config_hash)]),
+            )
+            .first<{ run_id: string }>()
+        : null;
     const previousGpuRows = previousGpu
       ? (await readResearchRun(env, config, previousGpu.run_id, opt)).results
       : [];

@@ -81,9 +81,13 @@ export function highresoReader(
           return {
             record_key: record.record_key,
             gpu_model: record.offer.reported_product,
-            instance_id: record.instance_id,
-            instance_id_changed_from: changedFrom,
-            identity_change_label: changedFrom ? '型番変更' : null,
+            ...(changedFrom
+              ? {
+                  instance_id: record.instance_id,
+                  instance_id_changed_from: changedFrom,
+                  identity_change_label: '型番変更' as const,
+                }
+              : {}),
             gpu_count: record.offer.gpu_count,
             price_jpy: record.offer.currency === 'JPY' ? record.offer.amount_decimal : null,
             unit: record.offer.unit,

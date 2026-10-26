@@ -4,9 +4,9 @@
 
 ## 問題と変更
 
-型番の表示名をキーにすると、表示名だけの変更でfirst_seen/not_seenが増える。Highreso限定の `domestic-gpu-html-v3` は、`hr:v2:` + SHA-256(stable({reported_product,gpu_count,vram,storage_gb,os_family,unit})) + `:` + 出現順位を使う。stableは既存のキー順整列JSON、vramは既存のGPU識別結果の `vram_gb`。OSは型番内の単独の `ubsNN` を抽出する。未認識・複数OSは取得結果を保存せず停止する。新しいOS表記は別途parserレビューする。
+型番の表示名をキーにすると、表示名だけの変更でfirst_seen/not_seenが増える。Highreso限定の `domestic-gpu-html-v3` は、`hr:v2:` + SHA-256(stable({reported_product,gpu_count,vram,storage_gb,os_family,unit})) + `:` + 出現順位を使う。stableは既存のキー順整列JSON、vramは既存のGPU識別結果の `vram_gb`。OSは型番内の単独の `ubsNN` を抽出する。未認識・複数OSの行だけは `hr:fallback:v1:` の別名前空間で、型番そのものと製品・GPU数・VRAM・ストレージ・単位を含むハッシュキーへフォールバックする。OSを推測せず、型番変更時の同一性も推定しない。他の行は通常どおり処理する。新しいOS表記は別途parserレビューする。
 
-価格・型番・規約版・取得日時はキーに含めない。型番を昇順（ASCII/BINARY）で並べ、同条件の行に1から順位を付ける。物理マシンの同一性や、末尾文字の対応規則を推定するものではない。同条件の重複数が変わる場合は順位が入れ替わり得る。この制約を隠さず、履歴は観測された掲載内容の系列として扱う。
+通常キーには価格・型番・規約版・取得日時を含めない（OS不明時のフォールバックだけは型番を含む）。型番を昇順（ASCII/BINARY）で並べ、同条件の行に1から順位を付ける。物理マシンの同一性や、末尾文字の対応規則を推定するものではない。同条件の重複数が変わる場合は順位が入れ替わり得る。この制約を隠さず、履歴は観測された掲載内容の系列として扱う。
 
 v2→v3初回は直前の同source・同query・同synthetic区分のcomplete snapshotだけを内容キーで照合する。直前のv2行は10/27 first_seenも含めて新キーを計算できる。価格変更はrevised、同一内容はreobserved。型番のみの変更はrevisedとし `domain_json.instance_id_changed_from` を残す。次の日の同一内容はreobservedに戻る。照合した旧行をnot_seenにしない。実際の消失・再登場は従来のnot_seen/reappeared。外部削除マーカー、現行の権利、旧configの承認、元の保持期限をすべて維持する。
 
@@ -30,17 +30,17 @@ v2→v3初回は直前の同source・同query・同synthetic区分のcomplete sn
 
 v2/v3で解析する価格・scope・原単位は同じなので、この境界だけdaily seriesを互換とする。他のmethod/scope境界は従来どおり分離する。改名だけの比較は `state='instance_id_changed'`、`identity_change_label='型番変更'` を返し、価格変化率は出さない。改名と価格変更が同時の場合は価格変更のstateに同じ改名情報を併記する。
 
-AdminRead v1のprice要素にoptionalな `instance_id`、`instance_id_changed_from`、`identity_change_label`（「型番変更」またはnull）を追加する。旧strict validatorを使うAdminクライアントには同梱contractの更新が必要。別リポジトリのAdmin/#highresoはこのラベルを表示する更新と**協調配備**が必要で、このリポジトリ内にはその画面実装はない。過去30complete runで系列を繋ぎ、リンク先のfirst_seenを改名として読むので、first_seenが10/27に巻き戻らない。窓外・期限切れ・削除済みの履歴を復活させない。3回のbounded D1 query（現行policy、snapshot、対応表）を使う。
+型番変更があるprice要素にだけ、AdminRead v1のoptionalな `instance_id`、`instance_id_changed_from`、`identity_change_label`（「型番変更」）を追加する。変更のない要素には3項目を一切出力せず、従来の応答形状を完全に維持する。旧strict validatorを使うAdminクライアントには同梱contractの更新が必要。Admin更新までは型番変更エントリがまだ出なければ従来どおり表示できるが、変更エントリが1件でも出ると旧strict validatorは応答全体を拒否する。このためAdmin更新をCollectorより先に配備し、3項目あり・なしの両方とラベル表示を確認するまでCollectorの配備を止める。別リポジトリのAdmin/#highresoはこのラベルを表示する更新と**協調配備**が必要で、このリポジトリ内にはその画面実装はない。過去30complete runで系列を繋ぎ、リンク先のfirst_seenを改名として読むので、first_seenが10/27に巻き戻らない。窓外・期限切れ・削除済みの履歴を復活させない。3回のbounded D1 query（現行policy、snapshot、対応表）を使う。
 
 公開API、PUBLIC_DB、公開OpenAPIは追加しない。「private API」は既存private関数／AdminRead RPCを指し、新しいHTTP経路は作らない。
 
 ## 本番手順（今回実行禁止）
 
-1. Claude Sonnetとの相互レビュー、全テスト・CI、Admin側のcontract/表示更新を完了する。異論はOpus判断。未完了なら停止。
-2. 適用直前の本番設定・版・既存の復旧手順を確認。既存データ相当のローカル検証とmigrationの相互レビューを確認し、private 0018だけを適用。新Collectorは0018のjournalも確認し、不足時は研究処理を停止する。既存migrationは変更しない。
+1. Claude Sonnetとの相互レビューと全テスト・CIを完了する。その後Admin側のcontract/表示更新を先行配備し、変更エントリあり・なしの応答の受理を確認する。異論はOpus判断。未完了なら停止。
+2. 適用直前の本番設定・版・既存の復旧手順を確認。既存データ相当のローカル検証とmigrationの相互レビューを確認し、private 0018だけを適用する。**migration → Collector deploy** の順序を厳守し、journalと表の適用確認前に新Collectorを配備しない。新Collectorは0018のjournalも確認し、不足時は研究処理を停止する。既存migrationは変更しない。
 3. 対応表SQLを生成し、別途承認された本番read-only dry-runで旧新48/48件・pair48件・unmatched0件を確認。条件が合わなければ適用せず報告。
 4. 対応表の本番書込みはKazの別承認後、レビュー済みINSERTのみ適用。元観測は削除・更新しない。
-5. 候補configについてレビュー済みadoptReviewedResearchConfigを明示実行する。更新が稼働Collectorと競合しない保守窓を取り、同じ候補を正式設定へ反映してCollectorとAdminを協調配備する。単に候補JSONを置くだけでは有効にならない。権利grantや公開範囲を増やさない。
+5. 候補configについてレビュー済みadoptReviewedResearchConfigを明示実行する。更新が稼働Collectorと競合しない保守窓を取り、同じ候補を正式設定へ反映して先行更新済みAdminに対してCollectorを配備する。単に候補JSONを置くだけでは有効にならない。権利grantや公開範囲を増やさない。
 6. 次の通常の日次収集で48件がreobserved（実際の改定はrevised）、型番由来のfirst_seen/not_seenが0、既存の公開APIと他sourceが正常であることを確認する。追加のHighreso取得はしない。
 
 ## ロールバック
@@ -68,3 +68,11 @@ Collectorのテスト用migration journalにも0018を追加した。既存の�
 Node 24.22.0 / pnpm 11.19.0で `pnpm run check`、`pnpm test`、`pnpm run test:runtime`、`pnpm run build` がすべて成功。通常localEnvでVitest 55ファイル・599件、Nodeテスト13件（合計612件）が成功し、失敗・skipは0。初回全件実行で発生したD1起動hookのtimeoutは単独5件と全件の再実行で解消し、timeout設定は変更していない。
 
 workerdではGPU 1,051件・22ページ・23回の継続処理、Models 50/250/1,000件、private PoC 50行と優先Models 500件、障害復旧・保存期限処理を合成データで確認。buildはCollector/APIともdry-runだけを実行し、Wranglerの更新確認バナーとmetrics送信は無効化した。offline preflight（`network_performed=false`）、生成schema/OpenAPIの差分なし、`git diff --check` も成功。Cloudflare接続・実サイト取得・push・デプロイ・本番書込みは行っていない。相互レビューとCIは引き続き未実施。
+
+### review-1 指摘修正後の検証（2026-10-27）
+
+変更のないAdminエントリを旧strict契約で受理でき、追加3項目が一切ないことを合成データで確認した。OS未認識・複数OSと通常行が混在してもページを処理でき、通常キーが変わらず、フォールバックの型番変更を同一系列へ誤結合しないことを検査した。Highreso旧版とRebroのcompleteページでは、前回runの削除ゲートが従来どおり働くことも確認した。前回runの検索・読取条件はHighreso v3またはcompleteページに限定する。
+
+Node 24.22.0 / pnpm 11.19.0で `pnpm check`、`pnpm test`、`pnpm test:runtime`、`pnpm build` がすべて成功。Vitest 55ファイル・602件、Nodeテスト13件（合計615件）が成功し、失敗・skipは0。通常のlocalEnv/workerdを使用し、互換環境への差替えはしていない。runtimeではGPU 1,051件とModels 50/250/1,000件を含む合成データの検査が成功した。
+
+offline preflightは `network_performed=false`。生成schema/OpenAPIの差分なし、`git diff --check` 成功。buildは更新確認・metrics送信を無効にしたローカルdry-runのみ。外部ネットワーク・Cloudflare操作・push・deploy・本番書込みは行っていない。PR本文はローカルの `docs/highreso-stable-key-pr.md` のみ更新した。今回の修正後の相互レビューとCIは未実施。

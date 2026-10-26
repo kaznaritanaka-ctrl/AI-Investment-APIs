@@ -30,7 +30,23 @@ export function highresoContent(record: PublicGpuRecord) {
 export async function highresoKeys(records: PublicGpuRecord[]) {
   const groups = new Map<string, PublicGpuRecord[]>();
   for (const record of records) {
-    const content = stable(highresoContent(record));
+    let content: string;
+    try {
+      content = stable(highresoContent(record));
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'highreso_os_unrecognized') throw error;
+      // Unknown OS must not abort the page or imply a rename. Keep the exact
+      // instance name and all identity conditions in a separate key namespace.
+      content = stable({
+        fallback_reason: 'highreso_os_unrecognized',
+        instance_id: record.instance_id,
+        reported_product: record.offer.reported_product,
+        gpu_count: record.offer.gpu_count,
+        vram: record.identity.vram_gb,
+        storage_gb: record.storage_gb,
+        unit: record.offer.unit,
+      });
+    }
     const group = groups.get(content) ?? [];
     group.push(record);
     groups.set(content, group);
@@ -43,7 +59,8 @@ export async function highresoKeys(records: PublicGpuRecord[]) {
     if (new Set(group.map((r) => r.instance_id)).size !== group.length)
       throw new Error('research_duplicate_record');
     const digest = await hash(content);
-    group.forEach((record, i) => keys.set(record, `hr:v2:${digest}:${i + 1}`));
+    const prefix = JSON.parse(content).fallback_reason ? 'hr:fallback:v1' : 'hr:v2';
+    group.forEach((record, i) => keys.set(record, `${prefix}:${digest}:${i + 1}`));
   }
   return keys;
 }

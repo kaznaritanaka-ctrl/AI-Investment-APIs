@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HighresoLatestPrices } from '../src/admin-highreso-contract';
 import { highresoReader } from '../src/admin-highreso';
 import { ResearchConfigSchema } from '../src/research/schema';
 import candidate from '../config/proposals/highreso-stable-key.json';
@@ -53,12 +54,72 @@ describe('Highreso stable identity (synthetic only)', () => {
         (r) => r.instance_id === 'renamed-ubs22-b' && r.offer.unit === item.offer.unit,
       )?.record_key,
     ).toBe(item.record_key);
-    await expect(parsePublicGpu(c, html(['fake-no-os']), gpuTime, true)).rejects.toThrow(
-      'highreso_os_unrecognized',
+    const mixed = await parsePublicGpu(
+      c,
+      html(['fake-no-os', 'fake-ubs22-ubs24-a', 'fake-ubs22-a']),
+      gpuTime,
+      true,
     );
+    expect(mixed.records).toHaveLength(6);
+    expect(mixed.records.filter((r) => r.record_key.startsWith('hr:fallback:v1:'))).toHaveLength(4);
+    expect(mixed.records.find((r) => r.instance_id === 'fake-ubs22-a')?.record_key).toBe(
+      item.record_key,
+    );
+    const renamedUnknown = await parsePublicGpu(c, html(['other-no-os']), gpuTime, true);
+    expect(renamedUnknown.records[0].record_key).not.toBe(mixed.records[0].record_key);
     const otherOS = await parsePublicGpu(c, html(['fake-ubs24-a']), gpuTime, true);
     expect(otherOS.records[0].record_key).not.toBe(item.record_key);
   });
+  it('preserves the exact legacy Admin shape without renames', async () => {
+    const c = await config();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(gpuFetcher('highreso_public', html()));
+    await collectResearchPage(local.env, c, query, gpuTime, {
+      current_terms_version: c.terms.version,
+      now: () => gpuTime,
+      allow_network: true,
+    });
+    const result = await highresoReader(local.env, c, gpuTime).highresoLatestPrices();
+    const legacyPrice = HighresoLatestPrices.shape.prices.element
+      .omit({
+        instance_id: true,
+        instance_id_changed_from: true,
+        identity_change_label: true,
+      })
+      .strict();
+    expect(result.prices).toHaveLength(4);
+    for (const price of result.prices) {
+      expect(legacyPrice.parse(price)).toEqual(price);
+      expect(Object.keys(price).sort()).toEqual(
+        [
+          'record_key',
+          'gpu_model',
+          'gpu_count',
+          'price_jpy',
+          'unit',
+          'tax_status',
+          'first_seen',
+          'last_changed',
+        ].sort(),
+      );
+    }
+  });
+  it.each(['highreso_public', 'rebro_public'] as const)(
+    'retains the previous-run deletion gate for complete legacy %s pages',
+    async (adapter) => {
+      const c = await publicGpuSource(adapter);
+      const first = await collectResearchPage(
+        local.env,
+        c,
+        { kind: adapter },
+        gpuTime,
+        gpuOptions(c),
+      );
+      await recordDeletion(local.env, c.source.source_id, first.run_id, day(1), 'expired');
+      await expect(
+        collectResearchPage(local.env, c, { kind: adapter }, day(1), gpuOptions(c, day(1))),
+      ).rejects.toThrow('research_run_deleted');
+    },
+  );
   it('bridges v2 once, preserves old keys, records renames and prices, then reobserves and records actual absence/reappearance', async () => {
     const legacy = await publicGpuSource();
     const first = await collectResearchPage(
