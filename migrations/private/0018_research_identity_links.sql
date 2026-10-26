@@ -1,27 +1,7 @@
 -- Append-only identity evidence. IDs only: no quote, payload, or retention extension.
 -- No FK to observations: authorized retention deletion must remain possible.
-CREATE TABLE research_identity_links (
-  link_id TEXT PRIMARY KEY,
-  source_id TEXT NOT NULL CHECK(source_id='highreso_public'),
-  from_observation_id TEXT NOT NULL,
-  to_observation_id TEXT NOT NULL,
-  basis TEXT NOT NULL CHECK(basis='content_match_v1'),
-  method_version TEXT NOT NULL CHECK(method_version='domestic-gpu-html-v3'),
-  recorded_at TEXT NOT NULL,
-  CHECK(from_observation_id<>to_observation_id),
-  UNIQUE(source_id,from_observation_id),
-  UNIQUE(source_id,to_observation_id)
-);
+-- Keep each SQL statement on one line for D1Database.exec.
+CREATE TABLE research_identity_links ( link_id TEXT PRIMARY KEY, source_id TEXT NOT NULL CHECK(source_id='highreso_public'), from_observation_id TEXT NOT NULL, to_observation_id TEXT NOT NULL, basis TEXT NOT NULL CHECK(basis='content_match_v1'), method_version TEXT NOT NULL CHECK(method_version='domestic-gpu-html-v3'), recorded_at TEXT NOT NULL, CHECK(from_observation_id<>to_observation_id), UNIQUE(source_id,from_observation_id), UNIQUE(source_id,to_observation_id) );
 CREATE TRIGGER research_identity_links_immutable BEFORE UPDATE ON research_identity_links BEGIN SELECT RAISE(ABORT,'immutable_research_identity_link'); END;
 CREATE TRIGGER research_identity_links_no_delete BEFORE DELETE ON research_identity_links BEGIN SELECT RAISE(ABORT,'immutable_research_identity_link'); END;
-CREATE TRIGGER research_identity_links_scope BEFORE INSERT ON research_identity_links
-WHEN NOT EXISTS (
-  SELECT 1 FROM research_gpu_observations a JOIN research_runs ar ON ar.run_id=a.run_id
-  JOIN research_gpu_observations b ON b.observation_id=NEW.to_observation_id
-  JOIN research_runs br ON br.run_id=b.run_id
-  WHERE a.observation_id=NEW.from_observation_id AND ar.source_id=NEW.source_id AND br.source_id=NEW.source_id
-    AND ar.state='complete' AND br.state='complete' AND ar.synthetic=br.synthetic
-    AND ar.scheduled_for<br.scheduled_for AND a.change_kind='reobserved' AND b.change_kind='first_seen'
-    AND a.method_version='domestic-gpu-html-v2' AND b.method_version='domestic-gpu-html-v2'
-)
-BEGIN SELECT RAISE(ABORT,'research_identity_link_scope'); END;
+CREATE TRIGGER research_identity_links_scope BEFORE INSERT ON research_identity_links WHEN NOT EXISTS ( SELECT 1 FROM research_gpu_observations a JOIN research_runs ar ON ar.run_id=a.run_id JOIN research_gpu_observations b ON b.observation_id=NEW.to_observation_id JOIN research_runs br ON br.run_id=b.run_id WHERE a.observation_id=NEW.from_observation_id AND ar.source_id=NEW.source_id AND br.source_id=NEW.source_id AND ar.state='complete' AND br.state='complete' AND ar.synthetic=br.synthetic AND ar.scheduled_for<br.scheduled_for AND a.change_kind='reobserved' AND b.change_kind='first_seen' AND a.method_version='domestic-gpu-html-v2' AND b.method_version='domestic-gpu-html-v2' ) BEGIN SELECT RAISE(ABORT,'research_identity_link_scope'); END;

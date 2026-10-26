@@ -295,6 +295,7 @@ it.each([
   '0009_research_retention_states.sql',
   '0014_research_assessments_append_only.sql',
   '0015_private_gpu_daily.sql',
+  '0018_research_identity_links.sql',
 ])('skips safely and logs if migration %s is missing, before R2 or HTTP', async (missing) => {
   await local.env.PRIVATE_DB.prepare('DELETE FROM d1_migrations WHERE name=?').bind(missing).run();
   const http = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected HTTP'));

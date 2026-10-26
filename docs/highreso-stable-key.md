@@ -58,3 +58,13 @@ AdminRead v1のprice要素にoptionalな `instance_id`、`instance_id_changed_fr
 check（整形・型・境界）、build（dry-run）、offline preflight、生成schema検査は成功。通常のworkerd runtimeはサンドボックスの `listen EPERM 127.0.0.1` により実行不可。通常localEnvの統合テストも起動待ちで中止した。ネットワーク／ローカル待受けが許可されたCIでのcheck/test/test:runtime/build完走が引き続き必要。Claude SonnetのCLIレビューは未ログインで実行不可だったため、相互レビュー承認は未取得。push禁止に従いCI/PRの起動・作成はしていない。
 
 通常環境のparser/contract/DOMテスト3ファイル35件も成功。旧型番が過去に異なるストレージ条件で再利用されていた場合も、観測ごとに内容キーを解決して別条件の系列を誤って併合しない。共有のstable/hash/hashBytesは処理を変えずにsrc/canonical.tsへ分離し、安定キーの単体検証で同じ実装を使用する。
+
+### localhost許可後の追検証（2026-10-27）
+
+通常のD1実行で0018の複数行SQLが `incomplete input` となったため、0016/0017と同様に各SQL文を1行に揃えた。SQLの内容・制約・不変triggerは変更していない。migrationローダーや通常localEnvの差替えは行わない。
+
+Collectorのテスト用migration journalにも0018を追加した。既存の未適用migration検査には0018欠落の場合も加え、R2読取・HTTP・取得処理より前に停止することを確認する。本番のschema gateは変更しない。
+
+Node 24.22.0 / pnpm 11.19.0で `pnpm run check`、`pnpm test`、`pnpm run test:runtime`、`pnpm run build` がすべて成功。通常localEnvでVitest 55ファイル・599件、Nodeテスト13件（合計612件）が成功し、失敗・skipは0。初回全件実行で発生したD1起動hookのtimeoutは単独5件と全件の再実行で解消し、timeout設定は変更していない。
+
+workerdではGPU 1,051件・22ページ・23回の継続処理、Models 50/250/1,000件、private PoC 50行と優先Models 500件、障害復旧・保存期限処理を合成データで確認。buildはCollector/APIともdry-runだけを実行し、Wranglerの更新確認バナーとmetrics送信は無効化した。offline preflight（`network_performed=false`）、生成schema/OpenAPIの差分なし、`git diff --check` も成功。Cloudflare接続・実サイト取得・push・デプロイ・本番書込みは行っていない。相互レビューとCIは引き続き未実施。
