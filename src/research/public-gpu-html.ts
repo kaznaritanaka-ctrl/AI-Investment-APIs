@@ -8,6 +8,7 @@ import {
   type DomesticGPUIntake,
 } from './domestic-gpu';
 import type { ResearchConfig } from './schema';
+import { HIGHRESO_METHOD, highresoKeys } from './highreso-identity';
 
 type Node = {
   tagName?: string;
@@ -108,6 +109,7 @@ export const PublicGpuRecordSchema = z
     offer: DomesticGPUIntakeSchema,
     identity: GPUIdentity,
     instance_id: z.string().min(1).max(120).nullable(),
+    instance_id_changed_from: z.string().min(1).max(120).optional(),
     reported_quantity: z.number().int().positive().nullable(),
     storage_gb: z
       .string()
@@ -128,7 +130,7 @@ export const PublicGpuPageSchema = z
     reasons: z.array(z.string()),
     selection: z
       .object({
-        method_version: z.literal('domestic-gpu-html-v2'),
+        method_version: z.enum(['domestic-gpu-html-v2', HIGHRESO_METHOD]),
         input_rows: z.number().int().nonnegative(),
         cohort_rows: z.number().int().nonnegative(),
         excluded_rows: z.number().int().nonnegative(),
@@ -252,7 +254,7 @@ export async function parsePublicGpu(
     cohortRows = 0,
     excludedModel = 0,
     excludedCount = 0;
-  const v2 = c.method_version === 'domestic-gpu-html-v2';
+  const v2 = ['domestic-gpu-html-v2', HIGHRESO_METHOD].includes(c.method_version);
   if (c.adapter === 'highreso_public') {
     // Traverse document order, associating each table with only its preceding GPU spec block.
     const ordered: Node[] = [],
@@ -450,6 +452,12 @@ export async function parsePublicGpu(
       }
     }
   }
+  if (c.adapter === 'highreso_public' && c.method_version === HIGHRESO_METHOD) {
+    for (const [record, key] of await highresoKeys(records)) {
+      record.record_key = key;
+      record.offer.record_key = key;
+    }
+  }
   if (!matchedTables || (c.adapter === 'rebro_public' && matchedTables !== 1))
     throw new Error('public_gpu_table_missing');
   if (inputRows > c.limits.max_input_rows || records.length > c.limits.page_size)
@@ -466,7 +474,7 @@ export async function parsePublicGpu(
     ...(v2
       ? {
           selection: {
-            method_version: 'domestic-gpu-html-v2',
+            method_version: c.method_version,
             input_rows: inputRows,
             cohort_rows: cohortRows,
             excluded_rows: inputRows - cohortRows,
@@ -491,5 +499,7 @@ export function gpuRecordFingerprint(record: PublicGpuRecord) {
   void policy_version;
   void terms_version;
   void synthetic;
-  return hash(stable({ ...record, offer: content }));
+  const { instance_id_changed_from, ...quote } = record;
+  void instance_id_changed_from;
+  return hash(stable({ ...quote, offer: content }));
 }

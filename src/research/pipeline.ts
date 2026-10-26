@@ -1,4 +1,6 @@
+import { resolveHighresoHistory, type GpuHistoryRow } from './highreso-history';
 import { z } from 'zod';
+import { HIGHRESO_METHOD, highresoKeys, withHighresoKey } from './highreso-identity';
 import { gpuRetryAt } from './retry';
 import { dcCollectionSlot } from './dc-contract';
 import { fetchDCTrackerPage } from './dc-network';
@@ -13,7 +15,12 @@ import { fetchBounded, FetchFailure, type NetworkOptions } from '../network';
 import { errorCode, hash, isoTime, stable } from '../util';
 import { parseElectricity, researchRequest } from './electricity';
 import { isPublicGpu, researchTable } from './public-gpu-contract';
-import { PublicGpuPageSchema, parsePublicGpu, gpuRecordFingerprint } from './public-gpu-html';
+import {
+  PublicGpuPageSchema,
+  PublicGpuRecordSchema,
+  parsePublicGpu,
+  gpuRecordFingerprint,
+} from './public-gpu-html';
 import { fetchPublicGpuPage, gpuReviewErrors } from './public-gpu-network';
 import {
   assertResearchAllowed,
@@ -375,9 +382,45 @@ export async function collectResearchPage(
                 : source.policy.retention_limit_days - retention.backup_days,
             ),
           );
+    const highresoV3 =
+      config.adapter === 'highreso_public' && config.method_version === HIGHRESO_METHOD;
+    const previousGpu =
+      gpu && (highresoV3 || page.coverage === 'complete')
+        ? await env.PRIVATE_DB.prepare(
+            "SELECT run_id FROM research_runs WHERE source_id=? AND query_hash=? AND synthetic=? AND state='complete' AND recorded_at<? AND config_hash IN (SELECT value FROM json_each(?)) ORDER BY recorded_at DESC,run_id DESC LIMIT 1",
+          )
+            .bind(
+              source.source_id,
+              queryHash,
+              Number(synthetic),
+              e.observed_at,
+              JSON.stringify([configHash, ...config.history_access.map((h) => h.config_hash)]),
+            )
+            .first<{ run_id: string }>()
+        : null;
+    const previousGpuRows = previousGpu
+      ? (await readResearchRun(env, config, previousGpu.run_id, opt)).results
+      : [];
+    const legacy = highresoV3
+      ? previousGpuRows
+          .filter(
+            (r) => r.method_version === 'domestic-gpu-html-v2' && r.change_kind !== 'not_seen',
+          )
+          .map((row) => ({
+            row,
+            record: PublicGpuRecordSchema.parse(JSON.parse(row.domain_json)),
+          }))
+      : [];
+    const legacyKeys = await highresoKeys(legacy.map((r) => r.record));
+    const matchedLegacy = new Map(
+      legacy.map(({ row, record }) => [legacyKeys.get(record)!, { row, record }]),
+    );
+    const legacyKeysById = new Map(
+      legacy.map(({ row, record }) => [row.observation_id, legacyKeys.get(record)!]),
+    );
     const priorRecords = page.records.length
       ? await env.PRIVATE_DB.prepare(
-          `SELECT * FROM (SELECT o.observation_id,o.record_hash,o.record_key,o.change_kind,r.*,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM ${table} o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND (r.normalized_expires_at IS NULL OR r.normalized_expires_at>?) AND (? IS NULL OR r.recorded_at>?) AND r.retention_snapshot_json IS NOT NULL AND json_extract(r.retention_snapshot_json,'$.backup_days')>=? AND (r.all_copies_expires_at IS NULL OR r.all_copies_expires_at>?) AND r.config_hash IN (SELECT value FROM json_each(?)) AND o.observed_at<? AND o.record_key IN (` +
+          `SELECT * FROM (SELECT o.observation_id,o.record_hash,o.record_key,o.change_kind,o.domain_json,r.*,ROW_NUMBER() OVER(PARTITION BY o.record_key ORDER BY o.observed_at DESC,o.observation_id DESC) position FROM ${table} o JOIN research_runs r USING(run_id) JOIN research_sources s ON s.source_id=r.source_id WHERE r.source_id=? AND r.state='complete' AND r.synthetic=? AND s.suspended=0 AND (r.normalized_expires_at IS NULL OR r.normalized_expires_at>?) AND (? IS NULL OR r.recorded_at>?) AND r.retention_snapshot_json IS NOT NULL AND json_extract(r.retention_snapshot_json,'$.backup_days')>=? AND (r.all_copies_expires_at IS NULL OR r.all_copies_expires_at>?) AND r.config_hash IN (SELECT value FROM json_each(?)) AND o.observed_at<? AND o.record_key IN (` +
             page.records.map(() => '?').join(',') +
             ')) WHERE position=1',
         )
@@ -400,6 +443,7 @@ export async function collectResearchPage(
               record_key: string;
               change_kind: string;
               run_id: string;
+              domain_json: string;
             }
           >()
       : { results: [] };
@@ -424,9 +468,38 @@ export async function collectResearchPage(
           : 'offer' in record
             ? await gpuRecordFingerprint(record)
             : await hash(stable(record));
-      const prior = priorRecords.results.find(
+      let prior:
+        | {
+            observation_id: string;
+            record_key: string;
+            record_hash: string;
+            domain_json: string;
+            change_kind: string;
+          }
+        | undefined = priorRecords.results.find(
         (r) => r.record_key === record.record_key && !deletedPrior.has(r.run_id),
       );
+      let savedRecord = record;
+      if (highresoV3 && 'offer' in record) {
+        const old = matchedLegacy.get(record.record_key);
+        if (!prior && old) {
+          // Only the immediately preceding v2 snapshot may cross the identity boundary.
+          // readResearchRun already enforces current rights, original deadlines and markers.
+          prior = {
+            ...old.row,
+            record_key: record.record_key,
+            record_hash: await gpuRecordFingerprint(withHighresoKey(old.record, record.record_key)),
+          };
+        }
+        if (prior) {
+          const oldDomain =
+            old && old.row.observation_id === prior.observation_id
+              ? old.record
+              : PublicGpuRecordSchema.safeParse(JSON.parse(prior.domain_json)).data;
+          if (oldDomain?.instance_id && oldDomain.instance_id !== record.instance_id)
+            savedRecord = { ...record, instance_id_changed_from: oldDomain.instance_id };
+        }
+      }
       statements.push(
         env.PRIVATE_DB.prepare(
           `INSERT OR IGNORE INTO ${table}(observation_id,run_id,page_number,record_key,source_url,method_version,observed_at,recorded_at,record_hash,previous_observation_id,change_kind,domain_json) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>?)`,
@@ -448,7 +521,7 @@ export async function collectResearchPage(
               : prior.record_hash === fingerprint
                 ? 'reobserved'
                 : 'revised',
-          stable(record),
+          stable(savedRecord),
           runId,
           lease,
           now(),
@@ -457,24 +530,14 @@ export async function collectResearchPage(
     }
     if (gpu && page.coverage === 'complete') {
       // Absence is relative to the last complete, same-scope snapshot, never a sale or stock zero.
-      const previous = await env.PRIVATE_DB.prepare(
-        "SELECT run_id FROM research_runs WHERE source_id=? AND query_hash=? AND synthetic=? AND state='complete' AND recorded_at<? AND config_hash IN (SELECT value FROM json_each(?)) ORDER BY recorded_at DESC LIMIT 1",
-      )
-        .bind(
-          source.source_id,
-          queryHash,
-          Number(synthetic),
-          e.observed_at,
-          JSON.stringify([configHash, ...config.history_access.map((h) => h.config_hash)]),
-        )
-        .first<{ run_id: string }>();
-      if (previous) {
-        const rows = (await readResearchRun(env, config, previous.run_id, opt)).results;
+      if (previousGpu) {
+        const rows = previousGpuRows;
         const currentKeys = new Set(page.records.map((r) => r.record_key));
         for (const old of rows) {
-          if (old.change_kind === 'not_seen' || currentKeys.has(String(old.record_key))) continue;
+          const oldKey = legacyKeysById.get(old.observation_id) ?? old.record_key;
+          if (old.change_kind === 'not_seen' || currentKeys.has(oldKey)) continue;
           const tombstone = stable({
-            record_key: old.record_key,
+            record_key: oldKey,
             listing_state: 'not_seen',
             absence_basis: 'same_scope_complete_page',
             previous_observation_id: old.observation_id,
@@ -483,10 +546,10 @@ export async function collectResearchPage(
             env.PRIVATE_DB.prepare(
               `INSERT OR IGNORE INTO ${table}(observation_id,run_id,page_number,record_key,source_url,method_version,observed_at,recorded_at,record_hash,previous_observation_id,change_kind,domain_json) SELECT ?,?,?,?,?,?,?,?,?,?,'not_seen',? WHERE EXISTS(SELECT 1 FROM research_runs WHERE run_id=? AND lease_token=? AND lease_until>?)`,
             ).bind(
-              await hash(stable([runId, old.record_key, 'not_seen'])),
+              await hash(stable([runId, oldKey, 'not_seen'])),
               runId,
               0,
-              old.record_key,
+              oldKey,
               source.source_url,
               config.method_version,
               e.observed_at,
@@ -589,6 +652,7 @@ export async function readAdminGpuSnapshots(
     await env.PRIVATE_DB.prepare(
       `
     SELECT r.*, (SELECT json_group_array(json_object(
+      'observation_id', o.observation_id, 'previous_observation_id', o.previous_observation_id, 'method_version', o.method_version,
       'record_key', o.record_key, 'domain_json', o.domain_json,
       'change_kind', o.change_kind, 'observed_at', o.observed_at
     )) FROM (SELECT * FROM research_gpu_observations WHERE run_id=r.run_id LIMIT 193) o) observations_json
@@ -614,18 +678,14 @@ export async function readAdminGpuSnapshots(
         throw new Error('research_history_scope_unreviewed');
       const expiry = historyExpiry(config, run);
       if (expiry !== null && expiry <= now) throw new Error('research_history_unavailable');
-      const rows = JSON.parse(run.observations_json) as {
-        record_key: string;
-        domain_json: string;
-        change_kind: string;
-        observed_at: string;
-      }[];
+      const rows = JSON.parse(run.observations_json) as GpuHistoryRow[];
       if (rows.length !== run.observation_count || rows.length > 192)
         throw new Error('research_history_unavailable');
       rows.sort((a, b) => a.record_key.localeCompare(b.record_key));
       return { run, rows };
     }),
   );
+  if (config.adapter === 'highreso_public') await resolveHighresoHistory(env, snapshots);
   return { snapshots, truncated: candidates.length > 30 };
 }
 
@@ -658,7 +718,7 @@ export async function readResearchRun(
     `SELECT * FROM ${researchTable(config.adapter)} WHERE run_id=? ORDER BY record_key LIMIT 192`,
   )
     .bind(runId)
-    .all();
+    .all<GpuHistoryRow & { method_version: string; record_hash: string; run_id: string }>();
 }
 
 export async function purgeResearchRun(

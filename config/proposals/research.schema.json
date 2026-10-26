@@ -863,7 +863,8 @@
         "dc-tracker-v1",
         "electricity-research-v1",
         "domestic-gpu-html-v1",
-        "domestic-gpu-html-v2"
+        "domestic-gpu-html-v2",
+        "domestic-gpu-html-v3"
       ]
     },
     "public_access": {

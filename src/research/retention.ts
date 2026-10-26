@@ -1,3 +1,4 @@
+import { isHighresoIdentityUpgrade } from './highreso-identity';
 import { z } from 'zod';
 import {
   assertResearchExecution,
@@ -530,7 +531,8 @@ export async function adoptReviewedResearchConfig(
       prior.adapter !== config.adapter ||
       stable(prior.scope) !== stable(config.scope) ||
       prior.source.source_url !== config.source.source_url ||
-      prior.method_version !== config.method_version ||
+      (prior.method_version !== config.method_version &&
+        !isHighresoIdentityUpgrade(prior, config)) ||
       !prior.source.policy.fields.every((field) => config.source.policy.fields.includes(field))
     )
       throw new Error('research_history_scope_unreviewed');

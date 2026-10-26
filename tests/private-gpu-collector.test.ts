@@ -45,6 +45,7 @@ beforeEach(() => {
         '0009_research_retention_states.sql',
         '0014_research_assessments_append_only.sql',
         '0015_private_gpu_daily.sql',
+        '0018_research_identity_links.sql',
       ].map((name) => ({ name })),
     }),
   };

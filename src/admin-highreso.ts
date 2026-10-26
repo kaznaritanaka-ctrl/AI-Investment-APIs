@@ -71,17 +71,29 @@ export function highresoReader(
           const history = snapshots
             .flatMap((s) => s.rows)
             .filter((r) => r.record_key === row.record_key);
+          const lastChange = history.find(
+            (r) => r.change_kind === 'first_seen' || r.change_kind === 'revised',
+          );
+          const changedFrom = lastChange
+            ? (PublicGpuRecordSchema.parse(JSON.parse(lastChange.domain_json))
+                .instance_id_changed_from ?? null)
+            : null;
           return {
             record_key: record.record_key,
             gpu_model: record.offer.reported_product,
+            ...(changedFrom
+              ? {
+                  instance_id: record.instance_id,
+                  instance_id_changed_from: changedFrom,
+                  identity_change_label: '型番変更' as const,
+                }
+              : {}),
             gpu_count: record.offer.gpu_count,
             price_jpy: record.offer.currency === 'JPY' ? record.offer.amount_decimal : null,
             unit: record.offer.unit,
             tax_status: record.offer.tax_status,
             first_seen: history.find((r) => r.change_kind === 'first_seen')?.observed_at ?? null,
-            last_changed:
-              history.find((r) => r.change_kind === 'first_seen' || r.change_kind === 'revised')
-                ?.observed_at ?? null,
+            last_changed: lastChange?.observed_at ?? null,
           };
         });
       return HighresoLatestPrices.parse({

@@ -17,6 +17,7 @@ const requiredMigrations = [
   '0009_research_retention_states.sql',
   '0014_research_assessments_append_only.sql',
   '0015_private_gpu_daily.sql',
+  '0018_research_identity_links.sql',
 ];
 function logFailure(sourceId: string, phase: string, error: unknown) {
   emitLog({ source_id: sourceId, phase, error_code: safeLogCode(errorCode(error)) });
@@ -26,7 +27,7 @@ function logFailure(sourceId: string, phase: string, error: unknown) {
 async function assertResearchSchema(env: ResearchEnv) {
   try {
     const rows = await env.PRIVATE_DB.prepare(
-      'SELECT name FROM d1_migrations WHERE name IN (?,?,?,?,?)',
+      `SELECT name FROM d1_migrations WHERE name IN (${requiredMigrations.map(() => '?').join(',')})`,
     )
       .bind(...requiredMigrations)
       .all<{ name: string }>();

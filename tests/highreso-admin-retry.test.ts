@@ -156,7 +156,7 @@ it('projects private runs and prices, validates limits, masks errors and fails c
     last_error: 'operation_failed',
   });
   await expect(reader.highresoRuns(31)).rejects.toThrow();
-  // Full 30-run window still uses two D1 round trips.
+  // Full 30-run window uses three bounded D1 round trips, including identity links.
   for (let i = 0; i < 29; i++) {
     await local.env.PRIVATE_DB.prepare(
       `INSERT INTO research_runs (${columns.join(',')}) SELECT ${columns
@@ -187,7 +187,7 @@ it('projects private runs and prices, validates limits, masks errors and fails c
   );
   const started = performance.now();
   const prices = await measured.highresoLatestPrices();
-  expect(queries).toHaveBeenCalledTimes(2);
+  expect(queries).toHaveBeenCalledTimes(3);
   expect(performance.now() - started).toBeLessThan(5000);
   expect(prices.prices).toHaveLength(4);
   expect(prices.prices[0]).toMatchObject({ first_seen: gpuTime, last_changed: gpuTime });

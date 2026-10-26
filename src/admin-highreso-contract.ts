@@ -52,6 +52,9 @@ export const HighresoLatestPrices = z
             tax_status: z.enum(['included', 'excluded', 'unknown']),
             first_seen: timestamp.nullable(),
             last_changed: timestamp.nullable(),
+            instance_id: z.string().nullable().optional(),
+            instance_id_changed_from: z.string().nullable().optional(),
+            identity_change_label: z.literal('型番変更').nullable().optional(),
           })
           .strict(),
       )
