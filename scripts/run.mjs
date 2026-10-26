@@ -28,7 +28,12 @@ const commands = {
   ],
   test: [
     ['node_modules/vitest/vitest.mjs', 'run', ...extra],
-    ['--test', 'scripts/resilience.test.mjs'],
+    [
+      '--test',
+      'scripts/resilience.test.mjs',
+      'scripts/highreso-identity-links.test.mjs',
+      'scripts/highreso-identity.test.mjs',
+    ],
   ],
   build: [
     [

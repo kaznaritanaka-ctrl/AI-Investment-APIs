@@ -38,6 +38,8 @@ const codes = new Set([
   'estat_scope_changed',
   'operation_failed',
   'research_schema_unavailable',
+  'highreso_os_unrecognized',
+  'research_identity_link_conflict',
   'dc_schema_unavailable',
   'dc_robots_disallowed',
   'dc_robots_invalid',

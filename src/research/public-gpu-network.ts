@@ -61,6 +61,7 @@ export async function readReviewedPublicGpu(
 }
 
 export const gpuReviewErrors = [
+  'highreso_os_unrecognized',
   'public_gpu_schema_invalid',
   'http_401',
   'http_403',

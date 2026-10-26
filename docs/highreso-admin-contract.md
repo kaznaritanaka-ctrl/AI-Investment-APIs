@@ -63,7 +63,7 @@ fallback to stale snapshots when the selected snapshot is hidden/expired.
 Disappeared quotes are excluded. At most 192 prices. Current source rights,
 config hash/history approval, retained deadlines, and R2 revocation/deletion
 markers apply through the bounded research snapshot reader; denied/unavailable reads reject.
-The reader uses two D1 queries for up to 30 snapshots (current policy plus snapshot data).
+The reader uses three bounded D1 queries for up to 30 snapshots (current policy, snapshot data, and identity links).
 Expired snapshots or observation-count mismatches reject, including missing rows for a nonempty run. The
 Admin must show an unavailable state, never convert an RPC failure into success.
 An authorized empty history returns null run/timestamp and an empty price list.
@@ -95,3 +95,8 @@ No production migration was performed.
 
 Display source attribution and retain the terms/license references; private_only
 does not grant public redistribution.
+
+2026-10-27 identity compatibility proposal: price entries gain optional `instance_id`,
+`instance_id_changed_from`, and `identity_change_label` (「型番変更」 or null). The
+companion Admin strict validator and #highreso display require a coordinated update.
+See [stable-key rollout and rollback](highreso-stable-key.md). No deployment performed.

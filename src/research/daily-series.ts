@@ -1,3 +1,5 @@
+import { HIGHRESO_METHOD } from './highreso-identity';
+import { resolveHighresoHistory } from './highreso-history';
 import { D, hash, isoTime, stable } from '../util';
 import { isPublicGpu } from './public-gpu-contract';
 import { PublicGpuRecordSchema, type PublicGpuRecord } from './public-gpu-html';
@@ -7,7 +9,7 @@ import { ResearchConfigSchema, type ResearchConfig } from './schema';
 import { historyExpiry, type RetainedRun } from './retention';
 
 // Adapted from PR #18. Rights/review/retention changes do not redefine prices.
-// No aliasing across parser, source, scope, normalization or unit changes.
+// Only Highreso's reviewed identity-only v2/v3 boundary preserves the parser series.
 export function dailySeriesDefinition(config: ResearchConfig) {
   if (!isPublicGpu(config.adapter) || !('models' in config.scope))
     throw new Error('daily_series_scope');
@@ -15,7 +17,11 @@ export function dailySeriesDefinition(config: ResearchConfig) {
     version: 'daily-comparison-v1',
     source_id: config.source.source_id,
     endpoint: config.source.endpoint,
-    method_version: config.method_version,
+    // v3 changes identity only; v2 quote parsing/units/scope remain compatible.
+    method_version:
+      config.adapter === 'highreso_public' && config.method_version === HIGHRESO_METHOD
+        ? 'domestic-gpu-html-v2'
+        : config.method_version,
     scope: {
       models: [...config.scope.models].sort(),
       gpu_counts: 'gpu_counts' in config.scope ? [...(config.scope.gpu_counts ?? [])].sort() : null,
@@ -102,6 +108,7 @@ export async function readPublicGpuHistory(
     // claim complete coverage after dropping it from the result.
     snapshots.push(await snapshot(env, config, run.run_id, opt));
   }
+  if (config.adapter === 'highreso_public') await resolveHighresoHistory(env, snapshots);
   return {
     visibility: 'private_only' as const,
     source: {
@@ -136,7 +143,10 @@ function quoteConditions(record: PublicGpuRecord) {
   void synthetic;
   void amount_decimal;
   void missing_reason;
-  return stable({ ...record, offer });
+  const { instance_id, instance_id_changed_from, ...conditions } = record;
+  void instance_id;
+  void instance_id_changed_from;
+  return stable({ ...conditions, offer });
 }
 export async function comparePublicGpuRuns(
   env: ResearchEnv,
@@ -153,6 +163,7 @@ export async function comparePublicGpuRuns(
     before.scheduled_for >= after.scheduled_for
   )
     throw new Error('daily_series_mismatch');
+  if (config.adapter === 'highreso_public') await resolveHighresoHistory(env, [before, after]);
   const seen = (rows: typeof before.rows) =>
     new Map(
       rows
@@ -167,6 +178,7 @@ export async function comparePublicGpuRuns(
   const changes = [...new Set([...a.keys(), ...b.keys()])].sort().map((key) => {
     const old = a.get(key),
       current = b.get(key);
+    const identityChanged = !!(old && current && old.instance_id !== current.instance_id);
     const state = !current
       ? 'not_seen'
       : !old
@@ -174,7 +186,9 @@ export async function comparePublicGpuRuns(
         : quoteConditions(old) !== quoteConditions(current)
           ? 'conditions_changed'
           : old.offer.amount_decimal === current.offer.amount_decimal
-            ? 'unchanged'
+            ? identityChanged
+              ? 'instance_id_changed'
+              : 'unchanged'
             : 'reported_price_changed';
     const amount = old?.offer.amount_decimal,
       next = current?.offer.amount_decimal;
@@ -188,6 +202,12 @@ export async function comparePublicGpuRuns(
     return {
       record_key: key,
       state,
+      ...(identityChanged
+        ? {
+            instance_id_changed_from: old!.instance_id,
+            identity_change_label: '型番変更' as const,
+          }
+        : {}),
       change_percent,
       economic_comparison:
         old && current

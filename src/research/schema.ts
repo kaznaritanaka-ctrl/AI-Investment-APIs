@@ -30,6 +30,7 @@ export const ResearchConfigSchema = z
       'electricity-research-v1',
       'domestic-gpu-html-v1',
       'domestic-gpu-html-v2',
+      'domestic-gpu-html-v3',
     ]),
     public_access: PublicAccessReviewSchema.optional(),
     dc_access: z
@@ -174,7 +175,11 @@ export const ResearchConfigSchema = z
               ? 'capex_utilization'
               : 'electricity') ||
       (isPublicGpu(v.adapter)
-        ? !['domestic-gpu-html-v1', 'domestic-gpu-html-v2'].includes(v.method_version)
+        ? ![
+            'domestic-gpu-html-v1',
+            'domestic-gpu-html-v2',
+            ...(v.adapter === 'highreso_public' ? ['domestic-gpu-html-v3'] : []),
+          ].includes(v.method_version)
         : v.adapter === 'dc_tracker'
           ? v.method_version !== 'dc-tracker-v1'
           : v.method_version !== 'electricity-research-v1') ||
@@ -226,7 +231,8 @@ export const ResearchConfigSchema = z
     if (isPublicGpu(v.adapter)) {
       if (
         v.scope.kind === 'highreso_public' &&
-        ((v.method_version === 'domestic-gpu-html-v2') !== (v.scope.gpu_counts !== undefined) ||
+        (['domestic-gpu-html-v2', 'domestic-gpu-html-v3'].includes(v.method_version) !==
+          (v.scope.gpu_counts !== undefined) ||
           (v.scope.gpu_counts && new Set(v.scope.gpu_counts).size !== v.scope.gpu_counts.length))
       )
         c.addIssue({ code: 'custom', message: 'public_gpu_cohort_review_required' });
