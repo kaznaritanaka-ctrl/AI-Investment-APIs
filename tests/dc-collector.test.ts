@@ -38,6 +38,8 @@ it('keeps DC disabled by default and ignores non-Monday dispatch without touchin
   const env = environment();
   await runDCTracker({ ...env, DC_TRACKER_ENABLED: 'false' }, monday, monday);
   await runDCTracker(env, '2026-10-27T18:17:00.000Z', monday);
+  await runDCTracker(env, '2026-10-27T18:17:16.915Z', monday);
+  await runDCTracker(env, '2026-10-26T18:20:16.915Z', monday);
   expect(env.PRIVATE_DB.prepare).not.toHaveBeenCalled();
   expect(collectResearchPage).not.toHaveBeenCalled();
 });
@@ -66,6 +68,14 @@ it('runs eight sources independently and keeps existing research authority on ea
   const logs = vi.mocked(console.log).mock.calls.flat().join('');
   expect(logs).toContain('operation_failed');
   expect(logs).not.toContain('untrusted page content');
+});
+
+it('dispatches second-bearing events with the same normalized slot on every invocation', async () => {
+  const env = environment();
+  for (const at of ['2026-10-26T18:17:16.915Z', '2026-10-26T18:17:59.999Z'])
+    await runDCTracker(env, at, at);
+  expect(collectResearchPage).toHaveBeenCalledTimes(16);
+  for (const [, , , at] of vi.mocked(collectResearchPage).mock.calls) expect(at).toBe(monday);
 });
 
 it('keeps retention separate from weekly acquisition, rotating all eight sources on idle turns', async () => {

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dcResearchConfigs } from '../src/research/dc-sources';
 import { dcRobotsAllowed, fetchDCTrackerPage } from '../src/research/dc-network';
 import { dcTrackerTurn } from '../src/research/dc-collector';
+import { dcCollectionSlot } from '../src/research/dc-contract';
 import { assertResearchConfigExecution } from '../src/research/execution';
 import {
   assertResearchAllowed,
@@ -97,12 +98,31 @@ describe('approved DC sources and bounded synthetic transport (no network)', () 
     const enabled = { DC_TRACKER_ENABLED: 'true', COLLECTION_CRON: '17 18 * * *' };
     expect(dcTrackerTurn(enabled, monday)).toBe(true);
     for (const at of [
+      monday,
+      '2026-10-26T18:17:16.915Z',
+      '2026-10-26T18:17:59.999Z',
+      '2026-10-26T18:17:16Z',
+    ]) {
+      expect(dcCollectionSlot(at)).toBe(monday);
+      expect(dcTrackerTurn(enabled, at)).toBe(true);
+    }
+    for (const at of [
       '2026-10-25T18:17:00.000Z',
       '2026-10-27T18:17:00.000Z',
+      '2026-10-27T18:17:16.915Z',
       '2026-10-26T18:47:00.000Z',
       '2026-10-26T18:20:00.000Z',
-    ])
+      '2026-10-26T18:20:16.915Z',
+      '2026-10-26T18:16:59.999Z',
+      '2026-10-26T18:18:00.000Z',
+      '2026-10-26T17:17:16.915Z',
+      '2026-10-26T19:17:16.915Z',
+      'invalid',
+      '2026-10-32T18:17:16.915Z',
+    ]) {
+      expect(dcCollectionSlot(at)).toBeNull();
       expect(dcTrackerTurn(enabled, at)).toBe(false);
+    }
     const production = {
       ENVIRONMENT: 'production',
       DC_TRACKER_ENABLED: 'true',
