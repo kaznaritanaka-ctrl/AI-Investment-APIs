@@ -1,5 +1,57 @@
 import type { Source } from './schema';
 
+const providerKey = (name: string) => name.trim().toLowerCase();
+export function effectstoryProviderExcluded(s: Source, provider: string) {
+  const key = providerKey(provider);
+  return (
+    s.policy.excluded_upstream_providers?.some((entry) =>
+      [entry.provider, ...entry.aliases].some((name) => providerKey(name) === key),
+    ) ?? false
+  );
+}
+
+// These explicit prohibitions cannot silently disappear from a reviewed policy.
+export function effectstoryExclusionsReady(s: Source) {
+  const entries = s.policy.excluded_upstream_providers;
+  return (
+    Array.isArray(entries) &&
+    entries.length > 0 &&
+    entries.every(
+      (entry) =>
+        entry &&
+        typeof entry.provider === 'string' &&
+        entry.provider.trim() &&
+        entry.provider.length <= 120 &&
+        Array.isArray(entry.aliases) &&
+        entry.aliases.length > 0 &&
+        entry.aliases.every(
+          (name) => typeof name === 'string' && name.trim() && name.length <= 120,
+        ) &&
+        typeof entry.reason === 'string' &&
+        entry.reason.trim() &&
+        Array.isArray(entry.evidence_refs) &&
+        entry.evidence_refs.length > 0 &&
+        entry.evidence_refs.every((ref) => typeof ref === 'string' && ref.trim()) &&
+        Object.keys(entry).every((key) =>
+          ['provider', 'aliases', 'reason', 'evidence_refs'].includes(key),
+        ),
+    ) &&
+    [
+      { provider: 'runpod', names: ['runpod', 'runpod.io'] },
+      { provider: 'openrouter', names: ['openrouter'] },
+    ].every(({ provider, names }) =>
+      entries.some(
+        (entry) =>
+          providerKey(entry.provider) === provider &&
+          names.every((name) =>
+            [entry.provider, ...entry.aliases].some((alias) => providerKey(alias) === name),
+          ) &&
+          entry.evidence_refs.includes('docs/license-review-20261021.md#' + provider),
+      ),
+    )
+  );
+}
+
 // Shared by the runtime rights gate and offline preflight; no grants for other
 // GPU sources or arbitrary endpoints follow from the public EffectStory grant.
 export function effectstoryAuthorizationReady(s: Source) {
@@ -18,6 +70,7 @@ export function effectstoryAuthorizationReady(s: Source) {
     s.max_records <= 50 &&
     s.policy.fields.length === 1 &&
     s.policy.fields[0] === 'gpu_projection_v1' &&
+    effectstoryExclusionsReady(s) &&
     s.policy.retention_days === 7 &&
     s.policy.rights.raw_redistribution === 'denied' &&
     s.policy.rights.external_llm_processing === 'denied' &&

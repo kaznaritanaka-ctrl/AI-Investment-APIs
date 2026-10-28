@@ -23,6 +23,7 @@
 price_of_computeは2026-10-06のオーナー承認に基づく非公開H100-SXM PoC（`enabled=true`）。承認済み範囲の収集・非公開保存・内部分析は`allowed`、外部LLM処理・raw再配布は`denied`。公開表示・正規化／派生／商用再配布は`review_required`で、公開不可。対象フィールドと保持期間を含む既存承認は[承認記録](price-of-compute-integration.md#private-collection-proposal-20261006)と`config/sources/price_of_compute.json`を参照。本追記は既存承認の説明訂正であり、権利・policy・enabledの値は変更しない。
 
 ## 注意
+- 2026-10-29 EffectStory 追記: 上表の RunPod / OpenRouter の「非公開（明示禁止）」は非公開保存の許可ではなく、収集・保存不可を意味する。EffectStory の二次価格表でも両提供者を保存前に除外し、件数のみを残す。[除外規則と提示された全22行・RunPod 4行の記録](license-review-effectstory-20261029.md) を参照。この追記で他ソースの承認範囲は変えない。
 - 公開APIやドキュメントのライセンスを、レスポンスデータの再配布権と読み替えていない（repo の rights-policy に従う）。
 - EIA/JEPX は研究提案（config/proposals/research）で、収集はブロックされたまま。判断は記録のみ。
 - 法的助言ではない。⚠ の3件（price_of_compute, ebay_browse, jepx）は提供元への書面確認で公開可否が変わりうる。
