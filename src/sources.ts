@@ -16,6 +16,7 @@ import s13 from '../config/sources/price_of_compute.json';
 import s14 from '../config/sources/ccir.json';
 import s15 from '../config/sources/estat_meti_seidou.json';
 import s16 from '../config/sources/estat_meti_iip.json';
+import s17 from '../config/sources/effectstory.json';
 export const sources = [
   s0,
   s1,
@@ -34,5 +35,6 @@ export const sources = [
   s14,
   s15,
   s16,
+  s17,
 ].map((s) => SourceSchema.parse(s));
 export const activeSources = sources.filter((s) => s.adapter !== 'candidate');

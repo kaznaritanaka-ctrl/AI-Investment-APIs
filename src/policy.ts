@@ -1,5 +1,6 @@
 import type { Source } from './schema';
 import { stable } from './util';
+import { effectstoryAuthorizationReady } from './effectstory-config';
 export function modelsAuthorizationReady(s: Source) {
   if (!s.models) return true;
   const m = s.models,
@@ -90,6 +91,7 @@ export function estatAuthorizationReady(source: Source): boolean {
 export function canCollect(source: Source, now: string): boolean {
   return (
     validPolicy(source, now) &&
+    effectstoryAuthorizationReady(source) &&
     gpuAuthorizationReady(source) &&
     modelsAuthorizationReady(source) &&
     estatAuthorizationReady(source) &&

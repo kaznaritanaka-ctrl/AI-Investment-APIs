@@ -3,7 +3,7 @@ import { runDCTracker, maintainDCTracker } from './research/dc-collector';
 import { privateGpuResearchTurn, runPrivateGpuResearch } from './research/collector';
 import { activeSources } from './sources';
 import { collectAll } from './pipeline';
-import { resumeGPURuns, queueGPURuns } from './gpu-pipeline';
+import { collectGPU, resumeGPURuns, queueGPURuns } from './gpu-pipeline';
 import { expireGPUData } from './gpu-retention';
 import { resumeCollections } from './collection-continuation';
 import { recordSummary, deliverNotifications, watchdog, expireEvidence } from './operations';
@@ -58,9 +58,25 @@ export default {
           )),
           ...(await queueGPURuns(
             env,
-            activeSources,
+            activeSources.filter((s) => s.adapter !== 'effectstory'),
             dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
             now,
+          )),
+          ...(await Promise.all(
+            activeSources
+              .filter((s) => s.adapter === 'effectstory')
+              .map((s) =>
+                observer(
+                  s,
+                  dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
+                  () =>
+                    collectGPU(
+                      env,
+                      s,
+                      dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
+                    ),
+                ),
+              ),
           )),
         ];
       else if (controller.cron === env.GPU_RESUME_CRON) {

@@ -7,6 +7,8 @@
 Cloudflare Cron → collector Worker → 取得/保存の独立policy gate → 決定的HTTP → private R2証拠 → private D1の追記履歴 → 品質/公開gate → public D1。
 API Workerはpublic D1のみをbindし、GET/HEAD以外を拒否する。AI runtimeは接続しない。
 
+2026-10-29追加: EffectStory の公開価格は既存 GPU 保存・完全 snapshot・公開 projection を使う。日次枠で source ごと UTC 日に最大 1 HTTP とし、再開は保存済み投影のみ。公開先に非公開 GPU ソースを混ぜない。migration は追加しない。[上限、保持、共有枠と配備後確認](effectstory.md)。
+
 初期範囲はECB EUR/USD・EUR/JPY原系列とModels.devのMistral 2モデル。USD/JPYは加工した計算結果として明示する。Models.devの全市場網羅を主張しない。カタログ全体はサイズ上限付きで読み、価格・識別子・比較条件の許可した部分だけを証拠保存する。ロゴ・説明文・認証情報は保存しない。ライセンスの根拠はsource-register参照。
 
 ## 時系列と故障境界

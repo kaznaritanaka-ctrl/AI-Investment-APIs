@@ -113,6 +113,7 @@ export const SourceSchema = z
       'sakura_dok',
       'ebay_browse',
       'price_of_compute',
+      'effectstory',
       'estat',
     ]),
     gpu: GPUConfigSchema.optional(),

@@ -43,6 +43,14 @@ const bundled = await build({
       .replace(
         'async fetch(request,env){',
         "async fetch(request,env){\nif(new URL(request.url).pathname.startsWith('/collection-'))return collectionRuntime(request,env);",
+      )
+      .replace(
+        'export default {',
+        "import {effectstoryRuntime} from './tests/effectstory-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        "async fetch(request,env){\nif(new URL(request.url).pathname==='/effectstory')return effectstoryRuntime(env);",
       ),
     resolveDir: process.cwd(),
     sourcefile: 'runtime-harness.ts',
@@ -125,6 +133,46 @@ try {
   );
   console.log(
     'Workerd operational check, notification dry-run, failure and recovery passed. Synthetic delivery only.',
+  );
+  const effectstoryResponse = await mf.dispatchFetch('https://local.test/effectstory');
+  assert.equal(effectstoryResponse.status, 200);
+  const effectstory = await effectstoryResponse.json();
+  assert.equal(effectstory.results.at(-1).state, 'complete', JSON.stringify(effectstory.results));
+  assert.equal(effectstory.requests.length, 1);
+  assert.deepEqual(effectstory.requests[0], {
+    url: 'https://effectstory.com/en/data/cloud-gpu-pricing',
+    method: 'GET',
+    user_agent:
+      'AIInvestmentResearch/0.1 (+https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs; private-research)',
+  });
+  assert.equal(effectstory.status, 200);
+  assert.equal(effectstory.body.data.length, 3);
+  for (const row of effectstory.body.data) {
+    assert.equal(row.data_origin, 'synthetic');
+    assert.equal(row.source.source_id, 'effectstory');
+    assert.equal(row.reuse.license_url, 'https://creativecommons.org/licenses/by/4.0/');
+    assert.equal(
+      row.attribution,
+      'Data: EffectStory, Cloud GPU Hourly Pricing (https://effectstory.com/en/data/cloud-gpu-pricing), CC BY 4.0',
+    );
+  }
+  const gb300 = effectstory.body.data.find((row) => row.value.provider === 'SyntheticCloud');
+  const unknown = effectstory.body.data.find((row) => row.value.provider === 'ImaginaryCompute');
+  const b300 = effectstory.body.data.find((row) => row.value.provider === 'ExampleCloud');
+  assert.equal(gb300.value.accelerator_model, 'GB300');
+  assert.equal(gb300.value.amount_decimal, '12.340');
+  assert.deepEqual(gb300.value.effectstory, {
+    gpu_label: 'GB300 NVL72',
+    basis: 'Invented rack offer',
+    checked_date: '2026-10-26',
+    source_url: 'https://effectstory.com/en/data/cloud-gpu-pricing',
+  });
+  assert.equal(gb300.source_date, '2026-10-26');
+  assert.equal(unknown.value.accelerator_model, null);
+  assert.equal(unknown.value.amount_decimal, '3.50');
+  assert.equal(b300.value.accelerator_model, 'B300');
+  console.log(
+    'EffectStory workerd passed: synthetic table, one mock HTTP and public API attribution.',
   );
   const collectionProfiles = [];
   const collectionStep = async (path) => {

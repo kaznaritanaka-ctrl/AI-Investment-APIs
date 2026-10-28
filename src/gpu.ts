@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { DecimalString, type Source, type Evidence } from './schema';
 import catalogData from '../config/gpu-catalog.json';
 import { ATTRIBUTION, PROJECTION_VERSION } from './price-of-compute';
+import { EffectStoryRow } from './effectstory';
 const currency = z.string().regex(/^[A-Z]{3}$/);
 const country = z
   .string()
@@ -96,6 +97,7 @@ export const GPURentalObject = rentalBase
     serving_provider: z.string(),
     // Additive and source-scoped: legacy GPU records keep their shape and identity.
     price_of_compute: PriceOfComputeQuote.optional(),
+    effectstory: EffectStoryRow.optional(),
     sale_unit: z.enum(['single_gpu', 'multi_gpu_lot', 'server', 'rack', 'unknown']),
     price_scope: z.enum(['public', 'account_specific', 'promotion', 'unknown']),
     minimum_gpu_count: z.number().int().positive().nullable(),

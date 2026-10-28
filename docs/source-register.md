@@ -1,5 +1,9 @@
 # ソース台帳 — Phase 0
 
+## 2026-10-29 EffectStory 公開価格表（所有者承認済み）
+
+Kaz は 2026-10-29 00:00 JST に EffectStory の公開データ追加を承認した。対象は [Cloud GPU Hourly Pricing](https://effectstory.com/en/data/cloud-gpu-pricing) の Full table、ライセンスは [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)、権利確認日は 2026-10-29。各公開行には `Data: EffectStory, Cloud GPU Hourly Pricing (https://effectstory.com/en/data/cloud-gpu-pricing), CC BY 4.0` を付ける。価格はプロバイダー自身の価格ページに由来するが、その上流ライセンスは未確認。ページ・robots の確認経緯と公開範囲は [個別レビュー](license-review-effectstory-20261029.md) を参照。Price of Compute、Highreso/GPUSOROBAN、研究データの公開権限は変更しない。
+
 ## 2026-10-22 e-Stat公開用2統計（所有者承認済み・収集有効 PR #35）
 
 所有者承認 `Kaz owner approval 2026-10-22T09:43Z estat` を反映し、経済産業省生産動態統計00550200と鉱工業指数00550300を `config/sources/estat_meti_seidou.json` / `estat_meti_iip.json` に登録した。取得・非公開保存・内部分析・公開表示・正規化再配布・派生再配布・商用再配布はallowed、raw再配布と外部LLM処理はdenied。（当初は両source enabled=false。2026-10-22夜、PR #35で署名登録のうえ両source enabled=true・ESTAT_ENABLED=trueに変更。詳細は supply-chain-stats.md「有効化」）。登録時点では新しい実観測・実HTTP・Secret作成・本番操作は0件。
