@@ -13,7 +13,8 @@ import {
 import { type Partition, validateNextURL } from './request-plan';
 import { stable, hash, decimal, D, isoTime, isoDate } from './util';
 import { projectPriceOfCompute } from './price-of-compute';
-import { parseEffectStory } from './effectstory';
+import { EffectStoryMetadata, parseEffectStory } from './effectstory';
+import { effectstoryExclusionsReady, effectstoryProviderExcluded } from './effectstory-config';
 type Obj = Record<string, unknown>;
 const object = (v: unknown): Obj => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('gpu_schema_invalid');
@@ -170,6 +171,7 @@ export async function gpuEvidenceFromBody(
   let total: number | null = null,
     next: number | null = null,
     received = 0;
+  let effectstoryMetadata: { dropped_count: number } | null = null;
   const keep = (fn: () => GPURental | GPUSecondary) => {
     try {
       const d = fn();
@@ -297,8 +299,15 @@ export async function gpuEvidenceFromBody(
   } else if (effectstory) {
     if (page !== 0 || s.source_id !== 'effectstory')
       throw new Error('gpu_source_metadata_mismatch');
-    received = total = effectstory.length;
-    for (const [index, row] of effectstory.entries()) {
+    if (!effectstoryExclusionsReady(s)) throw new Error('effectstory_exclusions_not_approved');
+    // The parser has already enforced the 50-row cap on the unfiltered table.
+    // Excluded rows never reach projected evidence, hashes of offers or storage.
+    const allowed = [...effectstory.entries()].filter(
+      ([_index, row]) => !effectstoryProviderExcluded(s, row.provider),
+    );
+    effectstoryMetadata = { dropped_count: effectstory.length - allowed.length };
+    received = total = allowed.length;
+    for (const [index, row] of allowed) {
       const { provider, amount_decimal, ...metadata } = row;
       const offer = await hash(stable([provider, row.gpu_label, row.basis]));
       const d = emptyRental(provider, offer, row.gpu_label, synthetic);
@@ -374,7 +383,11 @@ export async function gpuEvidenceFromBody(
     issues.push('future_listing_date');
   const { records: _rows, ...pocMetadata } = poc ?? { records: [] };
   const metadata = poc ? PriceOfComputeMetadata.parse(pocMetadata) : null;
-  const body = stable({ records, ...(metadata ? { price_of_compute: metadata } : {}) });
+  const body = stable({
+    records,
+    ...(metadata ? { price_of_compute: metadata } : {}),
+    ...(effectstoryMetadata ? { effectstory: effectstoryMetadata } : {}),
+  });
   return {
     format: 'gpu_projection_v1',
     body,
@@ -406,6 +419,17 @@ export function parseGPUProjection(s: Source, e: Evidence): Candidate[] {
   const root = object(JSON.parse(e.body));
   if (!Array.isArray(root.records) || root.records.length > s.max_records)
     throw new Error('gpu_evidence_invalid');
+  if (s.adapter === 'effectstory') {
+    if (!effectstoryExclusionsReady(s)) throw new Error('effectstory_exclusions_not_approved');
+    const { dropped_count } = EffectStoryMetadata.parse(root.effectstory);
+    if (
+      root.records.length + dropped_count > Math.min(s.max_records, 50) ||
+      root.records.length + dropped_count === 0 ||
+      e.gpu_page.received_count !== root.records.length ||
+      e.gpu_page.reported_total !== root.records.length
+    )
+      throw new Error('gpu_evidence_invalid');
+  }
   const metadata =
     s.adapter === 'price_of_compute' ? PriceOfComputeMetadata.parse(root.price_of_compute) : null;
   if (
@@ -433,6 +457,8 @@ export function parseGPUProjection(s: Source, e: Evidence): Candidate[] {
     const poc = 'price_of_compute' in domain ? domain.price_of_compute : undefined;
     const es = 'effectstory' in domain ? domain.effectstory : undefined;
     if (s.adapter === 'effectstory') {
+      if ('provider' in domain && effectstoryProviderExcluded(s, domain.provider))
+        throw new Error('effectstory_excluded_provider');
       if (
         !es ||
         s.source_id !== 'effectstory' ||

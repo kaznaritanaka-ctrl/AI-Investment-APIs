@@ -6,6 +6,9 @@ import { isoDate } from './util';
 export const EFFECTSTORY_URL = 'https://effectstory.com/en/data/cloud-gpu-pricing';
 export const EFFECTSTORY_ATTRIBUTION =
   'Data: EffectStory, Cloud GPU Hourly Pricing (https://effectstory.com/en/data/cloud-gpu-pricing), CC BY 4.0';
+export const EffectStoryMetadata = z
+  .object({ dropped_count: z.number().int().min(0).max(50) })
+  .strict();
 export const EffectStoryRow = z
   .object({
     gpu_label: z.string().min(1).max(256),

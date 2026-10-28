@@ -15,6 +15,176 @@ import { effectstoryHTML, effectstoryTime as time } from './effectstory-helpers'
 import { inspectPreflight } from '../scripts/preflight-core';
 import deployment from '../config/deployment.json';
 import { sources } from '../src/sources';
+import { SourceSchema } from '../src/schema';
+
+const projectedEvidence = (rows: string[][], s = source('effectstory')) =>
+  gpuEvidenceFromBody(
+    s,
+    s.gpu!.partitions[0],
+    'snap',
+    'scope',
+    0,
+    time,
+    effectstoryHTML(rows),
+    time,
+    true,
+  );
+const syntheticRow = (provider: string, label = 'GB300 NVL72') => [
+  provider,
+  label,
+  '$4.500/GPU-hr',
+  'Synthetic basis',
+  '2026-10-26',
+];
+
+it.each([
+  'RunPod',
+  'Runpod',
+  ' Runpod.io ',
+  '\tRUNPOD\n',
+  ' rUnPoD.Io ',
+  'OpenRouter',
+  ' OPENROUTER ',
+])('drops %j before projecting evidence and keeps only count metadata', async (provider) => {
+  const evidence = await projectedEvidence([
+    syntheticRow(provider, 'EXCLUDED_ROW_CONTENT'),
+    syntheticRow('Synthetic RunPod Partner'),
+  ]);
+  const body = JSON.parse(evidence.body);
+  expect(body.effectstory).toEqual({ dropped_count: 1 });
+  expect(body.records.map((r: any) => r.provider)).toEqual(['Synthetic RunPod Partner']);
+  expect(evidence.body).not.toContain('EXCLUDED_ROW_CONTENT');
+  expect(evidence.gpu_page).toMatchObject({ received_count: 1, reported_total: 1, complete: true });
+  expect(parseGPUProjection(source('effectstory'), evidence)).toHaveLength(1);
+});
+
+it('measures the row cap before exclusion, including all-excluded pages', async () => {
+  const rows = Array.from({ length: 50 }, (_, i) => syntheticRow('RunPod', 'Synthetic GPU ' + i));
+  const evidence = await projectedEvidence(rows);
+  expect(JSON.parse(evidence.body)).toEqual({ records: [], effectstory: { dropped_count: 50 } });
+  expect(parseGPUProjection(source('effectstory'), evidence)).toEqual([]);
+  await expect(projectedEvidence([...rows, syntheticRow('OpenRouter')])).rejects.toThrow(
+    'effectstory_record_limit',
+  );
+  const limited = source('effectstory');
+  limited.max_records = 1;
+  await expect(projectedEvidence(rows.slice(0, 2), limited)).rejects.toThrow(
+    'effectstory_record_limit',
+  );
+});
+
+it('applies additional provider exclusions from the reviewed policy', async () => {
+  const s = source('effectstory');
+  s.policy.excluded_upstream_providers!.push({
+    provider: 'Synthetic Restricted',
+    aliases: ['Synthetic Restricted Alias'],
+    reason: 'Synthetic prohibition',
+    evidence_refs: ['synthetic-review'],
+  });
+  const evidence = await projectedEvidence(
+    [syntheticRow(' SYNTHETIC RESTRICTED ALIAS '), syntheticRow('Synthetic Allowed')],
+    s,
+  );
+  expect(JSON.parse(evidence.body).effectstory).toEqual({ dropped_count: 1 });
+  expect(parseGPUProjection(s, evidence)).toHaveLength(1);
+  expect(evidence.body).not.toContain('RESTRICTED');
+});
+
+it('rejects excluded providers and invalid exclusion metadata during evidence replay', async () => {
+  const s = source('effectstory');
+  const evidence = await projectedEvidence([syntheticRow('Synthetic Allowed')]);
+  expect(JSON.parse(evidence.body).effectstory).toEqual({ dropped_count: 0 });
+  for (const provider of [' Runpod.io ', 'RunPod', ' OPENROUTER ']) {
+    const body = JSON.parse(evidence.body);
+    body.records[0].provider = provider;
+    expect(() => parseGPUProjection(s, { ...evidence, body: JSON.stringify(body) })).toThrow(
+      'effectstory_excluded_provider',
+    );
+  }
+  for (const metadata of [
+    undefined,
+    { dropped_count: -1 },
+    { dropped_count: 0.5 },
+    { dropped_count: 50 },
+    { dropped_count: 0, rows: ['forbidden'] },
+  ]) {
+    const body = { ...JSON.parse(evidence.body), effectstory: metadata };
+    expect(() => parseGPUProjection(s, { ...evidence, body: JSON.stringify(body) })).toThrow();
+  }
+});
+
+it('requires both provider prohibitions, aliases, reasons and evidence in schema and preflight', async () => {
+  const collector = JSON.parse(readFileSync('wrangler.collector.jsonc', 'utf8'));
+  const api = JSON.parse(readFileSync('wrangler.api.jsonc', 'utf8'));
+  const s = source('effectstory');
+  for (const mutate of [
+    (x: typeof s) => {
+      delete x.policy.excluded_upstream_providers;
+    },
+    (x: typeof s) => {
+      x.policy.excluded_upstream_providers = [];
+    },
+    (x: typeof s) => {
+      x.policy.excluded_upstream_providers!.pop();
+    },
+    (x: typeof s) => {
+      x.policy.excluded_upstream_providers!.shift();
+    },
+    (x: typeof s) => {
+      x.policy.excluded_upstream_providers![0].aliases = ['RunPod'];
+    },
+    (x: typeof s) => {
+      x.policy.excluded_upstream_providers![0].reason = ' ';
+    },
+    (x: typeof s) => {
+      x.policy.excluded_upstream_providers![0].evidence_refs = [];
+    },
+    (x: typeof s) => {
+      x.policy.excluded_upstream_providers![0].evidence_refs = ['unreviewed'];
+    },
+    ...[
+      'null',
+      '{}',
+      '[null]',
+      '[{"provider":123}]',
+      '[{"provider":"RunPod","reason":"reason","evidence_refs":["ref"]}]',
+      '[{"provider":"RunPod","aliases":[123],"reason":"reason","evidence_refs":["ref"]}]',
+      '[{"provider":"RunPod","aliases":["Runpod.io"],"reason":null,"evidence_refs":["ref"]}]',
+      '[{"provider":"RunPod","aliases":["Runpod.io"],"reason":"reason","evidence_refs":[null]}]',
+    ].map((json) => (x: typeof s) => {
+      x.policy.excluded_upstream_providers = JSON.parse(json);
+    }),
+  ]) {
+    const bad = structuredClone(s);
+    mutate(bad);
+    expect(canCollect(bad, time)).toBe(false);
+    expect(canPublish(bad, time)).toBe(false);
+    expect(
+      inspectPreflight(
+        deployment,
+        collector,
+        api,
+        sources.map((x) => (x.source_id === s.source_id ? bad : x)),
+      ).blockers,
+    ).toContain('effectstory:effectstory_scope_not_approved');
+    await expect(projectedEvidence([syntheticRow('RunPod')], bad)).rejects.toThrow(
+      'effectstory_exclusions_not_approved',
+    );
+  }
+  for (const entry of [
+    { provider: 'RunPod', aliases: [], reason: 'reason', evidence_refs: ['ref'] },
+    { provider: 'RunPod', aliases: [' '], reason: 'reason', evidence_refs: ['ref'] },
+    { provider: 'RunPod', aliases: ['RunPod'], reason: ' ', evidence_refs: ['ref'] },
+    { provider: 'RunPod', aliases: ['RunPod'], reason: 'reason', evidence_refs: [] },
+  ]) {
+    expect(
+      SourceSchema.safeParse({
+        ...s,
+        policy: { ...s.policy, excluded_upstream_providers: [entry] },
+      }).success,
+    ).toBe(false);
+  }
+});
 
 it('projects only the reviewed table, with decimal precision and published text preserved', async () => {
   const rows = parseEffectStory(effectstoryHTML(), time);
@@ -151,6 +321,69 @@ describe('EffectStory storage and transport', () => {
         now,
       )
     ).json() as Promise<any>;
+
+  it.each([false, true])(
+    'never persists excluded row contents (all excluded: %s)',
+    async (allExcluded) => {
+      const rows = [
+        ...['RunPod', 'Runpod', ' Runpod.io ', ' RUNPOD '].map((p, i) =>
+          syntheticRow(p, 'EXCLUDED_ROW_CONTENT_' + i),
+        ),
+        ...(allExcluded
+          ? [syntheticRow('OpenRouter', 'EXCLUDED_ROW_CONTENT_4')]
+          : Array.from({ length: 18 }, (_, i) => syntheticRow('Synthetic Allowed ' + i))),
+      ];
+      const s = source('effectstory');
+      const opts = {
+        synthetic: true,
+        now: () => time,
+        network: {
+          fetcher: (async () =>
+            new Response(effectstoryHTML(rows), {
+              headers: { 'content-type': 'text/html' },
+            })) as typeof fetch,
+        },
+      };
+      let state;
+      for (let i = 0; i < 3; i++) {
+        state = (await collectSource(env(), s, time, opts)).state;
+        if (state === 'complete' || state === 'failed') break;
+      }
+      expect(state).toBe('complete');
+      expect(local.objects.size).toBeGreaterThan(0);
+      for (const [key, stored] of local.objects) {
+        expect(stored.body).not.toContain('EXCLUDED_ROW_CONTENT');
+        expect(stored.body).not.toMatch(/runpod|openrouter/i);
+        const evidence = JSON.parse(stored.body);
+        if (key.startsWith('evidence/')) {
+          const body = JSON.parse(evidence.body);
+          expect(body.effectstory).toEqual({ dropped_count: allExcluded ? 5 : 4 });
+          expect(body.records).toHaveLength(allExcluded ? 0 : 18);
+        } else {
+          expect(key).toMatch(/^archive\//);
+          expect(evidence.observations).toHaveLength(allExcluded ? 0 : 18);
+        }
+      }
+      for (const [db, table] of [
+        [local.env.PRIVATE_DB, 'observations'],
+        [local.env.PUBLIC_DB, 'published_observations'],
+      ] as const) {
+        const observations = (await db.prepare('SELECT * FROM ' + table).all()).results;
+        expect(observations).toHaveLength(allExcluded ? 0 : 18);
+        expect(JSON.stringify(observations)).not.toContain('EXCLUDED_ROW_CONTENT');
+      }
+      const rentals = (
+        await local.env.PRIVATE_DB.prepare('SELECT provider FROM gpu_rental').all<{
+          provider: string;
+        }>()
+      ).results;
+      expect(rentals).toHaveLength(allExcluded ? 0 : 18);
+      expect(rentals.every((r) => r.provider.startsWith('Synthetic Allowed '))).toBe(true);
+      const coverage = (await api('/v1/gpu/coverage?source=effectstory')).data;
+      expect(coverage).toHaveLength(1);
+      expect(coverage[0].coverage).toBe('complete');
+    },
+  );
 
   it('publishes EffectStory rows only, with license, attribution, immutable daily snapshots and R2 expiry', async () => {
     const s = source('effectstory');

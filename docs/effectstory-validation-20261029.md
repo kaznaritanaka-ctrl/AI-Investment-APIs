@@ -2,6 +2,22 @@
 
 対象: `codex/effectstory`、基点 `9361a65510edfce1da6abf64b4d54ff2f483b570`。ネットワーク取得・push・デプロイ・remote migration は実施していない。テスト入力はすべて合成。提供済みの権利確認記録だけを使った。
 
+## 保存前除外の追加検証（基点 `cc12dde`）
+
+中断時の未コミット差分を引き継ぎ、RunPod / Runpod.io / OpenRouter を保存前に除外する policy v2 を検証した。大文字小文字・前後空白、設定からの追加除外、除外前の50行上限、全行除外、再開時の混入拒否、壊れた設定での停止を合成テストで確認。22行中4行除外の合成ケースではR2証拠・archiveとprivate/public DBに18行だけが残り、全行除外では0行となる。除外行の内容は保存せず、`effectstory.dropped_count` のみを追加する。提供された実ページの行数や規約は再取得していない。
+
+ローカルに既存の Node 24.22.0 を使い、`npm run check`、EffectStory 2ファイル39件（補助Node test 3件も成功）、`npm run build`、生成schema、offline preflight（`ready:true`、`network_performed:false`）を確認した。実行可能なオフライン回帰試験は29ファイル372件成功後、追加した設定参照テストを含むEffectStory 39件も成功。全体試験（`--bail=1`）と `test:runtime` は、従来と同じ `listen EPERM 127.0.0.1` によりMiniflare起動時に停止し、全体成功とは扱わない。ネットワーク接続・commit・Claude Code相互レビューは行っていない。
+
+## GPU runtime のページ数回帰（基点 `cc12dde`）
+
+原因は `scripts/runtime-smoke.mjs` に追加した EffectStory シナリオが、後続の既存 GPU scale テストと同じ Miniflare の D1/R2 を使っていたこと。EffectStory が保存した1ページも `tests/gpu-runtime-harness.ts` の全体 `SELECT COUNT(*) FROM gpu_pages` に含まれ、eBay の22ページと合わせて23になっていた。既存 adapter のページ分割を変更した結果ではない。
+
+EffectStory シナリオだけ独立した Miniflare に分離し、同じ migration を適用して終了時に破棄する。EffectStory に1ページが保存され、既存テスト側のページ数が増えないことも検査する。既存の `assert.equal(verified.pages, 22)` と GPU harness の COUNT、production の取得・保存処理は変更していない。引き継いだ未コミットの除外リスト編集も保持した。
+
+実 SQLite のオフライン診断で既存 GPU harness と EffectStory harness を呼び、共有DBでは eBay=22 / EffectStory=1 / 合計23、独立DBでは eBay=22 を確認。両ケースで1051観測、23回の処理呼出し、中央値625が一致した（最後の呼出し等はページ数と別）。これは workerd の検証ではない。`npm run check`、オフライン単体試験29ファイル373件と補助Node試験3件、`npm run build` が成功。`test:runtime` は指示どおり未実行。ネットワーク接続・commit は行っていない。
+
+以下は初回実装時点の記録。
+
 ## 結果と未完了
 
 | 確認 | 結果 |
