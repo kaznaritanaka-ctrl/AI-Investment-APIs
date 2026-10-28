@@ -65,7 +65,7 @@ export function gpuRequestPlan(
   } else if (page !== 0 || Object.keys(p.query).length) throw new Error('query_not_allowed');
   if (s.adapter === 'effectstory')
     headers['user-agent'] =
-      'AIInvestmentResearch/0.1 (+https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs; private-research)';
+      'AIInvestmentResearch/0.1 (+https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs; public-data-collection)';
   return { url: url.toString(), method: 'GET', headers };
 }
 export function validateNextURL(

@@ -2,6 +2,14 @@
 
 対象: `codex/effectstory`、基点 `9361a65510edfce1da6abf64b4d54ff2f483b570`。ネットワーク取得・push・デプロイ・remote migration は実施していない。テスト入力はすべて合成。提供済みの権利確認記録だけを使った。
 
+## main / PR #43 取り込み後の共有枠修正
+
+後半の予算は Models 54＋PoC 3 SKU×4＋余裕 2＝68 のまま維持した。EffectStory は既存 continuation の 18:00 UTC に取得、18:05 / 18:10 に保存済み証拠から再開、18:15 に保持期限処理を行い、後半には入れない。50 行の完全置換が取得＋再開 2 回以内で完了し、50 行ちょうどの削除も membership の空確認を経て保持期限処理 1 回で purged になることを実 SQLite で検証した。削除処理の SQL 文数は private/public 合計でも 1000 未満。source の絞り込みを再開対象の SQL LIMIT より前に行う回帰試験も追加した。
+
+User-Agent を `public-data-collection` に変更。カタログの `version`（出力の `classification_version`）を `20261029.1` に更新した。PoC の H100 基準値は版番号だけを旧版へ揃えて内容の一致を確認し、cohort・scope・run identity の従来の固定値検証を維持した。
+
+既存の Node 24.21.0 で `npm run -s check`、オフライン Vitest 30 ファイル384件、補助 Node test 3件、Collector/API の dry-run build、生成 schema / OpenAPI（追跡ファイルの差分なし）、offline preflight（`ready:true`）が成功。全体の `npm test` も実行したが、既存 PoC integration の Miniflare 起動が `listen EPERM 127.0.0.1` で停止した（`--bail=1` で同じ原因を確認）。`test:runtime` も同じ環境制限で停止。全体成功・runtime 成功とは扱わない。Claude Code `claude-sonnet-5-5` の読取専用レビューは CLI の未ログインにより実行できなかった。新規ログイン・commit・push・配備・実ソース取得は行っていない。現行の枠配分は [共有枠](effectstory.md#shared-budget) を参照。以下の過去記録にある 03:17 JST での EffectStory 取得は、この変更で 03:00 JST へ移した。
+
 ## 保存前除外の追加検証（基点 `cc12dde`）
 
 中断時の未コミット差分を引き継ぎ、RunPod / Runpod.io / OpenRouter を保存前に除外する policy v2 を検証した。大文字小文字・前後空白、設定からの追加除外、除外前の50行上限、全行除外、再開時の混入拒否、壊れた設定での停止を合成テストで確認。22行中4行除外の合成ケースではR2証拠・archiveとprivate/public DBに18行だけが残り、全行除外では0行となる。除外行の内容は保存せず、`effectstory.dropped_count` のみを追加する。提供された実ページの行数や規約は再取得していない。

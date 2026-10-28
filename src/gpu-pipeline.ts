@@ -10,6 +10,7 @@ import { finalizeGPUMetrics } from './gpu-metrics';
 import { collectionIdentity, dailyCollectionSlot, minuteSlot } from './run-identity';
 import { observe, type SourceObserver } from './telemetry';
 import { priceOfComputeReservation } from './price-of-compute';
+import { EFFECTSTORY_COLLECTION_CRON } from './effectstory-schedule';
 const nextUTCDate = (now: string) =>
   new Date(Date.parse(now.slice(0, 10) + 'T00:00:00.000Z') + 86400000).toISOString();
 export async function collectGPU(
@@ -266,7 +267,7 @@ export async function collectGPU(
                 : s.adapter === 'effectstory'
                   ? ((async (input: RequestInfo | URL, init?: RequestInit) => {
                       if (
-                        dailyCollectionSlot(env.COLLECTION_CRON, Date.parse(now())) !==
+                        dailyCollectionSlot(EFFECTSTORY_COLLECTION_CRON, Date.parse(now())) !==
                         minuteSlot(scheduled)
                       )
                         throw new FetchFailure('effectstory_no_backfill', nextUTCDate(now()));
@@ -482,10 +483,14 @@ export async function resumeGPURuns(
   savedOnly = false,
   observer?: SourceObserver,
 ) {
+  const ids = sources.filter((s) => s.gpu).map((s) => s.source_id);
+  if (!ids.length) return [];
   const runs = await env.PRIVATE_DB.prepare(
-    "SELECT r.source_id,r.scheduled_for FROM collection_runs r JOIN sources s USING(source_id) WHERE json_extract(s.config_json,'$.gpu') IS NOT NULL AND r.state IN ('pending','fetching','failed') AND (r.next_attempt_at IS NULL OR r.next_attempt_at<=?) AND (r.lease_until IS NULL OR r.lease_until<?) ORDER BY r.last_progress_at ASC,r.scheduled_for DESC LIMIT 1",
+    "SELECT r.source_id,r.scheduled_for FROM collection_runs r JOIN sources s USING(source_id) WHERE json_extract(s.config_json,'$.gpu') IS NOT NULL AND r.source_id IN (" +
+      ids.map(() => '?').join(',') +
+      ") AND r.state IN ('pending','fetching','failed') AND (r.next_attempt_at IS NULL OR r.next_attempt_at<=?) AND (r.lease_until IS NULL OR r.lease_until<?) ORDER BY r.last_progress_at ASC,r.scheduled_for DESC LIMIT 1",
   )
-    .bind(now, now)
+    .bind(...ids, now, now)
     .all<{ source_id: string; scheduled_for: string }>();
   const results: RunResult[] = [];
   for (const r of runs.results) {

@@ -10,7 +10,7 @@ const html = `<!doctype html><html><body><h2>Full table</h2><table>
 <tr><td>ImaginaryCompute</td><td>Mystery GPU</td><td>$3.50/GPU-hr</td><td>Invented test offer</td><td>2026-10-27</td></tr>
 <tr><td>ExampleCloud</td><td>HGX B300</td><td>$6.00/GPU-hr</td><td>Invented node offer</td><td>2026-10-27</td></tr></tbody>
 </table></body></html>`;
-const now = '2026-10-29T18:17:00.000Z';
+const now = '2026-10-29T18:00:00.000Z';
 
 export async function effectstoryRuntime(env: CollectorEnv) {
   const source = sources.find((s) => s.source_id === 'effectstory');

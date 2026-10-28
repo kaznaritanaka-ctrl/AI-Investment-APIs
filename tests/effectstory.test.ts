@@ -6,6 +6,8 @@ import { canCollect, canPublish } from '../src/policy';
 import { fetchGPURequest } from '../src/network';
 import { collectSource } from '../src/pipeline';
 import { queueGPURuns, resumeGPURuns } from '../src/gpu-pipeline';
+import { collectGPU } from '../src/gpu-pipeline';
+import { expireGPUData } from '../src/gpu-retention';
 import { handle } from '../src/api';
 import { source } from './helpers';
 import { effectstoryOfflineEnv } from './effectstory-offline-env';
@@ -423,12 +425,12 @@ describe('EffectStory storage and transport', () => {
     ).results;
     expect(artifacts).toHaveLength(2);
     for (const a of artifacts) {
-      expect(a.expires_at).toBe('2026-11-05T18:17:00.000Z');
+      expect(a.expires_at).toBe('2026-11-05T18:00:00.000Z');
       expect(await (await local.env.EVIDENCE.get(a.artifact_ref))!.text()).not.toMatch(
         /<table|__next_f/,
       );
     }
-    const next = '2026-10-30T18:17:00.000Z';
+    const next = '2026-10-30T18:00:00.000Z';
     const nextOpts = { ...opts, now: () => next };
     await collectSource(env(), s, next, nextOpts);
     await collectSource(env(), s, next, nextOpts);
@@ -578,7 +580,11 @@ describe('EffectStory storage and transport', () => {
       };
       const states = [];
       for (let i = 0; i < 3; i++) {
-        const result = await collectSource(env(), s, at, opts);
+        const result = await collectGPU(env(), s, at, {
+          ...opts,
+          now: () => new Date(Date.parse(at) + i * 5 * 60000).toISOString(),
+          savedOnly: i > 0,
+        });
         states.push(result.state);
         if (result.state === 'complete') break;
       }
@@ -586,14 +592,16 @@ describe('EffectStory storage and transport', () => {
       return states;
     };
     expect(await run(time, 'First synthetic ')).toHaveLength(2);
-    const next = '2026-10-30T18:17:00.000Z';
+    const next = '2026-10-30T18:00:00.000Z';
     expect(await run(next, 'Replacement synthetic ')).toHaveLength(3);
     expect(calls).toBe(2);
-    expect((await api('/v1/latest?dataset=gpu_rental&source=effectstory', next)).data).toHaveLength(
-      50,
-    );
-    const changes = (await api('/v1/changes?dataset=gpu_rental&source=effectstory&limit=100', next))
-      .data;
+    const completed = '2026-10-30T18:10:00.000Z';
+    expect(
+      (await api('/v1/latest?dataset=gpu_rental&source=effectstory', completed)).data,
+    ).toHaveLength(50);
+    const changes = (
+      await api('/v1/changes?dataset=gpu_rental&source=effectstory&limit=100', completed)
+    ).data;
     expect(changes).toHaveLength(50);
     expect(
       changes.every(
@@ -603,6 +611,58 @@ describe('EffectStory storage and transport', () => {
           c.reuse.license_url === 'https://creativecommons.org/licenses/by/4.0/',
       ),
     ).toBe(true);
+    const cleanupAt = new Date(Date.parse(time) + 180 * 86400000 + 15 * 60000).toISOString();
+    let statements = 0;
+    const counted = { ...env() };
+    for (const key of ['PRIVATE_DB', 'PUBLIC_DB'] as const) {
+      const db = counted[key];
+      counted[key] = {
+        prepare: (sql: string) => {
+          statements++;
+          return db.prepare(sql);
+        },
+        batch: db.batch.bind(db),
+      } as D1Database;
+    }
+    expect(await expireGPUData(counted, [s], cleanupAt)).toBe(50);
+    expect(statements).toBeLessThan(1000);
+    expect(
+      await env()
+        .PRIVATE_DB.prepare(
+          "SELECT COUNT(*) AS n FROM gpu_snapshots WHERE source_id='effectstory' AND state='purged'",
+        )
+        .first('n'),
+    ).toBe(1);
+    expect(
+      await env()
+        .PRIVATE_DB.prepare("SELECT COUNT(*) AS n FROM observations WHERE source_id='effectstory'")
+        .first('n'),
+    ).toBe(50);
+  });
+
+  it('selects GPU resume work within the supplied sources before applying LIMIT', async () => {
+    const s = source('effectstory');
+    await queueGPURuns(env(), [source('price_of_compute')], time, time);
+    await collectSource(env(), s, time, {
+      synthetic: true,
+      now: () => time,
+      network: {
+        fetcher: (async () =>
+          new Response(effectstoryHTML(), {
+            headers: { 'content-type': 'text/html' },
+          })) as typeof fetch,
+      },
+    });
+    const resumed = await resumeGPURuns(env(), [s], '2026-10-29T18:05:00.000Z', true);
+    expect(resumed).toMatchObject([{ source_id: 'effectstory', state: 'complete' }]);
+    expect(
+      await env()
+        .PRIVATE_DB.prepare("SELECT state FROM collection_runs WHERE source_id='price_of_compute'")
+        .first('state'),
+    ).toBe('pending');
+    expect(await resumeGPURuns(env(), [source('price_of_compute')], time, true)).toMatchObject([
+      { source_id: 'price_of_compute' },
+    ]);
   });
 
   it('does not repeat a failed logical run even when a delayed invocation crosses UTC midnight', async () => {
@@ -622,7 +682,8 @@ describe('EffectStory storage and transport', () => {
       now: () => delayed,
       network: { fetcher },
     });
-    expect(retry).toMatchObject({ state: 'failed', reason: 'effectstory_daily_budget' });
+    // The 18:00 capture window has expired by midnight; no new HTTP is allowed.
+    expect(retry.state).toBe('partial');
     expect(calls).toBe(1);
   });
 
@@ -649,7 +710,7 @@ describe('EffectStory storage and transport', () => {
         })
       ).state,
     ).toBe('failed');
-    const later = '2026-10-29T18:22:00.000Z';
+    const later = '2026-10-29T18:05:00.000Z';
     expect((await resumeGPURuns(env(), [s], later))[0].state).toBe('pending');
     expect((await resumeGPURuns(env(), [s], later))[0].state).toBe('complete');
     expect(calls).toBe(1);
@@ -670,7 +731,7 @@ describe('EffectStory storage and transport', () => {
     const denied = structuredClone(s);
     denied.policy.rights.private_storage = 'review_required';
     denied.policy.version = 'effectstory-synthetic-denied';
-    expect((await collectSource(env(), denied, '2026-10-29T18:16:00.000Z', opts)).state).toBe(
+    expect((await collectSource(env(), denied, '2026-10-29T17:59:00.000Z', opts)).state).toBe(
       'policy_skipped',
     );
     await queueGPURuns(env(), [s], time, time);
@@ -678,7 +739,7 @@ describe('EffectStory storage and transport', () => {
       state: 'failed',
       reason: 'effectstory_no_saved_evidence',
     });
-    expect((await collectSource(env(), s, '2026-10-28T18:17:00.000Z', opts)).state).toBe('partial');
+    expect((await collectSource(env(), s, '2026-10-28T18:00:00.000Z', opts)).state).toBe('partial');
     expect(calls).toBe(0);
   });
 

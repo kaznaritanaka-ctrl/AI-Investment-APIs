@@ -27,4 +27,4 @@ export const effectstoryHTML = (
 <h2>Full table</h2><table><thead><tr>${['Provider', 'GPU', 'Hourly (USD)', 'Basis', 'Checked'].map((h) => `<th>${h}</th>`).join('')}</tr></thead>
 <tbody>${rows.map((row) => `<tr>${row.map((s) => `<td>${s}</td>`).join('')}</tr>`).join('')}</tbody></table>
 <p>Licensed CC BY 4.0: reuse freely, credit EffectStory and link back to this page.</p></body></html>`;
-export const effectstoryTime = '2026-10-29T18:17:00.000Z';
+export const effectstoryTime = '2026-10-29T18:00:00.000Z';

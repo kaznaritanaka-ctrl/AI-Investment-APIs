@@ -2,13 +2,18 @@ import type { CollectorEnv } from './schema';
 import { runDCTracker, maintainDCTracker } from './research/dc-collector';
 import { privateGpuResearchTurn, runPrivateGpuResearch } from './research/collector';
 import { activeSources } from './sources';
-import { collectAll } from './pipeline';
+import { collectAll, type RunResult } from './pipeline';
 import { collectGPU, resumeGPURuns, queueGPURuns } from './gpu-pipeline';
 import { expireGPUData } from './gpu-retention';
 import { resumeCollections } from './collection-continuation';
 import { recordSummary, deliverNotifications, watchdog, expireEvidence } from './operations';
 import { recordOperationalNotifications } from './notifications';
 import { dailyCollectionSlot, minuteSlot } from './run-identity';
+import {
+  EFFECTSTORY_COLLECTION_CRON,
+  effectstoryScheduleReady,
+  effectstoryTurn,
+} from './effectstory-schedule';
 import {
   sourceObserver,
   emitLog,
@@ -28,6 +33,8 @@ export default {
             ? 'continuation'
             : null;
     if (!process) return;
+    const chainSources = activeSources.filter((s) => s.adapter !== 'effectstory');
+    const effectstorySources = activeSources.filter((s) => s.adapter === 'effectstory');
     const now = new Date().toISOString(),
       eventScheduled = new Date(controller.scheduledTime).toISOString(),
       slot = minuteSlot(eventScheduled),
@@ -46,57 +53,63 @@ export default {
       };
     emitLog({ ...context, phase: 'collector_start' });
     try {
-      let results;
+      let results: RunResult[];
       let gpuMaintenance = false;
       if (controller.cron === env.COLLECTION_CRON)
         results = [
           ...(await collectAll(
             env,
-            activeSources.filter((s) => !s.gpu),
+            chainSources.filter((s) => !s.gpu),
             dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
             { observer },
           )),
           ...(await queueGPURuns(
             env,
-            activeSources.filter((s) => s.adapter !== 'effectstory'),
+            chainSources,
             dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
             now,
           )),
-          ...(await Promise.all(
-            activeSources
-              .filter((s) => s.adapter === 'effectstory')
-              .map((s) =>
-                observer(
-                  s,
-                  dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
-                  () =>
-                    collectGPU(
-                      env,
-                      s,
-                      dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
-                    ),
-                ),
-              ),
-          )),
         ];
       else if (controller.cron === env.GPU_RESUME_CRON) {
-        const resumed = await resumeCollections(env, activeSources, now, observer);
-        results = resumed.results;
-        // A full GPU page and a full retention batch have separate SQL budgets.
-        gpuMaintenance =
-          !resumed.models_work && !resumed.estat_work && resumed.results.length === 0;
+        const turn =
+          effectstorySources.length &&
+          effectstoryScheduleReady(env.COLLECTION_CRON, env.GPU_RESUME_CRON)
+            ? effectstoryTurn(eventScheduled)
+            : null;
+        if (turn === 'intake') {
+          const effectstorySlot = dailyCollectionSlot(
+            EFFECTSTORY_COLLECTION_CRON,
+            controller.scheduledTime,
+          );
+          results = await Promise.all(
+            effectstorySources.map((s) =>
+              observer(s, effectstorySlot, () => collectGPU(env, s, effectstorySlot)),
+            ),
+          );
+        } else if (turn === 'resume') {
+          results = await resumeGPURuns(env, effectstorySources, now, true, observer);
+        } else if (turn === 'retention') {
+          await expireGPUData(env, effectstorySources, now);
+          results = [];
+        } else {
+          const resumed = await resumeCollections(env, chainSources, now, observer);
+          results = resumed.results;
+          // A full GPU page and a full retention batch have separate SQL budgets.
+          gpuMaintenance =
+            !resumed.models_work && !resumed.estat_work && resumed.results.length === 0;
+        }
       } else if (controller.cron === env.WATCHDOG_CRON) {
         results = [
           ...(await watchdog(
             env,
-            activeSources.filter((s) => !s.gpu && !s.estat),
+            chainSources.filter((s) => !s.gpu && !s.estat),
             dailyCollectionSlot(env.COLLECTION_CRON, controller.scheduledTime),
             now,
             observer,
           )),
-          ...(activeSources.some((s) => s.enabled && s.models)
+          ...(chainSources.some((s) => s.enabled && s.models)
             ? []
-            : await resumeGPURuns(env, activeSources, now, true, observer)),
+            : await resumeGPURuns(env, chainSources, now, true, observer)),
         ];
       } else return;
       await recordSummary(env, slot, results, new Date().toISOString(), {
@@ -117,7 +130,7 @@ export default {
       if (gpuMaintenance) {
         await maintainDCTracker(env, eventScheduled, now);
         if (privateGpuResearchTurn(env, eventScheduled) === null)
-          await expireGPUData(env, activeSources, now);
+          await expireGPUData(env, chainSources, now);
         else {
           try {
             await runPrivateGpuResearch(env, eventScheduled, now);

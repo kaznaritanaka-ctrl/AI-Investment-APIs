@@ -157,7 +157,7 @@ try {
       url: 'https://effectstory.com/en/data/cloud-gpu-pricing',
       method: 'GET',
       user_agent:
-        'AIInvestmentResearch/0.1 (+https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs; private-research)',
+        'AIInvestmentResearch/0.1 (+https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs; public-data-collection)',
     });
     assert.equal(effectstory.status, 200);
     assert.equal(effectstory.body.data.length, 3);

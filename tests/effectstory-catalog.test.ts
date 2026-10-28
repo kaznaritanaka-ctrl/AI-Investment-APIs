@@ -11,6 +11,7 @@ it('distinguishes GB300, B300, and GB200 without inventing SKU details', () => {
     ['B200', 'B200'],
   ]) {
     const identity = identifyGPU(label);
+    expect(identity.classification_version).toBe('20261029.1');
     expect(identity.accelerator_model).toBe(model);
     expect(identity.gpu_sku_id).toBeNull();
   }

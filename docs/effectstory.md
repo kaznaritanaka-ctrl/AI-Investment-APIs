@@ -8,7 +8,7 @@
 
 ## 取得と保存
 
-既存の日次 Cron `17 18 * * *`（翌日 03:17 JST）で固定ページを直接取得する。既存の正直な User-Agent を使い、最大 2,000,000 bytes、最大 50 行。上限は上流提供者の除外前に測り、51 行以上は切り詰めず全体を拒否する。HTTP の前に永続的な予約を記録し、失敗も含め 1 source・UTC 日あたり最大 1 HTTP に制限する。continuation と watchdog は新規 HTTP を行わず、保存済みの投影証拠からのみ再開できる。バックフィルはしない。
+既存の continuation Cron `*/5 18-23 * * *` の 18:00 UTC（翌日 03:00 JST）枠で固定ページを直接取得する。EffectStory の論理日次枠も 18:00 UTC とし、Models/PoC の 18:17 UTC 枠と分ける。既存の正直な User-Agent を使い、最大 2,000,000 bytes、最大 50 行。上限は上流提供者の除外前に測り、51 行以上は切り詰めず全体を拒否する。HTTP の前に永続的な予約を記録し、失敗も含め 1 source・UTC 日あたり最大 1 HTTP に制限する。18:05 / 18:10 UTC 枠は保存済みの投影証拠からのみ再開し、新規 HTTP を行わない。18:15 UTC 枠は保持期限処理に使う。通常の Models/PoC continuation と watchdog は EffectStory を処理しない。バックフィルはしない。
 
 `config/sources/effectstory.json` の `policy.excluded_upstream_providers`（理由・根拠参照付き）に従い、RunPod と OpenRouter の行は投影証拠を作る前に捨てる。提供者名の前後の空白と大文字小文字を無視し、名前または別名へ完全一致させる（`RunPod`、`Runpod`、`Runpod.io` を含む）。明示禁止の根拠は [RunPod](license-review-20261021.md#runpod) と [OpenRouter](license-review-20261021.md#openrouter)。非公開保存も行わず、R2 の evidence/archive、private/public D1、ログへ対象行の内容を残さない。除外件数だけを投影証拠の `effectstory.dropped_count` に記録し、coverage の件数は除外後の対象行数とする。全行が除外されれば対象行数は 0、除外件数だけが残る。設定の欠落・必要な別名や根拠の欠落は権利ゲートとオフライン配備前検査で停止し、保存済み投影の再開時にも対象提供者の混入を拒否する。policy はこの制限を含む v2 とする。
 
@@ -26,7 +26,21 @@ HTML 表を決定的に解析し、未知の構造、必須ヘッダーの欠落
 
 ## Shared budget
 
-既存の [共有枠レビュー](price-of-compute-integration.md#shared-budget-20261006) は Models に保守的な 54 枠、非公開 PoC に 6 枠を見込む。EffectStory は最大 50 行・1 ページとして、追加で最大 2 continuation 枠を見込み、合計 62 枠は 18:17 UTC 後の 68 枠に収まる。これらは通常運転・失敗なしの保守的な枠見積もりであり、再試行や保持処理の滞留時に完了を保証しない。不完全な取得を完全と表示しない。
+PR #43 の [PoC 3 SKU 拡張レビュー](price-of-compute-integration.md#private-sku-extension-20261029) に合わせ、18:17 UTC 後は Models 54 枠＋非公開 PoC の `h100-sxm`・`b200`・`b300` 各 4 枠（収集/確定 2＋保持期限処理 2）＋余裕 2 枠＝68 枠。既存 Cron の 18:20〜23:55 UTC にある 68 continuation 枠をすべて使う見積もりであり、EffectStory を足す余地はない。SKU 数も余裕 2 枠も維持する。
+
+EffectStory は同じ既存 Cron の前半 4 枠を専用に使う。Cron の追加・変更はしない。
+
+| UTC（翌日 JST） | 用途 | 最大枠数 |
+| --- | --- | --- |
+| 18:00（03:00） | 1 ページ・最大 50 行の取得と保存開始 | 1 |
+| 18:05 / 18:10（03:05 / 03:10） | 保存済み証拠の処理・完全 snapshot 確定（50 行全置換を含む） | 2 |
+| 18:15（03:15） | 180 日を超えた snapshot 1 件・最大 50 行の保持期限処理 | 1 |
+
+保持期限処理は公開撤回を先に行い、50 行を削除した場合も membership が空になったことを確認して、その枠内で snapshot を purged にする。EffectStory は派生統計を作らないため、通常運転では 1 日 1 snapshot の削除をこの 1 枠で処理できる。各枠は既存 Paid の invocation ごとの SQL 上限内で処理し、収集と保持期限処理は同じ invocation に重ねない。
+
+オフライン配備前検査は前半 4 枠を確保する正確な Cron 設定と既存の source 上限・権利レビューを確認する。後半は引き続き 54＋12＋2＝68 を検査する。再開対象の source を SQL の LIMIT より前に絞り、前半に残った EffectStory の未完了 run が Models/PoC の枠を消費したり、PoC の run が前半の再開を妨げたりしないようにする。
+
+これらは通常運転・失敗なしの枠見積もりであり、遅延・再試行や保持処理の滞留時に完了を保証しない。前半で未完了でも後半へ枠を借りず、不完全な取得を完全と表示しない。失敗・欠落した 18:00 の HTTP を後続枠でやり直さず、保存済み証拠のみを処理する。保持期限超過のデータは既存の読取 gate で非表示となり、滞留は運用確認の対象とする。
 
 ## 人による配備と確認
 
