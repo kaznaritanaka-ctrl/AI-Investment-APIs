@@ -5653,6 +5653,37 @@
                     ],
                     "additionalProperties": false
                   },
+                  "effectstory": {
+                    "type": "object",
+                    "properties": {
+                      "gpu_label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "basis": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "checked_date": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "source_url": {
+                        "type": "string",
+                        "const": "https://effectstory.com/en/data/cloud-gpu-pricing"
+                      }
+                    },
+                    "required": [
+                      "gpu_label",
+                      "basis",
+                      "checked_date",
+                      "source_url"
+                    ],
+                    "additionalProperties": false
+                  },
                   "sale_unit": {
                     "type": "string",
                     "enum": [
@@ -7466,6 +7497,37 @@
               "source_sku",
               "source_pricing_type",
               "source_observed_at"
+            ],
+            "additionalProperties": false
+          },
+          "effectstory": {
+            "type": "object",
+            "properties": {
+              "gpu_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "basis": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "checked_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "source_url": {
+                "type": "string",
+                "const": "https://effectstory.com/en/data/cloud-gpu-pricing"
+              }
+            },
+            "required": [
+              "gpu_label",
+              "basis",
+              "checked_date",
+              "source_url"
             ],
             "additionalProperties": false
           },

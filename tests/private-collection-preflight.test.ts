@@ -12,6 +12,20 @@ const inspect = (selected = fixture(), d = deployment) =>
 
 it('permits 500 models plus three private 50-row SKUs within the existing Crons', () => {
   expect(inspect()).toMatchObject({ ready: true, errors: [], blockers: [] });
+  const models = fixture().find((s) => s.source_id === 'models_dev')!.models!;
+  const modelSlots =
+    2 +
+    Math.ceil(models.max_models / models.models_per_invocation) +
+    Math.ceil(models.max_models / 50) +
+    Math.ceil(models.max_models / 25) +
+    2;
+  expect(modelSlots).toBe(54);
+  expect(
+    fixture()
+      .find((s) => s.source_id === 'price_of_compute')!
+      .gpu!.partitions.map((p) => p.id),
+  ).toEqual(['h100-sxm', 'b200', 'b300']);
+  expect(modelSlots + 4 * 3 + 2).toBe(68);
 });
 
 it('keeps combined collection blocked without its workload review', () => {
@@ -37,10 +51,29 @@ it.each(['public', 'sku', 'source', 'rows', 'window'] as const)(
   },
 );
 
-it('requires enough actual post-intake continuation slots for collection and retention', () => {
-  const selected = fixture();
-  selected.find((s) => s.source_id === 'models_dev')!.models!.max_models = 650;
-  expect(inspect(selected).blockers).toContain(
-    'models_dev:combined_daily_capacity_exceeds_existing_68_continuations',
+it.each([501, 650])(
+  'blocks %i models because the full two-slot margin must fit after intake',
+  (max) => {
+    const selected = fixture();
+    selected.find((s) => s.source_id === 'models_dev')!.models!.max_models = max;
+    expect(inspect(selected).blockers).toContain(
+      'models_dev:combined_daily_capacity_exceeds_existing_68_continuations',
+    );
+  },
+);
+
+it.each([
+  ['COLLECTION_CRON', '12 18 * * *'],
+  ['GPU_RESUME_CRON', '*/10 18-23 * * *'],
+])('blocks EffectStory if %s no longer supplies the reviewed separate window', (key, value) => {
+  const changed = structuredClone(collector);
+  changed.vars[key] = value;
+  changed.triggers.crons = Object.values({
+    COLLECTION_CRON: changed.vars.COLLECTION_CRON,
+    WATCHDOG_CRON: changed.vars.WATCHDOG_CRON,
+    GPU_RESUME_CRON: changed.vars.GPU_RESUME_CRON,
+  });
+  expect(inspectPreflight(deployment, changed, api, fixture()).blockers).toContain(
+    'effectstory:early_window_unavailable',
   );
 });

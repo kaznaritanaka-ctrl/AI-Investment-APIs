@@ -33,6 +33,19 @@ export const PolicySchema = z
     evidence_version: z.string(),
     evidence_refs: z.array(z.string()).min(1),
     models_scope: ModelScopeSchema.optional(),
+    excluded_upstream_providers: z
+      .array(
+        z
+          .object({
+            provider: z.string().trim().min(1).max(120),
+            aliases: z.array(z.string().trim().min(1).max(120)).min(1),
+            reason: z.string().trim().min(1),
+            evidence_refs: z.array(z.string().trim().min(1)).min(1),
+          })
+          .strict(),
+      )
+      .min(1)
+      .optional(),
   })
   .strict();
 
@@ -113,6 +126,7 @@ export const SourceSchema = z
       'sakura_dok',
       'ebay_browse',
       'price_of_compute',
+      'effectstory',
       'estat',
     ]),
     gpu: GPUConfigSchema.optional(),

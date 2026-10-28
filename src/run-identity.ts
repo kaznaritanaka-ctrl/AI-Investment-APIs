@@ -1,7 +1,8 @@
 import { hash, isoTime } from './util';
 
 // collection_runs contains collection work only. Watchdog and continuation are
-// invocation kinds which inspect/resume that work; they never mint a new run.
+// invocation kinds which normally inspect/resume that work. EffectStory's
+// dedicated 18:00 continuation event starts its own daily collection identity.
 export function minuteSlot(scheduled: string): string {
   if (!isoTime(scheduled)) throw new Error('invalid_schedule');
   return new Date(Math.floor(Date.parse(scheduled) / 60000) * 60000).toISOString();

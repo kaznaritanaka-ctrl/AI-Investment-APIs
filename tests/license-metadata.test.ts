@@ -42,7 +42,14 @@ describe('owner-commissioned license metadata (offline)', () => {
         .filter((s) => s.enabled)
         .map((s) => s.source_id)
         .sort(),
-    ).toEqual(['ecb', 'estat_meti_iip', 'estat_meti_seidou', 'models_dev', 'price_of_compute']);
+    ).toEqual([
+      'ecb',
+      'effectstory',
+      'estat_meti_iip',
+      'estat_meti_seidou',
+      'models_dev',
+      'price_of_compute',
+    ]);
     for (const s of sources.filter((s) => !s.enabled)) {
       expect(canCollect(s, reviewDate)).toBe(false);
       expect(canPublish(s, reviewDate, true)).toBe(false);

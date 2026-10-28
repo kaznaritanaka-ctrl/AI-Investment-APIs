@@ -7,7 +7,11 @@ import { hash, stable, D, batches } from './util';
 export const GPU_PARSER = 'gpu-20260927.1';
 export const PRICE_OF_COMPUTE_PARSER = 'gpu-price-of-compute-20261005.2';
 export const gpuParser = (s: Source) =>
-  s.adapter === 'price_of_compute' ? PRICE_OF_COMPUTE_PARSER : GPU_PARSER;
+  s.adapter === 'effectstory'
+    ? 'gpu-effectstory-20261029.1'
+    : s.adapter === 'price_of_compute'
+      ? PRICE_OF_COMPUTE_PARSER
+      : GPU_PARSER;
 export type Snapshot = {
   snapshot_id: string;
   run_id: string;
@@ -513,6 +517,9 @@ async function stageGPUPage(
               methodology: GPU_METHOD,
               source: { source_id: s.source_id, source_url: s.source_url },
               attribution: s.attribution_text,
+              ...(s.adapter === 'effectstory'
+                ? { reuse: { license_url: s.license_url, conditions: s.policy.conditions } }
+                : {}),
             }),
             snap.snapshot_id,
             'price_change',
@@ -572,6 +579,9 @@ export async function publishCoverage(env: CollectorEnv, s: Source, snap: Snapsh
     market_representative: false,
     inventory_interpretation: false,
     attribution: s.attribution_text,
+    ...(s.adapter === 'effectstory'
+      ? { reuse: { license_url: s.license_url, conditions: s.policy.conditions } }
+      : {}),
     rights_version: s.policy.version,
   };
   await env.PUBLIC_DB.prepare(
@@ -636,6 +646,9 @@ export async function finalizeGPU(env: CollectorEnv, s: Source, snap: Snapshot, 
             methodology: GPU_METHOD,
             source: { source_id: s.source_id, source_url: s.source_url },
             attribution: s.attribution_text,
+            ...(s.adapter === 'effectstory'
+              ? { reuse: { license_url: s.license_url, conditions: s.policy.conditions } }
+              : {}),
           }),
           snap.snapshot_id,
           m.observation_id,

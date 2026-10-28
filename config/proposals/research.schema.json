@@ -142,6 +142,7 @@
             "sakura_dok",
             "ebay_browse",
             "price_of_compute",
+            "effectstory",
             "estat"
           ]
         },
@@ -795,6 +796,48 @@
                 "fields"
               ],
               "additionalProperties": false
+            },
+            "excluded_upstream_providers": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "aliases": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    }
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence_refs": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "provider",
+                  "aliases",
+                  "reason",
+                  "evidence_refs"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "required": [

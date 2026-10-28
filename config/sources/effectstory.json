@@ -1,0 +1,119 @@
+{
+  "source_id": "effectstory",
+  "dataset_type": "gpu_rental",
+  "operator": "EffectStory",
+  "source_url": "https://effectstory.com/en/data/cloud-gpu-pricing",
+  "documentation_url": "https://effectstory.com/en/data/cloud-gpu-pricing",
+  "terms_url": "https://effectstory.com/en/data/cloud-gpu-pricing",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "endpoint": "https://effectstory.com/en/data/cloud-gpu-pricing",
+  "acquisition_method": "public_html_table",
+  "authentication_required": false,
+  "native_currency": "USD",
+  "native_unit": "gpu_hour",
+  "geography": [],
+  "native_frequency": "monthly",
+  "expected_update_calendar": "Upstream monthly; one bounded daily check on existing 03:17 JST cron",
+  "expected_lag": "unknown",
+  "rights_checked_at": "2026-10-29T00:00:00.000Z",
+  "rights_evidence_ref": "docs/license-review-effectstory-20261029.md",
+  "attribution_text": "Data: EffectStory, Cloud GPU Hourly Pricing (https://effectstory.com/en/data/cloud-gpu-pricing), CC BY 4.0",
+  "known_limitations": [
+    "CC BY 4.0; prices originate from providers own pricing pages; upstream licensing unverified.",
+    "RunPod (including Runpod.io) and OpenRouter rows are excluded before any storage; only the dropped count is retained as metadata. The 50-row limit applies before exclusion.",
+    "Secondary published quotes, not transactions, guaranteed capacity or provider-verified current prices.",
+    "Only Provider, GPU label and catalog model, USD/GPU-hour decimal, Basis, Checked and fixed source page URL are projected.",
+    "Strict HTML shape; entire snapshot rejected above 50 rows or on any unknown price/date/shape; no truncation, backfill or RSC fallback.",
+    "Daily immutable retrieval snapshots follow existing GPU conventions, including unchanged rows; Checked is the source date, not the retrieval date."
+  ],
+  "enabled": true,
+  "adapter": "effectstory",
+  "selection": [],
+  "max_bytes": 2000000,
+  "max_records": 50,
+  "policy": {
+    "version": "effectstory-20261029-public-v2",
+    "rights": {
+      "automated_collection": "allowed",
+      "private_storage": "allowed",
+      "internal_analysis": "allowed",
+      "external_llm_processing": "denied",
+      "public_display": "allowed",
+      "raw_redistribution": "denied",
+      "normalized_redistribution": "allowed",
+      "derived_redistribution": "allowed",
+      "commercial_redistribution": "allowed"
+    },
+    "fields": [
+      "gpu_projection_v1"
+    ],
+    "conditions": [
+      "CC BY 4.0; credit EffectStory and link to the source page on every reused row.",
+      "Data: EffectStory, Cloud GPU Hourly Pricing (https://effectstory.com/en/data/cloud-gpu-pricing), CC BY 4.0",
+      "Prices originate from providers own pricing pages; upstream licensing unverified.",
+      "Projection changes: table text and dates preserved; GPU identity normalized via catalog; no provider page collection or inferred quote conditions.",
+      "Private projected evidence/archive retained 7 days; normalized/public history 180 days; backup 30 days. No raw HTML storage or raw redistribution.",
+      "Exclude policy.excluded_upstream_providers before private/public persistence, including evidence/archive; case-insensitive trimmed exact provider/alias match. Retain only dropped_count metadata for excluded rows."
+    ],
+    "valid_from": "2026-10-28T15:00:00.000Z",
+    "valid_until": "2027-01-27T00:00:00.000Z",
+    "retention_days": 7,
+    "retention_limit_days": null,
+    "decision_actor": "Kaz owner approval 2026-10-29 00:00 JST: EffectStoryも追加して進めて; public CC BY 4.0 table",
+    "evidence_version": "Owner supplied honest-UA verification 2026-10-29; JSON-LD CC BY 4.0/dateModified 2026-10-26; robots allows page",
+    "evidence_refs": [
+      "docs/license-review-effectstory-20261029.md",
+      "https://effectstory.com/en/data/cloud-gpu-pricing",
+      "https://creativecommons.org/licenses/by/4.0/",
+      "docs/license-review-20261021.md#runpod",
+      "docs/license-review-20261021.md#openrouter"
+    ],
+    "excluded_upstream_providers": [
+      {
+        "provider": "RunPod",
+        "aliases": [
+          "RunPod",
+          "Runpod.io"
+        ],
+        "reason": "Upstream terms explicitly prohibit systematic retrieval to create a collection, compilation or database without written permission; do not store these rows privately or publicly.",
+        "evidence_refs": [
+          "docs/license-review-20261021.md#runpod",
+          "https://www.runpod.io/legal/terms-of-service"
+        ]
+      },
+      {
+        "provider": "OpenRouter",
+        "aliases": [
+          "OpenRouter"
+        ],
+        "reason": "Upstream terms explicitly prohibit automated scraping or copying of site/service information; do not store these rows privately or publicly.",
+        "evidence_refs": [
+          "docs/license-review-20261021.md#openrouter",
+          "https://openrouter.ai/terms"
+        ]
+      }
+    ]
+  },
+  "gpu": {
+    "owner_approval_ref": "Kaz owner approval 2026-10-29 00:00 JST EffectStory public",
+    "partitions": [
+      {
+        "id": "full-table",
+        "query": {},
+        "models": []
+      }
+    ],
+    "page_size": 50,
+    "max_pages": 1,
+    "pages_per_invocation": 1,
+    "snapshot_max_age_minutes": 360,
+    "retention": {
+      "evidence_days": 7,
+      "archive_days": 7,
+      "normalized_days": 180,
+      "backup_days": 30,
+      "reviewed_ref": "docs/effectstory.md#retention"
+    },
+    "region_map": {}
+  }
+}

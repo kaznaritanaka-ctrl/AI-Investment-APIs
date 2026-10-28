@@ -6,6 +6,8 @@
 
 gpu_rental と gpu_secondary を別datasetにします。原通貨・decimal string・課金単位を保存します。node_hour、gpu_hour、second、monthを混ぜず、月額を720/730時間で換算しません。GPU台数不明の按分もしません。単価への按分と中古価格÷レンタル時給は今回の公開指標には含めません。
 
+EffectStory の公開 Full table は、掲載済み USD/GPU-hour、GPU 原文、basis、checked date を二次ソースの `gpu_rental` として保持します。basis の文面から地域や契約を補完せず、二次情報を独立サンプル統計から除外します。各行に CC BY 4.0 と帰属表示を同梱します。[取得と公開の詳細](effectstory.md)。
+
 カタログは識別辞書であり収集実績ではありません。model、明示VRAM（GB）、PCIe/SXM、明示SXM世代を照合します。GiBをGBに読み替えません。GB300/NVL72はrack/systemとして扱い、B300 GPUのSKUへ写像しません。不明・部品・故障品・GPUなしserver・rental listing・販売単位不明・auction/best-offerは確定した中古fixed-ask統計から除外します。
 
 eBayのtitleは抽出時だけ参照し、証拠には識別した事実と分類理由を投影します。商品説明、画像、sellerプロフィール、OAuth tokenを保存しません。quantity_available_reportedは根拠がなければnullです。1 listingを1 GPUとは数えません。
@@ -41,3 +43,5 @@ spot/on-demandは同じprovider/SKU/region/その他条件で比較します。�
 JPY原値とUSD原値を保持し、JPY換算は両価格観測以前に取得・記録された同日付のECB EUR/USD・EUR/JPYから算出します。最大4暦日までの参照値に限定し、source_date、age、carried_forward、FX observation IDを派生行へ保存します。休日の参照値を当日の実勢FXとは表示しません。原通貨変化と換算値を別に返します。
 
 すべての派生値に入力snapshotとsource/policyの系譜を保持し、FXは原観測IDも保持します。入力の権利停止・期限切れ・retention削除があれば公開読取時にも非表示になります。対話で登場した実価格や企業情報を初期データにしていません。
+
+GB300 は NVIDIA Blackwell Ultra のラック系モデルとして B300・GB200 と区別する。EffectStory の GB300 ラベルも自動で識別するが、ラックを1枚のGPUと数えず、掲載単位の USD/GPU-hour を保持する。

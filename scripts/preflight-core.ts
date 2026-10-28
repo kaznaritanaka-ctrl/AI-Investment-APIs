@@ -1,3 +1,8 @@
+// @ts-expect-error Native Node offline preflight requires the explicit .ts extension.
+import { effectstoryAuthorizationReady } from '../src/effectstory-config.ts';
+// @ts-expect-error Native Node offline preflight requires the explicit .ts extension.
+import { effectstoryScheduleReady } from '../src/effectstory-schedule.ts';
+
 export type Config = Record<string, any>;
 export function inspectPreflight(
   deployment: Config,
@@ -102,6 +107,17 @@ export function inspectPreflight(
       if (s.policy.rights[right] !== 'allowed')
         errors.push(s.source_id + ':rights_not_allowed:' + right);
     if (s.gpu) {
+      require(effectstoryAuthorizationReady(s as import('../src/schema').Source), s.source_id +
+        ':effectstory_scope_not_approved');
+      if (s.adapter === 'effectstory')
+        require(effectstoryScheduleReady(
+          collector.vars.COLLECTION_CRON,
+          collector.vars.GPU_RESUME_CRON,
+        ), s.source_id + ':early_window_unavailable');
+      if (s.adapter === 'effectstory')
+        require(['public_display', 'normalized_redistribution', 'commercial_redistribution'].every(
+          (k) => s.policy.rights[k] === 'allowed',
+        ), s.source_id + ':effectstory_public_grant_missing');
       require(deployment.workers_plan === 'paid', s.source_id +
         ':gpu_d1_query_budget_requires_confirmed_paid_plan');
       if (s.gpu.page_size > 50 || s.max_records > 50 || s.gpu.pages_per_invocation !== 1)
@@ -149,11 +165,23 @@ export function inspectPreflight(
         2;
       require(slots <= 72, s.source_id +
         ':models_daily_capacity_exceeds_existing_72_continuations');
-      const gpu = sources.filter((x) => x.enabled && x.gpu);
+      const effectstory = sources.filter(
+        (x) => x.enabled && (x.adapter === 'effectstory' || x.source_id === 'effectstory'),
+      );
+      const reviewedEffectstory =
+        effectstory.length === 1 &&
+        deployment.collection_workload_mode === 'models_private_poc_effectstory_v1' &&
+        deployment.shared_collection_budget_review_ref === 'docs/effectstory.md#shared-budget' &&
+        effectstoryAuthorizationReady(effectstory[0] as import('../src/schema').Source) &&
+        effectstoryScheduleReady(collector.vars.COLLECTION_CRON, collector.vars.GPU_RESUME_CRON);
+      const gpu = sources.filter(
+        (x) => x.enabled && x.gpu && !(reviewedEffectstory && x === effectstory[0]),
+      );
       const isolatedPrivatePoC =
-        deployment.collection_workload_mode === 'models_then_private_poc_v1' &&
-        deployment.shared_collection_budget_review_ref ===
-          'docs/price-of-compute-integration.md#private-sku-extension-20261029' &&
+        ((deployment.collection_workload_mode === 'models_then_private_poc_v1' &&
+          deployment.shared_collection_budget_review_ref ===
+            'docs/price-of-compute-integration.md#private-sku-extension-20261029') ||
+          reviewedEffectstory) &&
         gpu.length === 1 &&
         gpu[0].source_id === 'price_of_compute' &&
         gpu[0].adapter === 'price_of_compute' &&
@@ -184,6 +212,7 @@ export function inspectPreflight(
       if (gpu.length && isolatedPrivatePoC)
         // 68 continuation slots follow 18:17 UTC before the existing window ends.
         // Per SKU: two collection/finalization and two retention slots; two margin.
+        // EffectStory uses four disjoint events at 18:00/05/10/15, including retention.
         require(slots + 4 * gpu[0].gpu.partitions.length + 2 <= 68, s.source_id +
           ':combined_daily_capacity_exceeds_existing_68_continuations');
       if (s.policy.retention_limit_days)

@@ -288,7 +288,14 @@ export async function fetchGPURequest(
     plan.headers.Authorization = 'Bearer ' + token.access_token;
   }
   // No response-supplied URL or credential is ever followed.
-  const response = await fetchBounded(s, plan, opt);
+  const response = await fetchBounded(
+    s,
+    plan,
+    s.adapter === 'effectstory'
+      ? { ...opt, max_attempts: 1, validators: undefined, onBody: undefined }
+      : opt,
+    s.adapter === 'effectstory' ? 'html' : 'json',
+  );
   if (response.status === 304) throw new FetchFailure('gpu_unexpected_304');
   return response;
 }

@@ -7,9 +7,12 @@ import { gpuEvidenceFromBody } from './gpu-adapters';
 import { ingestGPUPage, snapshot, publishCoverage, finalizeGPU, gpuParser } from './gpu-store';
 import { hash, stable, errorCode, isoTime } from './util';
 import { finalizeGPUMetrics } from './gpu-metrics';
-import { collectionIdentity } from './run-identity';
+import { collectionIdentity, dailyCollectionSlot, minuteSlot } from './run-identity';
 import { observe, type SourceObserver } from './telemetry';
 import { priceOfComputeReservation } from './price-of-compute';
+import { EFFECTSTORY_COLLECTION_CRON } from './effectstory-schedule';
+const nextUTCDate = (now: string) =>
+  new Date(Date.parse(now.slice(0, 10) + 'T00:00:00.000Z') + 86400000).toISOString();
 export async function collectGPU(
   env: CollectorEnv,
   s: Source,
@@ -143,7 +146,11 @@ export async function collectGPU(
           evidence: Evidence;
         if (saved) evidence = await saved.json<Evidence>();
         else {
-          if (opt.savedOnly) continue;
+          if (opt.savedOnly) {
+            if (s.adapter === 'effectstory')
+              throw new FetchFailure('effectstory_no_saved_evidence', nextUTCDate(now()));
+            continue;
+          }
           if (s.adapter === 'price_of_compute') {
             // A request budget is consumed before HTTP, even if the response or its
             // logging is lost. Saved evidence above remains replayable without HTTP.
@@ -257,7 +264,34 @@ export async function collectGPU(
                     if (init?.signal?.aborted) throw new FetchFailure('timeout', reservationAt);
                     return (opt.network?.fetcher ?? fetch)(input, init);
                   }) as typeof fetch)
-                : opt.network?.fetcher,
+                : s.adapter === 'effectstory'
+                  ? ((async (input: RequestInfo | URL, init?: RequestInit) => {
+                      if (
+                        dailyCollectionSlot(EFFECTSTORY_COLLECTION_CRON, Date.parse(now())) !==
+                        minuteSlot(scheduled)
+                      )
+                        throw new FetchFailure('effectstory_no_backfill', nextUTCDate(now()));
+                      // Atomic source/day reservation survives failed HTTP, parsing,
+                      // R2 writes and crashes, independently of the mutable run state.
+                      const reserved = await env.PRIVATE_DB.prepare(
+                        "INSERT INTO fetch_attempts(run_id,attempt,started_at,status,code,duration_ms) SELECT ?,0,?,NULL,'effectstory_daily_reservation',0 WHERE EXISTS(SELECT 1 FROM collection_runs WHERE run_id=? AND lease_token=? AND state='fetching') AND NOT EXISTS(SELECT 1 FROM fetch_attempts a JOIN collection_runs r USING(run_id) WHERE r.source_id=? AND a.code='effectstory_daily_reservation' AND (a.run_id=? OR a.started_at>=?))",
+                      )
+                        .bind(
+                          run,
+                          now(),
+                          run,
+                          lease,
+                          s.source_id,
+                          run,
+                          now().slice(0, 10) + 'T00:00:00.000Z',
+                        )
+                        .run();
+                      if (!reserved.meta.changes)
+                        throw new FetchFailure('effectstory_daily_budget', nextUTCDate(now()));
+                      if (init?.signal?.aborted) throw new FetchFailure('timeout');
+                      return (opt.network?.fetcher ?? fetch)(input, init);
+                    }) as typeof fetch)
+                  : opt.network?.fetcher,
             onAttempt: async (a) => {
               await env.PRIVATE_DB.prepare(
                 'INSERT INTO fetch_attempts(run_id,attempt,started_at,status,code,duration_ms) VALUES (?,?,?,?,?,?)',
@@ -449,10 +483,14 @@ export async function resumeGPURuns(
   savedOnly = false,
   observer?: SourceObserver,
 ) {
+  const ids = sources.filter((s) => s.gpu).map((s) => s.source_id);
+  if (!ids.length) return [];
   const runs = await env.PRIVATE_DB.prepare(
-    "SELECT r.source_id,r.scheduled_for FROM collection_runs r JOIN sources s USING(source_id) WHERE json_extract(s.config_json,'$.gpu') IS NOT NULL AND r.state IN ('pending','fetching','failed') AND (r.next_attempt_at IS NULL OR r.next_attempt_at<=?) AND (r.lease_until IS NULL OR r.lease_until<?) ORDER BY r.last_progress_at ASC,r.scheduled_for DESC LIMIT 1",
+    "SELECT r.source_id,r.scheduled_for FROM collection_runs r JOIN sources s USING(source_id) WHERE json_extract(s.config_json,'$.gpu') IS NOT NULL AND r.source_id IN (" +
+      ids.map(() => '?').join(',') +
+      ") AND r.state IN ('pending','fetching','failed') AND (r.next_attempt_at IS NULL OR r.next_attempt_at<=?) AND (r.lease_until IS NULL OR r.lease_until<?) ORDER BY r.last_progress_at ASC,r.scheduled_for DESC LIMIT 1",
   )
-    .bind(now, now)
+    .bind(...ids, now, now)
     .all<{ source_id: string; scheduled_for: string }>();
   const results: RunResult[] = [];
   for (const r of runs.results) {
@@ -460,7 +498,10 @@ export async function resumeGPURuns(
     if (s)
       results.push(
         await observe(observer, s, r.scheduled_for, () =>
-          collectGPU(env, s, r.scheduled_for, { now: () => now, savedOnly }),
+          collectGPU(env, s, r.scheduled_for, {
+            now: () => now,
+            savedOnly: savedOnly || s.adapter === 'effectstory',
+          }),
         ),
       );
   }

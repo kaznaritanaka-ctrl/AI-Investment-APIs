@@ -11,6 +11,7 @@ const hosts: Record<string, string> = {
   sakura_dok: 'https://secure.sakura.ad.jp/cloud/zone/is1a/api/managed-container/1.0/unit_prices/',
   ebay_browse: 'https://api.ebay.com/buy/browse/v1/item_summary/search',
   price_of_compute: 'https://priceofcompute.com/api/v1/prices/',
+  effectstory: 'https://effectstory.com/en/data/cloud-gpu-pricing',
 };
 export const EBAY_OAUTH = 'https://api.ebay.com/identity/v1/oauth2/token';
 export function gpuRequestPlan(
@@ -62,6 +63,9 @@ export function gpuRequestPlan(
       throw new Error('query_not_allowed');
     url.pathname += p.query.sku;
   } else if (page !== 0 || Object.keys(p.query).length) throw new Error('query_not_allowed');
+  if (s.adapter === 'effectstory')
+    headers['user-agent'] =
+      'AIInvestmentResearch/0.1 (+https://github.com/kaznaritanaka-ctrl/AI-Investment-APIs; public-data-collection)';
   return { url: url.toString(), method: 'GET', headers };
 }
 export function validateNextURL(

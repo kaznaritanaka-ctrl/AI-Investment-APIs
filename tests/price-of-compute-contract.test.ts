@@ -50,9 +50,11 @@ test('retains H100 domain, cohort, scope and run identity from the pre-extension
     true,
   );
   const d = JSON.parse(evidence.body).records[0];
-  // Baselines computed from HEAD before this extension, using the same invented quote.
+  assert.equal(d.classification_version, '20261029.1');
+  // The catalog version changed for EffectStory's GB300 recognition. Keep the
+  // pre-extension H100 baseline after normalizing only that explicit version.
   assert.equal(
-    await hash(stable(d)),
+    await hash(stable({ ...d, classification_version: '20260927.1' })),
     'e7a9390842c592285eed9bfc27d7c15f5a6f4d17c7e308d76a2e4c2786177671',
   );
   assert.equal(
@@ -115,7 +117,7 @@ test('collects only the three approved private SKU endpoints and maps each famil
     assert.equal(records.length, 50);
     assert.equal(records[0].accelerator_model, family);
     assert.equal(records[0].price_of_compute.requested_sku, sku);
-    assert.equal(records[0].classification_version, '20260927.1');
+    assert.equal(records[0].classification_version, '20261029.1');
     assert.throws(
       () => projectPriceOfCompute(body([...providers, row()]), sku, now),
       /provider_limit/,

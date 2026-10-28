@@ -85,7 +85,17 @@ export async function expireGPUData(env: CollectorEnv, sources: Source[], now: s
         ]);
         deleted++;
       }
-      if (rows.results.length < 50)
+      // EffectStory has at most 50 rows and one dedicated retention invocation.
+      // Confirm the full batch exhausted membership instead of needing another slot.
+      if (
+        rows.results.length < 50 ||
+        (s.adapter === 'effectstory' &&
+          !(await env.PRIVATE_DB.prepare(
+            'SELECT 1 FROM gpu_snapshot_members WHERE snapshot_id=? LIMIT 1',
+          )
+            .bind(g.snapshot_id)
+            .first()))
+      )
         await env.PRIVATE_DB.batch([
           env.PRIVATE_DB.prepare('DELETE FROM gpu_metric_jobs WHERE snapshot_id=?').bind(
             g.snapshot_id,

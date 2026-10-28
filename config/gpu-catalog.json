@@ -1,6 +1,6 @@
 {
-  "version": "20260927.1",
-  "checked_at": "2026-09-27T12:07:26.000Z",
+  "version": "20261029.1",
+  "checked_at": "2026-10-29T00:00:00.000Z",
   "description": "Identity dictionary only; no live market observations implied. Unknown SKU attributes remain null.",
   "families": [
     {
@@ -12,6 +12,11 @@
     },
     {
       "model": "B300",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
+      "model": "GB200",
       "vendor": "NVIDIA",
       "collection_status": "not_connected"
     },
