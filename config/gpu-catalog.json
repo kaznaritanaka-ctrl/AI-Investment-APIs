@@ -4,6 +4,13 @@
   "description": "Identity dictionary only; no live market observations implied. Unknown SKU attributes remain null.",
   "families": [
     {
+      "model": "GB300",
+      "vendor": "NVIDIA",
+      "architecture_family": "Blackwell Ultra",
+      "system_platform": "rack-scale",
+      "collection_status": "not_connected"
+    },
+    {
       "model": "B300",
       "vendor": "NVIDIA",
       "collection_status": "not_connected"

@@ -451,8 +451,11 @@ it('defers HTTP 200 schema failures and cross-slot requests for at least an hour
     now: () => later,
     network: { fetcher: invalid },
   });
-  expect(again).toMatchObject({ state: 'failed', reason: 'sku_mismatch' });
-  expect(calls).toBe(2);
+  expect(again).toMatchObject({ state: 'partial' });
+  expect(calls).toBe(1);
+  expect(
+    await local.env.PRIVATE_DB.prepare('SELECT reason FROM gpu_snapshots').first('reason'),
+  ).toBe('price_of_compute_daily_request_limit');
 });
 it('enforces source-wide success cooldown for a new slot while retaining immutable same-slot replay', async () => {
   const s = privateSource();
@@ -552,7 +555,9 @@ it('records malformed HTTP 200 body failure once and defers the next PoC attempt
   expect(result).toMatchObject({ state: 'failed', reason: 'network_error' });
   expect(calls).toBe(1);
   expect(
-    await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM fetch_attempts').first('n'),
+    await local.env.PRIVATE_DB.prepare(
+      'SELECT COUNT(*) n FROM fetch_attempts WHERE attempt>0',
+    ).first('n'),
   ).toBe(1);
   const run = await local.env.PRIVATE_DB.prepare(
     'SELECT next_attempt_at FROM collection_runs WHERE run_id=?',
@@ -603,7 +608,9 @@ it.each(['valid', 'undecodable'])(
     expect(first).toMatchObject({ state: 'failed', reason: 'attempt_log_failed' });
     expect(calls).toBe(1);
     expect(
-      await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM fetch_attempts').first('n'),
+      await local.env.PRIVATE_DB.prepare(
+        'SELECT COUNT(*) n FROM fetch_attempts WHERE attempt>0',
+      ).first('n'),
     ).toBe(0);
     const next = '2026-10-04T18:27:00.000Z';
     const replay = await collectGPU(local.env, s, now, {
@@ -667,7 +674,9 @@ it('keeps a pre-request reservation when both HTTP 200 attempt logging and failu
   ).rejects.toThrow('synthetic_post_response_db_outage');
   expect(calls).toBe(1);
   expect(
-    await local.env.PRIVATE_DB.prepare('SELECT COUNT(*) n FROM fetch_attempts').first('n'),
+    await local.env.PRIVATE_DB.prepare(
+      'SELECT COUNT(*) n FROM fetch_attempts WHERE attempt>0',
+    ).first('n'),
   ).toBe(0);
   const original = await local.env.PRIVATE_DB.prepare(
     'SELECT state,next_attempt_at,lease_until FROM collection_runs',
@@ -693,7 +702,7 @@ it('keeps a pre-request reservation when both HTTP 200 attempt logging and failu
   expect(calls).toBe(1);
   expect((await local.env.EVIDENCE.list()).objects).toHaveLength(0);
 });
-it.each(['write', 'readback'])(
+it.each(['write', 'readback', 'daily_write', 'daily_readback'])(
   'does not send a request when PoC reservation %s fails',
   async (failure) => {
     const s = privateSource();
@@ -717,6 +726,18 @@ it.each(['write', 'readback'])(
               failure === 'readback' &&
               sql === 'SELECT next_attempt_at FROM collection_runs WHERE run_id=? AND lease_token=?'
             )
+              return {
+                bind: () => ({ first: async () => null }),
+              } as unknown as D1PreparedStatement;
+            if (failure === 'daily_write' && sql.startsWith('INSERT OR IGNORE INTO fetch_attempts'))
+              return {
+                bind: () => ({
+                  run: async () => {
+                    throw Error('synthetic_daily_reservation_failure');
+                  },
+                }),
+              } as unknown as D1PreparedStatement;
+            if (failure === 'daily_readback' && sql.startsWith('SELECT id FROM fetch_attempts'))
               return {
                 bind: () => ({ first: async () => null }),
               } as unknown as D1PreparedStatement;
@@ -749,85 +770,152 @@ it.each(['write', 'readback'])(
     expect((await local.env.EVIDENCE.list()).objects).toHaveLength(0);
   },
 );
-it('never shortens a newer reservation when an older timed-out reservation write completes late', async () => {
-  const s = privateSource(),
-    started = Date.now();
-  let requests = 0,
-    reservations = 0,
-    postResponseFailure = false;
-  const clock = () => new Date(Date.parse(now) + Date.now() - started).toISOString();
-  let releaseOld!: () => void, oldDone!: () => void;
-  const release = new Promise<void>((resolve) => {
-    releaseOld = resolve;
+it('does not send HTTP after a timed-out request reservation completes late', async () => {
+  const s = privateSource();
+  let calls = 0;
+  let release!: () => void;
+  let done!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  const done = new Promise<void>((resolve) => {
-    oldDone = resolve;
+  const completed = new Promise<void>((resolve) => {
+    done = resolve;
   });
-  const deadlines: string[] = [];
   const database = new Proxy(local.env.PRIVATE_DB, {
     get(target, key) {
       if (key === 'prepare')
         return (sql: string) => {
-          if (sql.startsWith('UPDATE collection_runs SET next_attempt_at=')) {
-            const statement = target.prepare(sql);
+          const statement = target.prepare(sql);
+          if (sql.startsWith('INSERT OR IGNORE INTO fetch_attempts'))
             return {
               bind: (...args: unknown[]) => ({
                 run: async () => {
-                  const ordinal = ++reservations;
-                  deadlines.push(args[0] as string);
-                  if (ordinal === 1) {
-                    await release;
-                    try {
-                      return await statement.bind(...args).run();
-                    } finally {
-                      oldDone();
-                    }
+                  await blocked;
+                  try {
+                    return await statement.bind(...args).run();
+                  } finally {
+                    done();
                   }
-                  const result = await statement.bind(...args).run();
-                  releaseOld();
-                  return result;
                 },
               }),
             } as unknown as D1PreparedStatement;
-          }
-          if (
-            postResponseFailure &&
-            (sql.startsWith('INSERT INTO fetch_attempts') ||
-              sql.startsWith("UPDATE collection_runs SET state='failed'"))
-          )
-            return {
-              bind: () => ({
-                run: async () => {
-                  throw Error('synthetic_post_response_db_outage');
-                },
-              }),
-            } as unknown as D1PreparedStatement;
-          return target.prepare(sql);
+          return statement;
         };
       const value = Reflect.get(target, key);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
   const network = (async () => {
-    requests++;
-    await done;
-    postResponseFailure = true;
+    calls++;
     return fetcher()('https://fixture.test');
   }) as typeof fetch;
-  await expect(
-    collectGPU({ ...local.env, PRIVATE_DB: database }, s, now, {
-      synthetic: true,
-      now: clock,
-      network: { fetcher: network, timeout_ms: 1000, sleep: async () => {} },
-    }),
-  ).rejects.toThrow('synthetic_post_response_db_outage');
-  expect(reservations).toBe(2);
-  expect(requests).toBe(1);
-  expect(deadlines[1] > deadlines[0]).toBe(true);
-  const saved = await local.env.PRIVATE_DB.prepare(
-    'SELECT next_attempt_at FROM collection_runs WHERE source_id=?',
-  )
-    .bind(s.source_id)
-    .first<{ next_attempt_at: string }>();
-  expect(saved?.next_attempt_at).toBe(deadlines[1]);
+  const result = await collectGPU({ ...local.env, PRIVATE_DB: database }, s, now, {
+    synthetic: true,
+    now: () => now,
+    network: { fetcher: network, timeout_ms: 50 },
+  });
+  expect(result).toMatchObject({ state: 'failed', reason: 'timeout' });
+  release();
+  await completed;
+  const again = await collectGPU(local.env, s, now, {
+    synthetic: true,
+    now: () => '2026-10-04T19:18:00.000Z',
+    network: { fetcher: network },
+  });
+  expect(again.state).toBe('partial');
+  expect(calls).toBe(0);
 });
+
+it('stores 150 private provider quotes across the three daily SKU partitions with one request each', async () => {
+  const s = privateSource();
+  s.gpu!.partitions = structuredClone(
+    sources.find((x) => x.source_id === s.source_id)!.gpu!.partitions,
+  );
+  s.max_records = 50;
+  const urls: string[] = [];
+  const network = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    urls.push(url);
+    const sku = url.split('/').at(-1)!;
+    expect(['h100-sxm', 'b200', 'b300']).toContain(sku);
+    return fetcher(
+      JSON.stringify(
+        document(
+          Array.from({ length: 50 }, (_, i) => row({ provider: 'synthetic-' + i })),
+          { sku: sku.toUpperCase() },
+        ),
+      ),
+    )(url);
+  }) as typeof fetch;
+  let result;
+  for (let i = 0; i < 6; i++) {
+    result = await collectGPU(local.env, s, now, {
+      synthetic: true,
+      now: () => new Date(Date.parse(now) + i * 300000).toISOString(),
+      network: { fetcher: network },
+    });
+    expect(['pending', 'complete']).toContain(result.state);
+  }
+  expect(result).toMatchObject({ state: 'complete', observations: 150 });
+  expect(urls).toEqual(
+    ['h100-sxm', 'b200', 'b300'].map((sku) => 'https://priceofcompute.com/api/v1/prices/' + sku),
+  );
+  const rows = await observations();
+  expect(rows).toHaveLength(150);
+  expect(new Set(rows.map((o) => o.domain.accelerator_model))).toEqual(
+    new Set(['H100', 'B200', 'B300']),
+  );
+  expect(new Set(rows.map((o) => o.entity_key)).size).toBe(150);
+  expect(new Set(rows.map((o) => gpuRecordKey(o.domain))).size).toBe(150);
+  const count = urls.length;
+  expect(
+    (
+      await collectGPU(local.env, s, now, {
+        synthetic: true,
+        now: () => '2026-10-04T23:30:00.000Z',
+        network: { fetcher: network },
+      })
+    ).state,
+  ).toBe('complete');
+  expect(urls).toHaveLength(count);
+  await assertPrivate();
+});
+
+it.each(['http_503', 'network_error', 'unknown_shape'])(
+  'keeps the daily bound after %s failures while allowing other SKUs and the next daily run',
+  async (failure) => {
+    const s = privateSource();
+    s.gpu!.partitions = structuredClone(
+      sources.find((x) => x.source_id === s.source_id)!.gpu!.partitions,
+    );
+    const calls: string[] = [];
+    const network = (async (input: RequestInfo | URL) => {
+      const sku = String(input).split('/').at(-1)!;
+      calls.push(sku);
+      if (failure === 'network_error') throw Error('synthetic-network-failure');
+      if (failure === 'http_503') return new Response('', { status: 503 });
+      return fetcher(
+        JSON.stringify(document(undefined, { sku: sku.toUpperCase(), currency: 'EUR' })),
+      )(String(input));
+    }) as typeof fetch;
+    let result;
+    for (let i = 0; i < 5; i++) {
+      result = await collectGPU(local.env, s, now, {
+        synthetic: true,
+        now: () => new Date(Date.parse(now) + i * 3601000).toISOString(),
+        network: { fetcher: network, sleep: async () => {} },
+      });
+    }
+    expect(result).toMatchObject({ state: 'partial', observations: 0 });
+    expect(calls).toEqual(['h100-sxm', 'b200', 'b300']);
+    expect((await local.env.EVIDENCE.list()).objects).toHaveLength(0);
+    const tomorrow = '2026-10-05T18:17:00.000Z';
+    await collectGPU(local.env, s, tomorrow, {
+      synthetic: true,
+      now: () => tomorrow,
+      network: { fetcher: network },
+    });
+    expect(calls).toEqual(['h100-sxm', 'b200', 'b300', 'h100-sxm']);
+    await assertPrivate();
+  },
+);

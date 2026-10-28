@@ -79,6 +79,7 @@ const codes = new Set([
   'source_backoff',
   'price_of_compute_success_cache',
   'price_of_compute_reservation_failed',
+  'price_of_compute_daily_request_limit',
   'timeout',
   'network_error',
   'attempts_exhausted',

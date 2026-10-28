@@ -8,6 +8,10 @@ import { gpuEvidenceFromBody, parseGPUProjection } from '../src/gpu-adapters';
 import { canCollect, canPublish } from '../src/policy';
 import sourceConfig from '../config/sources/price_of_compute.json';
 import type { Source } from '../src/schema';
+import { identifyGPU, gpuRecordKey, gpuComparison, GPU_CATALOG } from '../src/gpu';
+import { gpuRequestPlan } from '../src/request-plan';
+import { hash, stable } from '../src/util';
+import { gpuParser } from '../src/gpu-store';
 
 // All prices and provider identities in this file are invented. No live response fixture.
 const now = '2026-10-05T00:10:00.000Z';
@@ -30,6 +34,139 @@ const document = (rows = [row()], patch = {}) => ({
 });
 const project = (value = document()) =>
   projectPriceOfCompute(JSON.stringify(value), 'h100-sxm', now);
+
+test('retains H100 domain, cohort, scope and run identity from the pre-extension implementation', async () => {
+  const s = sourceConfig as Source;
+  const partition = s.gpu!.partitions[0];
+  const evidence = await gpuEvidenceFromBody(
+    s,
+    partition,
+    'synthetic-snapshot',
+    'synthetic-scope',
+    0,
+    now,
+    JSON.stringify(document()),
+    now,
+    true,
+  );
+  const d = JSON.parse(evidence.body).records[0];
+  // Baselines computed from HEAD before this extension, using the same invented quote.
+  assert.equal(
+    await hash(stable(d)),
+    'e7a9390842c592285eed9bfc27d7c15f5a6f4d17c7e308d76a2e4c2786177671',
+  );
+  assert.equal(
+    await hash(stable(gpuComparison(d))),
+    '38ab130b3fa016f3cc01b5e037b340999adac5e86024ac58eb09222fd8eab408',
+  );
+  assert.equal(gpuRecordKey(d), '["h100-sxm","synthetic-lab","on_demand",null]');
+  assert.equal(
+    await hash(
+      stable({
+        adapter: s.adapter,
+        endpoint: s.endpoint,
+        partition,
+        classification_version: gpuParser(s),
+        page_size: s.gpu!.page_size,
+        region_map: s.gpu!.region_map,
+        market_scope: 'observed_search_only',
+      }),
+    ),
+    '16d9569c81b8e3ba59a963015b5de92c162a19c8bfebd6eb105f664cf6ae2f3c',
+  );
+  assert.equal(
+    await hash(s.source_id + '|' + now),
+    '9e8953452800c23bf6d7ef88035e927a782b1ba52e555f1807302efd4f792994',
+  );
+});
+
+test('collects only the three approved private SKU endpoints and maps each family distinctly', async () => {
+  assert.deepEqual(
+    sourceConfig.gpu.partitions.map((p) => p.id),
+    ['h100-sxm', 'b200', 'b300'],
+  );
+  assert.equal(sourceConfig.max_records, 50);
+  assert.equal(canPublish(sourceConfig as Source, now), false);
+  for (const [sku, family] of [
+    ['h100-sxm', 'H100'],
+    ['b200', 'B200'],
+    ['b300', 'B300'],
+  ]) {
+    const s = gpuSource('price_of_compute');
+    const p = { id: sku, query: { sku }, models: [] };
+    assert.equal(
+      gpuRequestPlan(s, p, 0, now).url,
+      'https://priceofcompute.com/api/v1/prices/' + sku,
+    );
+    const providers = Array.from({ length: 50 }, (_, i) => row({ provider: 'synthetic-' + i }));
+    const body = (rows = providers) => JSON.stringify(document(rows, { sku: sku.toUpperCase() }));
+    const evidence = await gpuEvidenceFromBody(
+      s,
+      p,
+      'synthetic-snapshot',
+      'synthetic-scope',
+      0,
+      now,
+      body(),
+      now,
+      true,
+    );
+    const records = JSON.parse(evidence.body).records;
+    assert.equal(records.length, 50);
+    assert.equal(records[0].accelerator_model, family);
+    assert.equal(records[0].price_of_compute.requested_sku, sku);
+    assert.equal(records[0].classification_version, '20260927.1');
+    assert.throws(
+      () => projectPriceOfCompute(body([...providers, row()]), sku, now),
+      /provider_limit/,
+    );
+    assert.throws(
+      () =>
+        projectPriceOfCompute(
+          JSON.stringify(document(undefined, { sku: sku.toUpperCase(), currency: 'EUR' })),
+          sku,
+          now,
+        ),
+      /unsupported_root_field/,
+    );
+  }
+});
+
+test('recognizes GB300 independently and rejects it from B300 responses and request plans', () => {
+  assert.deepEqual(
+    GPU_CATALOG.families.find((f) => f.model === 'GB300'),
+    {
+      model: 'GB300',
+      vendor: 'NVIDIA',
+      architecture_family: 'Blackwell Ultra',
+      system_platform: 'rack-scale',
+      collection_status: 'not_connected',
+    },
+  );
+  for (const name of ['GB300', 'gb300', 'GB300 NVL72 rack with B300 GPUs']) {
+    assert.equal(identifyGPU(name).accelerator_model, 'GB300');
+    assert.equal(identifyGPU(name).gpu_sku_id, null);
+  }
+  assert.throws(
+    () => projectPriceOfCompute(JSON.stringify(document(undefined, { sku: 'GB300' })), 'b300', now),
+    /sku_mismatch/,
+  );
+  assert.throws(
+    () =>
+      projectPriceOfCompute(JSON.stringify(document(undefined, { sku: 'GB300' })), 'gb300', now),
+    /sku_not_approved/,
+  );
+  assert.throws(
+    () =>
+      gpuRequestPlan(
+        gpuSource('price_of_compute'),
+        { id: 'gb300', query: { sku: 'gb300' }, models: [] },
+        0,
+        now,
+      ),
+    /query_not_allowed/,
+  );
+});
 
 test('preserves exact decimal numeric tokens without float rounding', () => {
   const input = JSON.stringify(document()).replace(

@@ -105,23 +105,27 @@ describe('owner-commissioned license metadata (offline)', () => {
     expect(s.known_limitations).toContain(
       '2026-10-21 license review: API page requires a visible Price of Compute link for free use; redistribution/commercial scope and upstream terms remain ambiguous. Non-public, review_required.',
     );
-    expect(canCollect(s, reviewDate)).toBe(true);
-    expect(canPublish(s, reviewDate, true)).toBe(false);
-    // Canonical hashes from production 0abf2b6: no new grant, SKU or retention change.
-    expect(await hash(stable(s.policy))).toBe(
-      'a9954a7e462de0a2388b80c8122dbd8e9c3e641d502780a3b1aadf21ac8d2af8',
-    );
+    const approval = '2026-10-28T15:00:00.000Z';
+    expect(canCollect(s, reviewDate)).toBe(false);
+    expect(canCollect(s, approval)).toBe(true);
+    expect(canPublish(s, approval)).toBe(false);
+    expect(canPublish(s, approval, true)).toBe(false);
+    expect(s.policy.version).toBe('price_of_compute-20261029-private-v2');
+    expect(s.policy.valid_from).toBe(approval);
+    expect(s.policy.valid_until).toBe('2027-01-05T00:00:00.000Z');
+    expect(s.gpu!.partitions.map((p) => p.id)).toEqual(['h100-sxm', 'b200', 'b300']);
+    // Pre-extension production fingerprint: all nine grants, field scope and retention unchanged.
     expect(
       await hash(
         stable({
-          policy: s.policy,
-          adapter: s.adapter,
-          endpoint: s.endpoint,
-          selection: s.selection,
-          gpu: s.gpu,
+          rights: s.policy.rights,
+          fields: s.policy.fields,
+          retention_days: s.policy.retention_days,
+          retention_limit_days: s.policy.retention_limit_days,
+          retention: s.gpu!.retention,
         }),
       ),
-    ).toBe('cf525a8bc60a902190cd50cf907fa01ce64fc8e7e724a9a18b9a7cce5bfacb3f');
+    ).toBe('deb68aa7fe22c9d1030e938ff21df442d8178011840912cbd473282d58dc86d1');
   });
 
   // Captured before this metadata change, using the same canonical serialization as syncSource.

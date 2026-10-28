@@ -152,7 +152,8 @@ export function inspectPreflight(
       const gpu = sources.filter((x) => x.enabled && x.gpu);
       const isolatedPrivatePoC =
         deployment.collection_workload_mode === 'models_then_private_poc_v1' &&
-        deployment.shared_collection_budget_review_ref &&
+        deployment.shared_collection_budget_review_ref ===
+          'docs/price-of-compute-integration.md#private-sku-extension-20261029' &&
         gpu.length === 1 &&
         gpu[0].source_id === 'price_of_compute' &&
         gpu[0].adapter === 'price_of_compute' &&
@@ -160,9 +161,15 @@ export function inspectPreflight(
         gpu[0].max_bytes <= 1000000 &&
         gpu[0].gpu.max_pages === 1 &&
         gpu[0].gpu.pages_per_invocation === 1 &&
-        gpu[0].gpu.partitions.length === 1 &&
-        gpu[0].gpu.partitions[0].id === 'h100-sxm' &&
-        gpu[0].gpu.partitions[0].query.sku === 'h100-sxm' &&
+        gpu[0].gpu.page_size <= 50 &&
+        gpu[0].gpu.partitions.length === 3 &&
+        gpu[0].gpu.partitions.every(
+          (p: Config, i: number) =>
+            p.id === ['h100-sxm', 'b200', 'b300'][i] &&
+            p.query.sku === p.id &&
+            Object.keys(p.query).length === 1 &&
+            !p.models.length,
+        ) &&
         gpu[0].gpu.snapshot_max_age_minutes === 360 &&
         collector.vars.COLLECTION_CRON === '17 18 * * *' &&
         collector.vars.GPU_RESUME_CRON === '*/5 18-23 * * *' &&
@@ -176,7 +183,8 @@ export function inspectPreflight(
         ':shared_gpu_models_budget_requires_separate_review');
       if (gpu.length && isolatedPrivatePoC)
         // 68 continuation slots follow 18:17 UTC before the existing window ends.
-        require(slots + 6 <= 68, s.source_id +
+        // Per SKU: two collection/finalization and two retention slots; two margin.
+        require(slots + 4 * gpu[0].gpu.partitions.length + 2 <= 68, s.source_id +
           ':combined_daily_capacity_exceeds_existing_68_continuations');
       if (s.policy.retention_limit_days)
         require(Math.max(

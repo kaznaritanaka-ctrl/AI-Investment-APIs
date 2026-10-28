@@ -433,7 +433,7 @@ export async function runDTO(
   result.canonical_run_id = String(canonical[0]?.run_id ?? id);
   const attempts = await rows(
     env.PRIVATE_DB,
-    'SELECT attempt,started_at,status,code,duration_ms FROM fetch_attempts WHERE run_id=? AND started_at<=? ORDER BY id DESC LIMIT 101',
+    'SELECT attempt,started_at,status,code,duration_ms FROM fetch_attempts WHERE run_id=? AND attempt>0 AND started_at<=? ORDER BY id DESC LIMIT 101',
     [id, asOf],
   );
   result.attempts = attempts.slice(0, 100).map((x) => ({

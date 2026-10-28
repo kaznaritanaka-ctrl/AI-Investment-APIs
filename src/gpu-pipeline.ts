@@ -9,6 +9,7 @@ import { hash, stable, errorCode, isoTime } from './util';
 import { finalizeGPUMetrics } from './gpu-metrics';
 import { collectionIdentity } from './run-identity';
 import { observe, type SourceObserver } from './telemetry';
+import { priceOfComputeReservation } from './price-of-compute';
 export async function collectGPU(
   env: CollectorEnv,
   s: Source,
@@ -144,6 +145,21 @@ export async function collectGPU(
         else {
           if (opt.savedOnly) continue;
           if (s.adapter === 'price_of_compute') {
+            // A request budget is consumed before HTTP, even if the response or its
+            // logging is lost. Saved evidence above remains replayable without HTTP.
+            const consumed = await env.PRIVATE_DB.prepare(
+              'SELECT id FROM fetch_attempts WHERE run_id=? AND attempt=0 AND code=? LIMIT 1',
+            )
+              .bind(run, priceOfComputeReservation(partition.query.sku))
+              .first();
+            if (consumed) {
+              await env.PRIVATE_DB.prepare(
+                "UPDATE gpu_snapshots SET state='quarantined',reason='price_of_compute_daily_request_limit' WHERE snapshot_id=?",
+              )
+                .bind(id)
+                .run();
+              continue;
+            }
             // Different slots may race, but only one source run may make a fresh request.
             // Same-slot concurrency is already serialized by the run lease above.
             const otherLease = await env.PRIVATE_DB.prepare(
@@ -152,13 +168,19 @@ export async function collectGPU(
               .bind(s.source_id, run, now())
               .first<{ lease_until: string }>();
             if (otherLease) throw new FetchFailure('source_backoff', otherLease.lease_until);
-            // Conservatively pause the entire source for >=1h after any HTTP 2xx,
-            // including parse/content failures. Only approved attempt metadata is retained;
-            // malformed payloads are never cached. Saved same-slot evidence bypasses HTTP.
+            // Keep the >=1h source-wide backoff across runs, including 2xx parse
+            // failures. Within this run a never-requested different SKU has its own
+            // endpoint/budget and can proceed without consuming idle cooldown slots.
+            // Saved evidence bypasses HTTP; malformed payloads are never cached.
             const recent = await env.PRIVATE_DB.prepare(
-              'SELECT a.started_at,a.duration_ms FROM fetch_attempts a JOIN collection_runs r USING(run_id) WHERE r.source_id=? AND a.status>=200 AND a.status<300 AND a.started_at>=? ORDER BY a.started_at DESC,a.id DESC LIMIT 1',
+              'SELECT a.started_at,a.duration_ms FROM fetch_attempts a JOIN collection_runs r USING(run_id) WHERE r.source_id=? AND a.status>=200 AND a.status<300 AND a.started_at>=? AND (a.run_id<>? OR EXISTS (SELECT 1 FROM fetch_attempts b WHERE b.run_id=a.run_id AND b.attempt=0 AND b.code=?)) ORDER BY a.started_at DESC,a.id DESC LIMIT 1',
             )
-              .bind(s.source_id, new Date(Date.parse(now()) - 2 * 3600000).toISOString())
+              .bind(
+                s.source_id,
+                new Date(Date.parse(now()) - 2 * 3600000).toISOString(),
+                run,
+                priceOfComputeReservation(partition.query.sku),
+              )
               .first<{ started_at: string; duration_ms: number }>();
             if (recent) {
               const until = new Date(
@@ -177,6 +199,7 @@ export async function collectGPU(
           }
           const response = await fetchGPURequest(s, env, partition, page, scheduled, {
             ...opt.network,
+            ...(s.adapter === 'price_of_compute' ? { max_attempts: 1 as const } : {}),
             now,
             fetcher:
               s.adapter === 'price_of_compute'
@@ -214,6 +237,19 @@ export async function collectGPU(
                         .filter((v): v is string => v !== null)
                         .sort()
                         .at(-1)!;
+                      const code = priceOfComputeReservation(partition.query.sku);
+                      const reservedRequest = await env.PRIVATE_DB.prepare(
+                        'INSERT OR IGNORE INTO fetch_attempts(run_id,attempt,started_at,status,code,duration_ms) SELECT ?,0,?,NULL,?,0 WHERE NOT EXISTS (SELECT 1 FROM fetch_attempts WHERE run_id=? AND attempt=0 AND code=?)',
+                      )
+                        .bind(run, now(), code, run, code)
+                        .run();
+                      const verifiedRequest = await env.PRIVATE_DB.prepare(
+                        'SELECT id FROM fetch_attempts WHERE run_id=? AND attempt=0 AND code=? LIMIT 1',
+                      )
+                        .bind(run, code)
+                        .first();
+                      if (!reservedRequest.meta.changes || !verifiedRequest)
+                        throw new Error('request_reservation_not_verified');
                     } catch {
                       throw new FetchFailure('price_of_compute_reservation_failed', reservationAt);
                     }

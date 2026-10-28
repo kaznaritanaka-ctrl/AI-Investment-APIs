@@ -11,6 +11,12 @@ const PRICING_TYPES = new Set(['on_demand', 'spot', 'community']);
 const ROOT_FIELDS = new Set(['sku', 'day', 'prices', 'providers', 'updated_at', 'attribution']);
 const ROW_FIELDS = new Set(['provider', 'pricing_type', 'usd_per_gpu_hr', 'region', 'observed_at']);
 
+/** Fixed metadata only; attempt=0 distinguishes a reservation from an HTTP result. */
+export function priceOfComputeReservation(sku: string): string {
+  if (!SUPPORTED_SKUS.has(sku)) throw Error('sku_not_approved');
+  return 'poc_request_reserved_' + sku;
+}
+
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('invalid_object');
   return value as Record<string, unknown>;

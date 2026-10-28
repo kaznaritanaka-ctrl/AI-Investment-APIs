@@ -140,45 +140,68 @@ try {
   assert.equal((await collectionStep('models-intake')).state, 'pending');
   let modelSteps = 0;
   let pocSteps = 1; // Its saved first page is held while Models owns the next slots.
-  let collectionDone = false;
+  let modelsDone = false;
   for (let i = 0; i < 60; i++) {
     const resumed = await collectionStep('resume');
     const verified = await collectionStep('verify');
     assert.equal(resumed.results.length, 1);
-    if (resumed.models_work) {
-      modelSteps++;
-      assert.equal(resumed.results[0].source_id, 'synthetic_collection_models');
-      assert.equal(verified.poc.processing_stage, 'metrics');
-    } else {
-      pocSteps++;
-      assert.equal(verified.models.state, 'complete');
-      assert.equal(resumed.results[0].source_id, 'price_of_compute');
-      collectionDone = resumed.results[0].state === 'complete';
-    }
-    if (collectionDone) break;
+    assert.equal(resumed.models_work, true);
+    modelSteps++;
+    assert.equal(resumed.results[0].source_id, 'synthetic_collection_models');
+    assert.equal(
+      verified.poc.find((row) => row.partition_id === 'h100-sxm').processing_stage,
+      'metrics',
+    );
+    modelsDone = verified.models.state === 'complete';
+    if (modelsDone) break;
+  }
+  assert(modelsDone);
+  assert(modelSteps <= 33);
+  let collectionDone = false;
+  for (const time of [1, 1, 2, 2, 2]) {
+    const result = await collectionStep('poc-intake?time=' + time);
+    pocSteps++;
+    assert(['pending', 'complete'].includes(result.state), JSON.stringify(result));
+    collectionDone = result.state === 'complete';
   }
   assert(collectionDone);
-  assert(modelSteps <= 33);
-  assert(pocSteps <= 3);
+  assert(pocSteps <= 6);
   const privateResult = await collectionStep('verify');
   assert.equal(privateResult.models.model_count, 500);
   assert.equal(privateResult.models.price_count, 500);
-  assert.equal(privateResult.private_count, 50);
+  assert.equal(privateResult.private_count, 150);
+  assert.deepEqual(
+    privateResult.poc.map((row) => [row.partition_id, row.state, row.received_count]),
+    [
+      ['b200', 'complete', 50],
+      ['b300', 'complete', 50],
+      ['h100-sxm', 'complete', 50],
+    ],
+  );
+  assert.deepEqual(
+    privateResult.attempts.map((row) => [row.code, row.n]),
+    [
+      ['poc_request_reserved_b200', 1],
+      ['poc_request_reserved_b300', 1],
+      ['poc_request_reserved_h100-sxm', 1],
+    ],
+  );
   assert.equal(privateResult.public_count, 0);
   assert.equal(privateResult.derived_count, 0);
   assert.deepEqual(privateResult.fk, []);
   assert.equal(privateResult.status.sources[0].snapshot, 'complete');
   assert.equal(privateResult.status.sources[0].publication, 'not_applicable');
   assert.equal(privateResult.status.overnight.sources[0].severity, 'ok');
-  assert.equal((await collectionStep('retire')).deleted, 50);
-  assert.equal((await collectionStep('retire')).deleted, 0);
+  let removed = 0;
+  for (let i = 0; i < 6; i++) removed += (await collectionStep('retire')).deleted;
+  assert.equal(removed, 150);
   const retired = await collectionStep('verify');
   assert.equal(retired.private_count, 0);
-  assert.equal(retired.poc.state, 'purged');
+  assert(retired.poc.every((row) => row.state === 'purged'));
   assert.deepEqual(retired.fk, []);
   assert.equal(
     collectionProfiles.reduce((n, p) => n + p.mock_http_requests, 0),
-    2,
+    4,
   );
   await writeFile(
     'work/runtime-private-collection-report.json',
@@ -188,10 +211,10 @@ try {
         external_http_requests: 0,
         cloud_cpu_measured: false,
         models: 500,
-        private_provider_rows: 50,
+        private_provider_rows: 150,
         model_continuations: modelSteps,
         poc_collection_invocations: pocSteps,
-        poc_retention_invocations: 2,
+        poc_retention_invocations: 6,
         max_sql_statements_per_invocation: Math.max(
           ...collectionProfiles.map((p) => p.sql_statements),
         ),
@@ -202,7 +225,7 @@ try {
     ) + '\n',
   );
   console.log(
-    'Private PoC workerd passed: 50 rows, Models 500 priority, no public values or derived metrics, bounded retention. Synthetic only.',
+    'Private PoC workerd passed: 150 rows across three SKUs, Models 500 priority, no public values or derived metrics, bounded retention. Synthetic only.',
   );
   let steps = 0,
     maxBatch = 0,
