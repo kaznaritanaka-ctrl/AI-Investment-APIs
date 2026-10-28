@@ -16,6 +16,11 @@
       "collection_status": "not_connected"
     },
     {
+      "model": "GB200",
+      "vendor": "NVIDIA",
+      "collection_status": "not_connected"
+    },
+    {
       "model": "B200",
       "vendor": "NVIDIA",
       "collection_status": "not_connected"

@@ -22,6 +22,17 @@ export const observe = (
 
 // Never log arbitrary Error.message or arbitrary result properties, even if they look like a code.
 const codes = new Set([
+  'effectstory_access_challenge',
+  'effectstory_html_shape',
+  'effectstory_table_shape',
+  'effectstory_record_limit',
+  'effectstory_price_shape',
+  'effectstory_checked_date',
+  'effectstory_duplicate_record',
+  'effectstory_daily_reservation',
+  'effectstory_daily_budget',
+  'effectstory_no_backfill',
+  'effectstory_no_saved_evidence',
   'estat_disabled',
   'estat_resume_failed',
   'estat_schema_unavailable',

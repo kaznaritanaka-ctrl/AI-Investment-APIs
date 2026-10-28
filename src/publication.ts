@@ -112,7 +112,7 @@ export function publicObservation(o: Observation, s: Source, batch: string) {
       source_id: s.source_id,
       source_url: s.source_url,
       operator: s.operator,
-      secondary: s.adapter === 'models_dev' || s.adapter === 'price_of_compute',
+      secondary: ['models_dev', 'price_of_compute', 'effectstory'].includes(s.adapter),
     },
     attribution: s.attribution_text,
     methodology:

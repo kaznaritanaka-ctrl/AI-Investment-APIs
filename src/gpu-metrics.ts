@@ -180,9 +180,9 @@ export async function finalizeGPUMetrics(
   now: string,
 ) {
   if (snap.state !== 'complete') return;
-  // The approved private PoC rollout stores provider observations, not an index.
-  // Avoid spending one continuation per provider on unrequested aggregate work.
-  if (s.adapter === 'price_of_compute' && !canPublish(s, now)) {
+  // These secondary catalogs store published provider observations only.
+  // Avoid one continuation per provider for unrequested aggregate/index work.
+  if (s.adapter === 'effectstory' || (s.adapter === 'price_of_compute' && !canPublish(s, now))) {
     await env.PRIVATE_DB.prepare(
       "UPDATE gpu_snapshots SET processing_stage='done' WHERE snapshot_id=? AND state='complete'",
     )

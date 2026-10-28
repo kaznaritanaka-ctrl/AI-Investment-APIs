@@ -13,6 +13,7 @@ import {
 import { type Partition, validateNextURL } from './request-plan';
 import { stable, hash, decimal, D, isoTime, isoDate } from './util';
 import { projectPriceOfCompute } from './price-of-compute';
+import { parseEffectStory } from './effectstory';
 type Obj = Record<string, unknown>;
 const object = (v: unknown): Obj => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('gpu_schema_invalid');
@@ -160,7 +161,9 @@ export async function gpuEvidenceFromBody(
   // path, which would also turn numeric provider identifiers into apparently valid labels.
   const poc =
     s.adapter === 'price_of_compute' ? projectPriceOfCompute(text, p.query.sku, observed) : null;
-  const root = poc ? {} : object(parseLossless(text, undefined, (token) => token));
+  const effectstory =
+    s.adapter === 'effectstory' ? parseEffectStory(text, observed, s.max_records) : null;
+  const root = poc || effectstory ? {} : object(parseLossless(text, undefined, (token) => token));
   if (root.error || root.errors) throw new Error('gpu_error_response');
   const records: (GPURental | GPUSecondary)[] = [],
     issues: string[] = [];
@@ -291,6 +294,39 @@ export async function gpuEvidenceFromBody(
           return GPURentalSchema.parse(d);
         });
     }
+  } else if (effectstory) {
+    if (page !== 0 || s.source_id !== 'effectstory')
+      throw new Error('gpu_source_metadata_mismatch');
+    received = total = effectstory.length;
+    for (const [index, row] of effectstory.entries()) {
+      const { provider, amount_decimal, ...metadata } = row;
+      const offer = await hash(stable([provider, row.gpu_label, row.basis]));
+      const d = emptyRental(provider, offer, row.gpu_label, synthetic);
+      // The table's unit is per GPU-hour, even for rack/system labels. Do not
+      // infer a one-GPU sale, provider region, commitment, inventory or tax.
+      Object.assign(d, {
+        amount_decimal,
+        billing_unit: 'gpu_hour',
+        price_scope: 'public',
+        secondary_source: true,
+        origin_source_id: null,
+        origin_offer_id: null,
+        evidence_pointer: 'full-table/' + index,
+        effectstory: metadata,
+      });
+      // Only catalog model normalization is authorized for this secondary table.
+      Object.assign(d, {
+        gpu_sku_id: null,
+        vram_gb: null,
+        form_factor: 'unknown',
+        module_generation: null,
+        system_platform: null,
+        identification_evidence: null,
+        classification_status: 'candidate',
+        exclusion_reasons: ['ambiguous_sku'],
+      });
+      records.push(GPURentalSchema.parse(d));
+    }
   } else if (poc) {
     if (page !== 0) throw new Error('pagination_unsupported');
     received = poc.records.length;
@@ -395,6 +431,20 @@ export function parseGPUProjection(s: Source, e: Evidence): Candidate[] {
     if (!domain) throw new Error('gpu_dataset_mismatch');
     if (domain.synthetic !== e.synthetic) throw new Error('synthetic_origin_mismatch');
     const poc = 'price_of_compute' in domain ? domain.price_of_compute : undefined;
+    const es = 'effectstory' in domain ? domain.effectstory : undefined;
+    if (s.adapter === 'effectstory') {
+      if (
+        !es ||
+        s.source_id !== 'effectstory' ||
+        es.checked_date > e.observed_at.slice(0, 10) ||
+        !('billing_unit' in domain) ||
+        domain.billing_unit !== 'gpu_hour' ||
+        domain.currency !== 'USD' ||
+        domain.accelerator_model !== identifyGPU(es.gpu_label).accelerator_model ||
+        !domain.secondary_source
+      )
+        throw new Error('gpu_source_metadata_mismatch');
+    } else if (es) throw new Error('gpu_source_metadata_mismatch');
     if (s.adapter === 'price_of_compute') {
       if (
         !poc ||
@@ -424,7 +474,7 @@ export function parseGPUProjection(s: Source, e: Evidence): Candidate[] {
       domain,
       entity_key: key,
       source_record_key: key,
-      source_date: poc?.source_day ?? null,
+      source_date: es?.checked_date ?? poc?.source_day ?? null,
       // Source update time is retained explicitly; it is not an established publication time.
       source_published_at: null,
       source_effective_at: null,
