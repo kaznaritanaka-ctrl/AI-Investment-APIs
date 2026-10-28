@@ -6,9 +6,12 @@ import { collectGPU } from '../src/gpu-pipeline';
 import { resumeCollections } from '../src/collection-continuation';
 import { expireGPUData } from '../src/gpu-retention';
 import { readOperationalStatus } from '../src/operational-status';
+import { sources } from '../src/sources';
 
 const slot = '2026-10-06T18:17:00.000Z';
 const resumedAt = '2026-10-06T19:00:00.000Z';
+const intakeTimes = [slot, resumedAt, '2026-10-06T19:05:00.000Z'];
+const statusAt = '2026-10-06T19:10:00.000Z';
 
 // All inputs below are invented. No production response, Secret or network access.
 export async function collectionRuntime(request: Request, env: CollectorEnv) {
@@ -17,6 +20,9 @@ export async function collectionRuntime(request: Request, env: CollectorEnv) {
   models.source_id = 'synthetic_collection_models';
   models.models!.max_models = 500;
   const poc = gpuSource('price_of_compute');
+  poc.gpu!.partitions = structuredClone(
+    sources.find((source) => source.source_id === 'price_of_compute')!.gpu!.partitions,
+  );
   poc.max_records = 50;
   poc.gpu!.retention = {
     evidence_days: 7,
@@ -82,22 +88,34 @@ export async function collectionRuntime(request: Request, env: CollectorEnv) {
     };
   let result: unknown;
   if (path === '/collection-poc-intake') {
+    const index = Number(new URL(request.url).searchParams.get('time') ?? '0');
+    const now = intakeTimes[index];
+    if (!now) throw new Error('synthetic_time_invalid');
     result = await collectGPU(tracked, poc, slot, {
       synthetic: true,
-      now: () => slot,
+      now: () => now,
       network: {
-        fetcher: mock({
-          sku: 'H100-SXM',
-          day: '2026-10-06',
-          updated_at: '2026-10-06T17:00:00Z',
-          providers: Array.from({ length: 50 }, (_, i) => ({
-            provider: 'synthetic-budget-provider-' + i,
-            pricing_type: 'on_demand',
-            usd_per_gpu_hr: 2,
-            region: 'synthetic-budget-region',
-            observed_at: '2026-10-06T16:00:00Z',
-          })),
-        }),
+        fetcher: async (input) => {
+          const url = new URL(String(input));
+          const slug = url.pathname.split('/').at(-1);
+          if (
+            url.origin !== 'https://priceofcompute.com' ||
+            !['h100-sxm', 'b200', 'b300'].includes(slug ?? '')
+          )
+            throw new Error('unexpected_synthetic_request');
+          return mock({
+            sku: slug!.toUpperCase(),
+            day: '2026-10-06',
+            updated_at: '2026-10-06T17:00:00Z',
+            providers: Array.from({ length: 50 }, (_, i) => ({
+              provider: 'synthetic-budget-provider-' + i,
+              pricing_type: 'on_demand',
+              usd_per_gpu_hr: 2,
+              region: 'synthetic-budget-region',
+              observed_at: '2026-10-06T16:00:00Z',
+            })),
+          })(input);
+        },
       },
     });
   } else if (path === '/collection-models-intake') {
@@ -118,11 +136,20 @@ export async function collectionRuntime(request: Request, env: CollectorEnv) {
       )
         .bind(models.source_id)
         .first(),
-      poc: await env.PRIVATE_DB.prepare(
-        'SELECT state,processing_stage,received_count FROM gpu_snapshots WHERE source_id=?',
-      )
-        .bind(poc.source_id)
-        .first(),
+      poc: (
+        await env.PRIVATE_DB.prepare(
+          'SELECT partition_id,state,processing_stage,received_count FROM gpu_snapshots WHERE source_id=? ORDER BY partition_id',
+        )
+          .bind(poc.source_id)
+          .all()
+      ).results,
+      attempts: (
+        await env.PRIVATE_DB.prepare(
+          'SELECT code,COUNT(*) n FROM fetch_attempts WHERE run_id IN (SELECT run_id FROM collection_runs WHERE source_id=?) AND attempt=0 GROUP BY code ORDER BY code',
+        )
+          .bind(poc.source_id)
+          .all()
+      ).results,
       private_count: await env.PRIVATE_DB.prepare(
         'SELECT COUNT(*) n FROM observations WHERE source_id=?',
       )
@@ -142,7 +169,7 @@ export async function collectionRuntime(request: Request, env: CollectorEnv) {
       status: await readOperationalStatus(
         { ...env, COLLECTION_CRON: '17 18 * * *', COLLECTION_ENABLED: 'true' },
         [poc],
-        resumedAt,
+        statusAt,
       ),
     };
   } else throw new Error('synthetic_collection_path_invalid');

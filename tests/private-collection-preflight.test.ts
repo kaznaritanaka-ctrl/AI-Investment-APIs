@@ -10,7 +10,7 @@ const fixture = () => structuredClone(sources);
 const inspect = (selected = fixture(), d = deployment) =>
   inspectPreflight(d, collector, api, selected);
 
-it('permits the reviewed 500-model plus one 50-row private H100 workload without extra Crons', () => {
+it('permits 500 models plus three private 50-row SKUs within the existing Crons', () => {
   expect(inspect()).toMatchObject({ ready: true, errors: [], blockers: [] });
 });
 
@@ -27,7 +27,7 @@ it.each(['public', 'sku', 'source', 'rows', 'window'] as const)(
     const poc = selected.find((s) => s.source_id === 'price_of_compute')!;
     if (kind === 'public') poc.policy.rights.public_display = 'allowed';
     if (kind === 'sku')
-      poc.gpu!.partitions.push({ id: 'b200', query: { sku: 'b200' }, models: [] });
+      poc.gpu!.partitions.push({ id: 'gb300', query: { sku: 'gb300' }, models: [] });
     if (kind === 'source') selected.find((s) => s.source_id === 'lambda')!.enabled = true;
     if (kind === 'rows') poc.max_records = 51;
     if (kind === 'window') poc.gpu!.snapshot_max_age_minutes = 720;

@@ -19,11 +19,11 @@
   "rights_evidence_ref": "docs/license-review-20261021.md#price_of_compute",
   "attribution_text": "Data: Price of Compute (https://www.priceofcompute.com/); visible link required, not a redistribution grant",
   "known_limitations": [
-    "Owner approved the private H100-SXM PoC scope and retention on 2026-10-06: collection, private storage and internal analysis are allowed; external LLM processing and raw redistribution are denied; publication is not authorized.",
+    "Owner approved the existing private scope extension to H100-SXM, B200 and B300 on 2026-10-29 00:00 JST; collection, private storage and internal analysis only. Existing rights and retention are unchanged; publication remains unauthorized.",
     "2026-10-21 license review: API page requires a visible Price of Compute link for free use; redistribution/commercial scope and upstream terms remain ambiguous. Non-public, review_required.",
-    "Approved private scope; production activation awaits validated Collector deployment and R2 retention rules.",
+    "The B200/B300 scope extension requires a validated Collector release; existing private collection rights and retention rules are unchanged.",
     "Secondary listed provider prices; retrieval success is not proof of current provider quotes or availability.",
-    "Only H100-SXM, one complete bounded response, at most 50 provider rows.",
+    "Only h100-sxm, b200 and b300: one HTTP request per SKU per daily run, at most 50 provider rows per SKU / 150 total; no GB300 requests or history backfill.",
     "Unknown shape or semantics fail closed before projection storage; rejected raw bodies cannot be reparsed.",
     "No external LLM processing or public data release; no history backfill."
   ],
@@ -33,7 +33,7 @@
   "max_bytes": 1000000,
   "max_records": 50,
   "policy": {
-    "version": "price_of_compute-20261006-private-v1",
+    "version": "price_of_compute-20261029-private-v2",
     "rights": {
       "automated_collection": "allowed",
       "private_storage": "allowed",
@@ -49,31 +49,45 @@
       "gpu_projection_v1"
     ],
     "conditions": [
-      "Owner approved 2026-10-06: H100-SXM daily acquisition, private storage and internal analysis only. Publication and external LLM processing are not authorized.",
+      "Owner approved 2026-10-29 00:00 JST: extend the existing private H100-SXM daily scope to B200 and B300. Existing rights remain unchanged; publication and external LLM processing are not authorized.",
       "Whitelist: requested sku; source day/updated_at; provider label/pricing_type/usd_per_gpu_hr/region/observed_at; fixed attribution; retrieval time and integrity hashes.",
       "Do not persist raw response, upstream aggregate prices, arbitrary text, URLs or unreviewed fields.",
-      "One H100-SXM partition per daily slot; existing source-wide >=1h successful-response/reservation cooldown; <=3 attempts per network invocation, not an enforced three-per-day limit.",
+      "Three fixed SKU partitions (h100-sxm, b200, b300) per daily slot, one HTTP attempt each including failures; durable pre-request reservation; saved-evidence replay only thereafter. Existing source-wide >=1h cross-run cooldown remains; never-requested distinct SKUs in the same run may proceed without that wait. One page per invocation and six-hour capture window remain.",
       "Approved evidence/archive/normalized/backup limits are 7/7/180/30 days; original absolute expiry applies.",
       "No public display, normalized/raw/derived/commercial redistribution or external LLM processing is authorized."
     ],
-    "valid_from": "2026-10-06T00:00:00.000Z",
+    "valid_from": "2026-10-28T15:00:00.000Z",
     "valid_until": "2027-01-05T00:00:00.000Z",
     "retention_days": 7,
     "retention_limit_days": null,
-    "decision_actor": "Owner approved the exact private collection scope and retention on 2026-10-06; production deployment/R2 changes require separate immediate approval.",
-    "evidence_version": "Official API/attribution documentation reviewed 2026-10-06; owner approved private H100 scope and retention; no live acquisition yet.",
+    "decision_actor": "Kaz approved the existing private SKU scope extension on 2026-10-29 00:00 JST; no new rights grant, secrets or cost change.",
+    "evidence_version": "Existing API/attribution and retention evidence retained; Kaz approved H100-SXM/B200/B300 scope 2026-10-29 00:00 JST. This change uses synthetic fixtures only, with no new upstream request.",
     "evidence_refs": [
       "https://www.priceofcompute.com/api",
       "https://www.priceofcompute.com/press"
     ]
   },
   "gpu": {
-    "owner_approval_ref": "owner-private-collection-20261006-h100-sxm",
+    "owner_approval_ref": "owner-private-collection-20261029-h100-sxm-b200-b300",
     "partitions": [
       {
         "id": "h100-sxm",
         "query": {
           "sku": "h100-sxm"
+        },
+        "models": []
+      },
+      {
+        "id": "b200",
+        "query": {
+          "sku": "b200"
+        },
+        "models": []
+      },
+      {
+        "id": "b300",
+        "query": {
+          "sku": "b300"
         },
         "models": []
       }
