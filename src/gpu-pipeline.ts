@@ -9,12 +9,9 @@ import { hash, stable, errorCode, isoTime } from './util';
 import { finalizeGPUMetrics } from './gpu-metrics';
 import { collectionIdentity, dailyCollectionSlot, minuteSlot } from './run-identity';
 import { observe, type SourceObserver } from './telemetry';
-<<<<<<< HEAD
 import { priceOfComputeReservation } from './price-of-compute';
-=======
 const nextUTCDate = (now: string) =>
   new Date(Date.parse(now.slice(0, 10) + 'T00:00:00.000Z') + 86400000).toISOString();
->>>>>>> cc12dde (EffectStory（CC BY 4.0）のクラウドGPU価格を公開ソースとして追加、GB300をカタログに追加)
 export async function collectGPU(
   env: CollectorEnv,
   s: Source,

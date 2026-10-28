@@ -204,8 +204,8 @@ export function inspectPreflight(
       if (gpu.length && isolatedPrivatePoC)
         // 68 continuation slots follow 18:17 UTC before the existing window ends.
         // Per SKU: two collection/finalization and two retention slots; two margin; EffectStory two.
-        require(slots + 4 * gpu[0].gpu.partitions.length + 2 + (reviewedEffectstory ? 2 : 0) <= 68, s.source_id +
-          ':combined_daily_capacity_exceeds_existing_68_continuations');
+        require(slots + 4 * gpu[0].gpu.partitions.length + 2 + (reviewedEffectstory ? 2 : 0) <=
+          68, s.source_id + ':combined_daily_capacity_exceeds_existing_68_continuations');
       if (s.policy.retention_limit_days)
         require(Math.max(
           m.retention.evidence_days,
