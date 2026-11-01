@@ -6,6 +6,8 @@ PR #24をマージしたmain=b30554eに、Kazの2026-10-21 21:05 JST承認に基
 
 当時の規約確認は[2026-10-21記録](license-review-20261021.md)のgpusoroban／rebroを参照します。呼び出し側が21:06 JSTに取得したwork内の本文を使い、この実装作業では外部通信も実収集も行いませんでした。Highresoは現行と11/1適用新版を確認済み、Rebroは/reason/・/rules/・robotsのContent-Signalまで記録しました。robots指紋は保存本文から計算済みでした。規約は抽出テキストなので既存HTML指紋との一致を保証できず、terms_sha256=null、source.enabled=false、wire未確認、保持unapproved、Time Travel/lifecycle未確認だった準備段階の記録です。フラグだけを切り替えても取得しない検査は維持します。権利承認と未確認の技術ゲートを混同しません。
 
+**2026-11-01設定更新**: Kazが03:13Z（12:13 JST）に承認した規約fallbackを`highreso_public-20261101-private-v5`で有効化した。保存HTMLの既存指紋を照合し、旧文面が残る`/terms`から承認済み新版の固定URL`/5401872`へ切り替える。権利・対象・保持・非公開の範囲は変えない。配備とremote D1登録は未実施で、取得前に`adoptReviewedResearchConfig`による明示登録が必要。同UTC日の旧runを置き換える再試行は1日1run制約で拒否される。[承認・確認記録](private-gpu-deploy-checklist.md#terms-fallback-20261101)。以下の1 run最大3 HTTPは初期設計の記録で、2026-10-23承認後は最大3 sequence/run・合計9 HTTP。1 sequenceはrobots→規約→価格の最大3 HTTPで、追加fallback要求は行わない。
+
 ## 収集と保存
 
 `collectPublicGpuDay` は非公開の日次呼出し口です。承認済み設定を渡した場合も、既存の研究用取得・保存・分析、terms、owner、wire、保持、外部取消し・削除記録を検査します。1 source／UTC日1 run、1ページ、1 run最大3 HTTP要求（robots→規約→価格を各1要求、同じrunの追加fallback要求なし）、取得窓6時間、5分lease、SQL batch最大20文です。失敗はsourceごとに分離します。429のRetry-Afterは日を跨いでも守り、403、規約・robots・表構造の変更などは新しい設定のレビューまで停止します。単純再実行では要求予算を復活させません。

@@ -123,7 +123,7 @@ pnpm exec wrangler rollback <DC配備直前のCollector-version-id> -c wrangler.
 - [ ] 対象sourceの取得形式と最小投影を実応答で確認しwire_contract_review_refを記録する。Highresoは呼び出し側が取得済みのwork/live/をオフライン解析して確認済み（下記wire記録）。Rebroは見送り。本文・実fixtureをGit/CIへ保存しない。
 - [ ] [規約確認記録](license-review-20261021.md)のRebro別サイト利用規約の未公開・第10条の適用リスクを確認する。公開範囲や既存grantを広げず、禁止と判明した場合は収集を止める。
 - [ ] robotsFingerprint（CRLF→LF、前後trim、UTF-8のSHA-256）を実応答と照合する。規約はtermsFingerprintによるHTML解析・可視本文正規化で照合する。抽出テキストだけから規約hashを推測しない。
-- [ ] Highresoは11/1 00:00 JSTより前にterms_sha256、以降は確認済み新版のnext_terms_sha256を使用する。URLは/termsが第一。新版が/5401872にしかない場合はレビューしたhighreso_terms_fallback=trueと新policy版で切替を記録する。redirectや同一runの4要求目は認めず、再取得には明示登録・日次予算を確認する。
+- [ ] Highresoは11/1 00:00 JSTより前にterms_sha256、以降は確認済み新版のnext_terms_sha256を使用する。URLは/termsが第一。新版が/5401872にしかない場合はレビューしたhighreso_terms_fallback=trueと新policy版で切替を記録する。redirectや同一runの4要求目は認めず、再取得には明示登録・日次予算を確認する。 2026-11-01T03:13ZのKaz承認で設定切替を記録済み（[詳細](#terms-fallback-20261101)）。remote登録・配備・再取得の完了を示すものではない。
 - [ ] 保存モード・期間・根拠、実際のTime Travel日数（7/30）、backup上限、R2 lifecycleを確認しretentionのreview refを埋める。target_daysは許諾ではない。research-control/を短期lifecycleから除外し、取消し・削除マーカーを復元でも巻き戻さない。
 - [ ] 各runのimmutable config_versionsと保持snapshotが保存されることを確認する。設定変更後の保守は保存版で行い、期限は延長しない。旧履歴への読取許可は現行権利・history_accessで独立に審査する。新config取得には新policy版とadoptReviewedResearchConfigの明示更新が必要。Cronはこの権限更新を自動化しない。
 - [ ] 最終設定でassertResearchAllowedが通ることを確認する。source.enabled、所有者承認、wire、独立した各権利、規約指紋、保存環境の全検査が必要。新grant、Secrets/権限拡大、ドメイン/Access、公開範囲拡大、費用増は個別にKazの承認を得る。
@@ -304,3 +304,14 @@ pnpm exec wrangler rollback 8c4dd812-6372-4bb5-ab28-5dcd8608f954 -c wrangler.api
 - [ ] 必要なら`research/highreso_public/`だけに365日以内の削除ルールを確認/設定する（無料、設定は翌朝のみ）。既存の7日ルールなら短いままでよい。証拠保持設定が7日なので、365日lifecycleだけに期限保証を任せず、Cronの7日証拠削除とbacklogを確認する。lifecycleは補助であり期限ちょうどの削除を保証しない。
 - [ ] `research-control/`（revocations/deletions/maintenance）は別prefix。取消し/削除マーカーを短期lifecycle・包括bucketルール・復元で消さない。包括ルールがcontrolを消すならtrueへ切り替えず、既存データを保護するprefix分離をレビューしてから直す。
 - [ ] 対象prefix、日数、control除外、変更の有無を記録する。R2の有料機能/プラン変更、新サービス、新しいbackup exportは追加しない。Cloudflare全3repo合算の月額20ドル超の見込みなら作業を止めてKazへ相談する。
+
+<a id="terms-fallback-20261101"></a>
+## 2026-11-01 Highreso規約fallbackの設定変更
+
+承認ref: **Kaz owner approval 2026-11-01T03:13Z**。`/terms`が旧文面のままのため、既存`public_access.highreso_terms_fallback=true`を選び、policyを`highreso_public-20261101-private-v5`へ更新した。新旧の保存HTMLを既存`termsFingerprint`で再計算し、上記wire記録の両指紋との一致を確認。指紋・権利・fields・scope・保持期間・公開範囲の変更はない。
+
+- [x] 設定と承認根拠を更新し、生HTMLはGitに含めない。
+- [ ] 配備後、既存`adoptReviewedResearchConfig`相当の全ゲートを確認し、旧hash `624ba4bf299b416d71bf4f9bf4b9ea6c72bbab70b02460cf6d6426caa47a2d61`から明示登録する。既存runner／Admin書込口はなく、Cronは自動更新しない。
+- [ ] 次の取得可能slotで結果を確認する。2026-10-31T18:17Zの旧runが存在する同UTC日は、新policyでも`research_one_run_per_day`により新runを作れない。6時間の取得窓も維持する。
+
+この作業ではdeploy・remote操作・実HTTPを行わない。取得予算は2026-10-23承認の最大3 sequence/run（各robots・規約・価格の最大3 HTTP、合計最大9 HTTP）で、切替による追加要求や予算リセットはない。旧runのID・hash・失敗記録・保持期限・外部制御マーカーは維持する。
