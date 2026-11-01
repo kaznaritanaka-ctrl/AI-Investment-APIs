@@ -61,9 +61,9 @@ test('keeps OS and storage changes separate and rejects unknown/ambiguous OS', a
 });
 
 test('stages v3 separately, preserving rights, scope, retention and the exact old config hash', async () => {
-  const original = JSON.parse(
-    readFileSync('config/proposals/research/highreso_public.json', 'utf8'),
-  );
+  // The proposal approves access to v4 history, not to whichever config is current.
+  // This snapshot is the Highreso config from main at 1bdcef2.
+  const original = JSON.parse(readFileSync('config/history/highreso_public.v4.json', 'utf8'));
   const candidate = JSON.parse(readFileSync('config/proposals/highreso-stable-key.json', 'utf8'));
   const compiled = await build({
     entryPoints: ['src/canonical.ts'],

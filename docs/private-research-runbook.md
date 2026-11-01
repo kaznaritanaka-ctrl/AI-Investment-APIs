@@ -12,6 +12,17 @@
 
 sourceのfull config hashと各版をresearch_sources / research_config_versionsへ記録する。同一policy版の変更では再開を拒否する。ローカルの `adoptReviewedResearchConfig` は現行hash、新policy版、同一source/adapter/scope/fieldsを検査する。enabled版は全取得権を要求する。disabled版はownerのunknown/denied評価も記録できるが、利用許可ではない。過去版のreadには `history_access` のhash/承認根拠と現行権利/termsが必要で、過去runの期限を伸ばさない。
 
+### レビュー済み設定の登録runner
+
+`scripts/research-config-adopt.mjs` は実際の `adoptReviewedResearchConfig` を呼び、Wranglerでremote private D1を読み書きする。取消しマーカーはR2のGETで存在だけを調べ、本文を表示しない。不在応答の場合は `r2 bucket info --json` でも対象バケットを確認し、照会失敗なら停止する（権限は追加しない）。本番feature flagは `wrangler.collector.jsonc` のvarsから読む。最初は書込みなしのdry-runで、新hash、現行登録行、実行予定のSQLと値を確認する。設定本文は表示せず、そのhashのみ表示する。dry-runもremote D1/R2を読むため、本手順の例は将来のレビュー・実行許可後に使う。
+
+```sh
+node scripts/research-config-adopt.mjs CONFIG --expected-current-hash HASH --dry-run
+node scripts/research-config-adopt.mjs CONFIG --expected-current-hash HASH --apply
+```
+
+`--dry-run` は省略時の既定で、書込みには `--apply` が必要。現行hashが期待値と異なる場合や権利・期限・取消しなどの検査に失敗した場合は停止する。同じ新hashとpolicy版が登録済みなら `already adopted` と表示し書き込まない。Highreso v4からv5への期待する旧hashは `624ba4bf299b416d71bf4f9bf4b9ea6c72bbab70b02460cf6d6426caa47a2d61`、新hashは `7748971426b6c150d62ed6e85264dc6d987a56b0be5ccc94e533d55fc3ed4f9f`。将来のHighreso v3 identity設定も同じrunnerを使い、その時点の現行hashと `history_access` の承認・範囲を検証する。登録だけで過去履歴への新たなアクセス権は生じない。
+
 収集のdisabledと過去履歴の権利停止は別。disabledなら新規取得不可だが、現行のprivate_storage/internal_analysis・terms・期間・保持が有効なら履歴は読める。source suspended、権利失効、config/terms不一致、R2取消し/削除記録は読取を遮断する。公開経路には接続しない。
 
 ## 保存と復旧
