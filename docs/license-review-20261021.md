@@ -52,3 +52,9 @@ Highresoは2026-10-31T15:00Z（11/1 00:00 JST）以降も`/terms`を第一候補
 ## 22:45 JST承認後の更新
 
 13:45Zの最新承認を準備承認より優先する。Highresoの生HTML/robotsは呼び出し側が13:46ZにPUBLIC_GPU_UAで取得済みのwork/live内ファイルからオフライン検証した。現行/新版規約のtermsFingerprintと価格48観測のwire確認は完了し、設定へ指紋を記録した。[wire確認の詳細](private-gpu-deploy-checklist.md#wire-20261021)を現在の状態とする。以前の「terms_sha256=null」「両候補allowed」は21:06の準備時点の記録。Rebroは最新決定で見送り、再開承認はない。R2実ルールの確認は翌朝の未完了項目であり、今回Cloudflareへ接続・変更していない。
+
+## 2026-11-01 Highreso規約URL切替の承認記録
+
+Kazが2026-11-01T03:13Z（12:13 JST）に既存fallbackの有効化を承認。提示された2026-10-31T18:17Z runは`public_gpu_terms_review_required`で0行だった。呼び出し側の保存済みHTMLを既存`termsFingerprint`でオフライン再計算し、`/terms`は旧指紋`4ce6d0b8842660a4844dee2ce13ab7072e8f06957e433dc18566ddb45f3bcb3e`、固定URL`https://soroban.highreso.jp/5401872`は承認済み新版指紋`dedccccce1277fd21a361d066bf81655314bc639cfc8c0a3e222c8c650baef49`と一致した。本文はGitへ含めない。
+
+`highreso_terms_fallback=true`と新policy版`highreso_public-20261101-private-v5`を設定し、既存の指紋・権利・field・scope・保持・private_onlyを維持する。これは設定変更の記録であり、deployやremote D1登録は実施していない。取得前に`adoptReviewedResearchConfig`の明示登録が必要。旧runがあるUTC日の新runはDBの1日1run制約で拒否され、policy更新で予算は復活しない。[切替チェック記録](private-gpu-deploy-checklist.md#terms-fallback-20261101)を参照。
