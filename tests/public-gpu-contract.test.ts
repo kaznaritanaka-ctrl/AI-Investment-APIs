@@ -15,7 +15,11 @@ import {
   termsFingerprint,
 } from '../src/research/public-gpu-html';
 import { fetchPublicGpuPage } from '../src/research/public-gpu-network';
-import { publicGpuEndpoints, PUBLIC_GPU_UA } from '../src/research/public-gpu-contract';
+import {
+  publicGpuEndpoints,
+  publicGpuTermsReview,
+  PUBLIC_GPU_UA,
+} from '../src/research/public-gpu-contract';
 import {
   assessResearchRetention,
   plusDays,
@@ -280,6 +284,42 @@ describe('fixed public GPU HTML contracts (entirely synthetic)', () => {
       expect(new Headers(init?.headers).has('authorization')).toBe(false);
     }
     expect(new Headers(fetcher.mock.calls[2][1]?.headers).get('accept')).toBe('text/html');
+  });
+  it.each(['2026-10-31T15:00:00.000Z', '2026-11-04T05:05:00.000Z'])(
+    'selects /terms and the reviewed November fingerprint from the approved switch config at %s',
+    (at) => {
+      const c = ResearchConfigSchema.parse(highreso);
+      expect(c.public_access!.highreso_terms_fallback).toBe(false);
+      expect(c.source.policy.version).toBe('highreso_public-20261104-private-v6');
+      expect(publicGpuTermsReview('highreso_public', c.public_access!, at)).toEqual({
+        url: 'https://soroban.highreso.jp/terms',
+        sha256: 'dedccccce1277fd21a361d066bf81655314bc639cfc8c0a3e222c8c650baef49',
+      });
+      expect(c.public_access!.next_terms_sha256).toBe(
+        publicGpuTermsReview('highreso_public', c.public_access!, at).sha256,
+      );
+    },
+  );
+  it('rejects a redirected terms response after the switch without fetching the price page', async () => {
+    const c = await publicGpuSource();
+    c.public_access!.highreso_terms_fallback = highreso.public_access.highreso_terms_fallback;
+    const original = gpuFetcher('highreso_public');
+    const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) =>
+      String(url).endsWith('/terms')
+        ? new Response(null, {
+            status: 301,
+            headers: { location: 'https://soroban.highreso.jp/5401872' },
+          })
+        : original(url, init),
+    );
+    await expect(
+      fetchPublicGpuPage(c, { fetcher, now: () => '2026-11-04T05:05:00.000Z' }),
+    ).rejects.toThrow('redirect_blocked');
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      publicGpuEndpoints.highreso_public.robots,
+      publicGpuEndpoints.highreso_public.terms,
+    ]);
+    for (const [, init] of fetcher.mock.calls) expect(init?.redirect).toBe('manual');
   });
   it('prefers /terms after November with the reviewed new fingerprint; notice is an explicit bounded fallback', async () => {
     const c = await publicGpuSource();

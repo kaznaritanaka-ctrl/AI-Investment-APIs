@@ -315,3 +315,10 @@ pnpm exec wrangler rollback 8c4dd812-6372-4bb5-ab28-5dcd8608f954 -c wrangler.api
 - [ ] 次の取得可能slotで結果を確認する。2026-10-31T18:17Zの旧runが存在する同UTC日は、新policyでも`research_one_run_per_day`により新runを作れない。6時間の取得窓も維持する。
 
 この作業ではdeploy・remote操作・実HTTPを行わない。取得予算は2026-10-23承認の最大3 sequence/run（各robots・規約・価格の最大3 HTTP、合計最大9 HTTP）で、切替による追加要求や予算リセットはない。旧runのID・hash・失敗記録・保持期限・外部制御マーカーは維持する。
+
+<a id="terms-switch-20261104"></a>
+## 2026-11-04 Highreso規約URLの切替
+
+承認ref: **Kaz owner approval 2026-11-04T04:59Z**。呼び出し側が2026-11-04T05:05Zに`PUBLIC_GPU_UA`を使い、redirect無効で確認したところ、廃止された`/5401872`は`/terms`へ301、`/terms`は200を返した。`/terms`の`termsFingerprint`はレビュー済み`next_terms_sha256`の`dedccccce1277fd21a361d066bf81655314bc639cfc8c0a3e222c8c650baef49`と一致した。
+
+`public_access.highreso_terms_fallback=false`、policy `highreso_public-20261104-private-v6`へ切り替える。redirectは引き続き許可せず、権利・fields・scope・保持期間・非公開限定は変更しない。この記録はremote登録・配備・再取得の完了を示さない。
