@@ -26,7 +26,8 @@
       "2026-10-21 license review: Caller obtained raw HTML/robots with PUBLIC_GPU_UA at 2026-10-21T13:46Z; prior terms assessment found no explicit automated-collection prohibition. Kaz approved Highreso only at 2026-10-21T13:45Z. No redistribution permission; all publication, redistribution, external LLM processing and AI training denied.",
       "Wire and HTML fingerprints reviewed offline from caller-supplied responses. Production flag remains false; real R2 lifecycle and deployment checks are required the following morning.",
       "Reviewed current terms (revision 2025-09-30) and https://soroban.highreso.jp/5401872 (revision 2026-08-27; effective 2026-11-01, overseas users 2026-08-27). No automatic review expiry at the transition; changed live fingerprints still require reviewed configuration.",
-      "Kaz owner approval 2026-11-01T03:13Z: use the already reviewed https://soroban.highreso.jp/5401872 terms via public_access.highreso_terms_fallback=true because /terms still serves the old fingerprint after the effective date. Offline caller-supplied 2026-11-01 HTML matches both existing reviewed fingerprints. Rights, fields, scope, retention and private-only visibility are unchanged; explicit config adoption and existing daily limits remain mandatory."
+      "Kaz owner approval 2026-11-01T03:13Z: use the already reviewed https://soroban.highreso.jp/5401872 terms via public_access.highreso_terms_fallback=true because /terms still serves the old fingerprint after the effective date. Offline caller-supplied 2026-11-01 HTML matches both existing reviewed fingerprints. Rights, fields, scope, retention and private-only visibility are unchanged; explicit config adoption and existing daily limits remain mandatory.",
+      "Kaz owner approval 2026-11-04T04:59Z: /5401872 was retired with 301 to /terms; caller verification at 2026-11-04T05:05Z with PUBLIC_GPU_UA and redirects disabled found /terms returns 200 and termsFingerprint equals the reviewed next_terms_sha256 dedccccce1277fd21a361d066bf81655314bc639cfc8c0a3e222c8c650baef49. Set public_access.highreso_terms_fallback=false; redirects remain disallowed. Rights, fields, scope, retention and private-only visibility are unchanged."
     ],
     "enabled": true,
     "adapter": "candidate",
@@ -34,7 +35,7 @@
     "max_bytes": 1000000,
     "max_records": 48,
     "policy": {
-      "version": "highreso_public-20261101-private-v5",
+      "version": "highreso_public-20261104-private-v6",
       "rights": {
         "automated_collection": "allowed",
         "private_storage": "allowed",
@@ -64,7 +65,8 @@
         "Kaz owner approval 2026-10-21T13:45Z; docs/private-gpu-deploy-checklist.md#approval-20261021",
         "docs/license-review-20261021.md#gpusoroban",
         "docs/private-gpu-deploy-checklist.md#wire-20261021",
-        "Kaz owner approval 2026-11-01T03:13Z; docs/private-gpu-deploy-checklist.md#terms-fallback-20261101"
+        "Kaz owner approval 2026-11-01T03:13Z; docs/private-gpu-deploy-checklist.md#terms-fallback-20261101",
+        "Kaz owner approval 2026-11-04T04:59Z; docs/private-gpu-deploy-checklist.md#terms-switch-20261104"
       ]
     }
   },
@@ -122,7 +124,7 @@
     "robots_decision": "allowed",
     "reviewed_ref": "docs/private-gpu-deploy-checklist.md#wire-20261021",
     "next_terms_sha256": "dedccccce1277fd21a361d066bf81655314bc639cfc8c0a3e222c8c650baef49",
-    "highreso_terms_fallback": true
+    "highreso_terms_fallback": false
   },
   "maintenance": {
     "collection_stopped": false,
