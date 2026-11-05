@@ -138,7 +138,7 @@
 
 月曜の固定slotと既存DBの1 source/UTC日1 run制約を合わせ、週1 runに限定する。同じslotの再配送・失敗再開も同じrunと永続通信カウンターを使い、総HTTP要求は**robotsを含め3回まで**。完了runの再配送はHTTPなし。slotから6時間を超えた取得、他曜日・別時刻・watchdog/continuationによる取得は拒否する。合成テスト専用JSONの複数page受入は本番の1page設定とは別。
 
-各runで最初に固定originのrobots.txtを取り直す。既存の正直な`PUBLIC_GPU_UA`を使用し、UA別ルール、最長path、同長Allow優先、wildcardと末尾一致を評価する。404/410はrobots未設置、403/5xx/壊れたrobots/redirectは拒否。全対象pathの許可を確認してから事前登録された一次URLだけをGETし、同一hostを含めredirectは一切追従しない。source本文のURL・指示は追わない。timeoutは要求当たり最大15秒、robotsは16KiB、ページはsource.max_bytesか128KiBの小さい方まで。超過は切捨て成功にせず停止する。最大2ページ＋robotsで3要求、再試行の予算も永続カウンターに含む。規約本文の毎週GETは行わず、提供済み規約評価とterms.review_afterゲートを使う。
+各runで最初に固定originのrobots.txtを取り直す。既存の正直な`PUBLIC_GPU_UA`を使用し、UA別ルール、最長path、同長Allow優先、wildcardと末尾一致を評価する。404/410はrobots未設置、403/5xx/壊れたrobots/redirectは拒否。全対象pathの許可を確認してから事前登録された一次URLだけをGETし、同一hostを含めredirectは一切追従しない。source本文のURL・指示は追わない。timeoutは要求当たり最大15秒、robotsは16KiB、ページはsource.max_bytesか512KiBの小さい方まで（source別設定は[2026-11-06のサイズ変更](#dc-size-20261106)参照）。超過は切捨て成功にせず停止する。最大2ページ＋robotsで3要求、再試行の予算も永続カウンターに含む。規約本文の毎週GETは行わず、提供済み規約評価とterms.review_afterゲートを使う。
 
 live adapterは**開示ページ確認のdraft**だけを作る。HTMLはtitleとraw bytesのSHA-256、PDFは形式確認とhashのみを記録し、本文全体は保存しない。公表日・容量・進捗・資金調達は自動推定しない。`field=disclosure`は引用nullを許し、PDFから架空の引用を作らない。他の事実項目の引用要件は維持する。変更判定では取得日の違いだけで開示内容の訂正としない。固定URLの再確認であり、新着一覧の探索やPDFの事実抽出は未実装。未承認はdraftのままで、Kazの回答を代行・自動承認しない。
 
@@ -161,3 +161,44 @@ Highresoと同じfixed_days=365、evidence_days=7、archive_days=0、backup/time
 - **必須検証は未完了**。通常DC統合、全件`pnpm test --bail 1`（既存price-of-compute統合の起動時）、`pnpm test:runtime`はsandboxの`listen EPERM 127.0.0.1`で失敗。実行可能な環境で全件とruntimeを再実行するまで全合格・配備準備完了とはしない。
 - Claudeとの相互レビューは今回未実施（ネットワーク禁止の作業範囲）。§12の過去のNot logged in記録も、レビュー承認の代わりにはしない。相互レビュー条件は緩めない。
 - コミット・stageは指示どおり試行せず、変更はbranch `codex/dc-sources`のworking treeへ残した。deploy、remote D1、live smoke、Secrets、NASの変更0。実行ログはGit対象外の`work/dc-sources-*.log`。
+
+
+<a id="dc-size-20261106"></a>
+
+## 14. 2026-11-06 DC応答サイズ上限の変更
+
+2026-11-02 18:17 UTCの週次runでは、`dc_softbank`、`dc_sakura`、`dc_edgeconnex`が旧128KiB上限を超えて`response_too_large`となり、各sourceは観測0件のpartialだった。他の5社はcompleteだった。失敗した3社だけ`source.max_bytes`を512KiBに変更し、他の5社は128KiBを維持する。DCコードの上限も512KiBとし、設定がそれを超えることはできない。robotsの16KiB上限は変えない。
+
+この変更は応答サイズの技術的な上限だけを変更する。権利、対象、保持条件は変更せず、証跡は従来の投影のみで本文全体を保存しない。PDFは引き続きテキストとして解釈せず、形式確認とhashに使う。超過時は読取を中断し、部分内容を成功扱いしない。
+
+登録済み3社は設定hashの変更を反映するadoptが必要であり、`research_config_versions`のsource/policy版一意制約に従い`policy.version`のみ更新した。Highreso v5/v6と同様に、`terms.version`・`policy.evidence_version`と確認日・根拠は据え置く。adoptのdry-runもremoteを参照するため今回実行していない。次回の週次slotは2026-11-09 18:17 UTC（11月10日03:17 JST）。本変更だけで次回の実取得成功を確認したことにはならない。
+
+### 設定の採用とhash
+
+`collectResearchPage`は登録済み`research_sources.config_hash`と実行設定のhashを照合し、不一致はHTTP前に`research_policy_changed`で停止する。新しいCollectorの配備だけでは直らない。相互レビュー・検証後、取得と競合しない時間に3設定それぞれのremote dry-runを確認し、同じ設定を`--apply`でadoptしてからCollectorを配備する。他5社のadoptやmigrationは不要。今回の範囲ではremote照会・adopt・配備・pushを一切実行していない。
+
+`scripts/research-config-adopt.mjs`の実処理`runResearchConfigAdoption`は、既存の`DC_TRACKER_ENABLED`を使って全8社のdry-runに対応し、スクリプト修正は不要だった。production設定・模擬D1/R2を使い、同じ処理が書込みゼロで返す`new_hash`を以下に記録した。旧hashはこのbranchの基点`e69e8bf`から計算した期待値であり、本番の登録行を今回読み直した値ではない。本番の現行hashが異なれば停止して再確認する。
+
+| source_id | 期待する旧hash | 新hash |
+|---|---|---|
+| dc_softbank | `8ed3da8d4b9d43d29b3f140d126170315f1406159c3d99ad49cfca35b0679318` | `0bab2dc516e85d2314a8920123542152e6910b53cd6c4749e0d03c0c6de677d6` |
+| dc_sakura | `3c45174d2e23d23efb83928cae6bad7ee853d8f5d2371a39ccac292b16f48b3d` | `b18689243279907e4b2afb94e5b4d895e7435b6f9e29bcfa266d584e06ca499a` |
+| dc_edgeconnex | `6371884d2e8e5e309f67b3b6aeb8d251e9a333bec886c722865c0e374772efe3` | `68371041cb6f7922c1097cabe77e9cc7d3c1bfba87ec0239fbe6f72c3d709a0d` |
+
+新policy版は各`source_id-20261106-private-v2`。権利・fields・scope・retention・history_accessは元設定と一致する。過去runの期限は延長せず、古い週の失敗runを再取得しない。
+
+### 証跡・CPU・メモリーと手動実行
+
+受信したraw bytesはハッシュ計算とHTMLのtitle抽出、PDF先頭5バイトの形式確認にだけ使い、R2 envelopeには許可済みの投影だけを入れる。PDFのbase64も保存しない。`parseDCTracker`が読むのもこの投影JSONであり、128KiB上限を維持する。`pipeline.ts`の保存前・再読込・同時書込競合後の全envelope上限も128KiBのまま。
+
+HTMLのtitle抽出は、閉じない`<title`が多数あっても同じ範囲を繰り返し走査しない方式にした。ページを逐次処理し、保持する受信chunkと結合bytesは各最大512KiB、復号したHTMLも最大約1MiBで、ページ全体を並列で蓄積しない。PDF解析ライブラリーは追加しない。128MBメモリー、`cpu_ms=5000`、料金プラン、サービス、bindingsは変更していない。
+
+Node v24.22.1の合成計測（1 runに512KiBの2ページ、各20回）では、プロセスCPU最大はHTML 22.399ms、PDF 14.189ms、閉じないtitleのHTML 5.188msだった。ローカルworkerdでも512KiBの3社分がcompleteとなり、R2証跡は約2〜3.3KiB、本文の保持はゼロ。これらは本番CloudflareのCPU実測ではない。
+
+単一sourceを指定する運用用CLI・HTTP/RPCはない。CollectorのHTTPは404、`runDCTracker`は全8社を順番に処理する。内部関数`collectResearchPage`へ1社の設定を渡すことはできるが、既存の権利・hash・取消し確認、月曜18:17 UTCのslot、6時間の取得期限、1 source/UTC日1 run、robots込み3要求の永続上限をすべて満たす必要がある。任意日に安全に再取得する手動コマンドとしては提供しておらず、今回は手動取得を行っていない。
+
+### ローカル検証結果
+
+`pnpm check`、`pnpm test`（60ファイル・695件＋Node 13件）、`pnpm test:runtime`、`pnpm build`（Collector/API dry-runのみ）、`pnpm preflight`（offline、ready=true、network_performed=false）、生成schema/OpenAPI再生成一致、`git diff --check`が成功。最終設定で関連3ファイル38件も再確認した。139/186-PDF/162KiBの合成応答、HTML/PDF各512KiBの成功、512KiB超のContent-Length拒否とstream即時cancel、設定上限、robots16KiB、他5社128KiB、登録hash不一致のHTTP前停止、明示adopt後の保存・再配送、全8社のproduction dry-runを含む。workerdでは3社の512KiB応答と証跡の小ささ・本文非保存を確認し、既存の1051 GPU listingsと50/250/1000 Modelsの検証も通過した。実sourceへのHTTPとCloudflareへの照会はゼロ。
+
+Claude Code `claude-sonnet-5-5`の相互レビューは認証未設定（`Not logged in`）で未完了。追加API課金への切替は行わず、レビュー承認・merge・deployは後続作業に残す。

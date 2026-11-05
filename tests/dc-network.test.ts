@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dcResearchConfigs } from '../src/research/dc-sources';
 import { dcRobotsAllowed, fetchDCTrackerPage } from '../src/research/dc-network';
 import { dcTrackerTurn } from '../src/research/dc-collector';
-import { dcCollectionSlot } from '../src/research/dc-contract';
+import { DC_MAX_RESPONSE_BYTES, dcCollectionSlot } from '../src/research/dc-contract';
 import { assertResearchConfigExecution } from '../src/research/execution';
 import {
   assertResearchAllowed,
@@ -13,6 +13,7 @@ import {
 import { parseDCTracker } from '../src/research/dc-tracker-schema';
 import { PUBLIC_GPU_UA } from '../src/research/public-gpu-contract';
 import highresoGPU from '../config/proposals/research/highreso_public.json';
+import { dcSizeBody, dcSizeCases, dcSizeMarker, dcSizeTitle } from './dc-size-helpers';
 const monday = '2026-10-26T18:17:00.000Z';
 const config = () => structuredClone(dcResearchConfigs[0]);
 const response = (body: string, type = 'text/html', status = 200) =>
@@ -227,7 +228,7 @@ describe('approved DC sources and bounded synthetic transport (no network)', () 
   it('accepts robots 404, refuses page redirect and enforces byte cap during streaming', async () => {
     for (const page of [
       new Response(null, { status: 302, headers: { location: 'https://other.test/page' } }),
-      response('x'.repeat(131073)),
+      response('x'.repeat(DC_MAX_RESPONSE_BYTES + 1)),
     ]) {
       const fetcher = vi.fn(async () =>
         fetcher.mock.calls.length === 1 ? response('not found', 'text/plain', 404) : page,
@@ -235,6 +236,120 @@ describe('approved DC sources and bounded synthetic transport (no network)', () 
       await expect(fetchDCTrackerPage(config(), { fetcher, now: () => monday })).rejects.toThrow();
       expect(fetcher).toHaveBeenCalledTimes(2);
     }
+  });
+  it.each(dcSizeCases)('accepts $source response bytes=$bytes ($type)', async (sample) => {
+    const c = structuredClone(dcResearchConfigs.find((c) => c.source.source_id === sample.source)!);
+    const body = dcSizeBody(sample.bytes, sample.type);
+    const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+      String(url).endsWith('/robots.txt')
+        ? response('', 'text/plain', 404)
+        : new Response(body, { headers: { 'content-type': sample.type } }),
+    );
+    const result = await fetchDCTrackerPage(c, { fetcher, now: () => monday });
+    const page = await parseDCTracker(c, result.text, 0);
+    expect(page.coverage).toBe('complete');
+    expect(page.records).toHaveLength(c.dc_access!.projects.length);
+    expect(page.records[0].evidence_sha256).toBe(
+      Buffer.from(await crypto.subtle.digest('SHA-256', body)).toString('hex'),
+    );
+    expect(page.records[0].value_text).toBe(sample.type === 'text/html' ? dcSizeTitle : null);
+    expect(result.text).not.toContain(dcSizeMarker);
+    expect(new TextEncoder().encode(result.text).length).toBeLessThan(131072);
+    expect(fetcher).toHaveBeenCalledTimes(1 + c.dc_access!.projects.length);
+  });
+  it.each(['text/html', 'application/pdf'])('accepts exactly 512 KiB of %s', async (type) => {
+    const body = dcSizeBody(DC_MAX_RESPONSE_BYTES, type);
+    const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+      String(url).endsWith('/robots.txt')
+        ? response('', 'text/plain', 404)
+        : new Response(body, {
+            headers: { 'content-type': type, 'content-length': String(body.byteLength) },
+          }),
+    );
+    const result = await fetchDCTrackerPage(config(), { fetcher, now: () => monday });
+    expect((await parseDCTracker(config(), result.text, 0)).coverage).toBe('complete');
+  });
+  it.each(['text/html', 'application/pdf'])(
+    'cancels %s immediately on oversized content-length or streamed bytes',
+    async (type) => {
+      for (const advertised of [true, false]) {
+        let reads = 0;
+        const cancel = vi.fn();
+        const stream = new ReadableStream<Uint8Array>(
+          {
+            pull(controller) {
+              reads++;
+              // Two reads cross the cap; a third must never be requested.
+              controller.enqueue(new Uint8Array(reads === 1 ? DC_MAX_RESPONSE_BYTES : 1));
+            },
+            cancel,
+          },
+          { highWaterMark: 0 },
+        );
+        const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+          String(url).endsWith('/robots.txt')
+            ? response('', 'text/plain', 404)
+            : new Response(stream, {
+                headers: {
+                  'content-type': type,
+                  ...(advertised ? { 'content-length': String(DC_MAX_RESPONSE_BYTES + 1) } : {}),
+                },
+              }),
+        );
+        await expect(fetchDCTrackerPage(config(), { fetcher, now: () => monday })).rejects.toThrow(
+          'response_too_large',
+        );
+        expect(reads).toBe(advertised ? 0 : 2);
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(fetcher).toHaveBeenCalledTimes(2);
+      }
+    },
+  );
+  it('keeps the robots and unchanged sources at their original byte limits', async () => {
+    const fetcher = vi.fn(async () => response('x'.repeat(16385), 'text/plain'));
+    await expect(fetchDCTrackerPage(config(), { fetcher, now: () => monday })).rejects.toThrow(
+      'response_too_large',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    for (const c of dcResearchConfigs.filter(
+      (c) => !dcSizeCases.some((s) => s.source === c.source.source_id),
+    )) {
+      expect(c.source.max_bytes).toBe(131072);
+      const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+        String(url).endsWith('/robots.txt')
+          ? response('', 'text/plain', 404)
+          : response('x'.repeat(131073)),
+      );
+      await expect(fetchDCTrackerPage(c, { fetcher, now: () => monday })).rejects.toThrow(
+        'response_too_large',
+      );
+    }
+  });
+  it('rejects config above the hard ceiling before HTTP and keeps projections bounded', async () => {
+    const c = config();
+    c.source.max_bytes = DC_MAX_RESPONSE_BYTES + 1;
+    const fetcher = vi.fn();
+    expect(ResearchConfigSchema.safeParse(c).error?.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: 'dc_tracker_live_scope_invalid' }),
+      ]),
+    );
+    await expect(fetchDCTrackerPage(c, { fetcher, now: () => monday })).rejects.toThrow();
+    expect(fetcher).not.toHaveBeenCalled();
+    await expect(parseDCTracker(config(), ' '.repeat(131073), 0)).rejects.toThrow(
+      'response_too_large',
+    );
+  });
+  it.each([
+    ['<title '.repeat(Math.ceil(DC_MAX_RESPONSE_BYTES / 7)).slice(0, DC_MAX_RESPONSE_BYTES), null],
+    ['<title>x<b>invalid</b></title><TITLE class="x"> Valid title </TITLE>', 'Valid title'],
+    ['<title>  </title><title>Later</title>', null],
+  ])('handles malformed or repeated title markup in a bounded scan', async (html, title) => {
+    const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+      String(url).endsWith('/robots.txt') ? response('', 'text/plain', 404) : response(html!),
+    );
+    const result = await fetchDCTrackerPage(config(), { fetcher, now: () => monday });
+    expect((await parseDCTracker(config(), result.text, 0)).records[0].value_text).toBe(title);
   });
   it('captures PDF hash without decoding its body or inventing a quote, date or capacity', async () => {
     const c = structuredClone(dcResearchConfigs.find((c) => c.source.source_id === 'dc_sakura')!);

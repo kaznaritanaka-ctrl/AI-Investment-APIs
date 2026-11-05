@@ -24,16 +24,17 @@
     "known_limitations": [
       "200; no news/IR disallow",
       "Owner-approved private research; no public display, redistribution or page text/quotes to external AI",
+      "2026-11-06: response cap raised to 512 KiB; page bodies remain unstored and PDF is not interpreted as text",
       "No live wire verification performed in this implementation; synthetic transport tests only",
       "Draft disclosure capture only; no inferred capacity, progress or financing"
     ],
     "enabled": true,
     "adapter": "candidate",
     "selection": [],
-    "max_bytes": 131072,
+    "max_bytes": 524288,
     "max_records": 20,
     "policy": {
-      "version": "dc_softbank-20261022-private-v1",
+      "version": "dc_softbank-20261106-private-v2",
       "rights": {
         "automated_collection": "allowed",
         "private_storage": "allowed",

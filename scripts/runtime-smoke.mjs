@@ -51,6 +51,14 @@ const bundled = await build({
       .replace(
         'async fetch(request,env){',
         "async fetch(request,env){\nif(new URL(request.url).pathname==='/effectstory')return effectstoryRuntime(env);",
+      )
+      .replace(
+        'export default {',
+        "import {dcSizeRuntime} from './tests/dc-size-runtime-harness';\nexport default {",
+      )
+      .replace(
+        'async fetch(request,env){',
+        "async fetch(request,env){\nif(new URL(request.url).pathname==='/dc-size')return dcSizeRuntime(env);",
       ),
     resolveDir: process.cwd(),
     sourcefile: 'runtime-harness.ts',
@@ -128,6 +136,33 @@ try {
     'Workerd schema drift: authorized evidence preserved, publication held, saved response reparsed offline. Synthetic only.',
   );
   await mkdir('work', { recursive: true });
+  const dcStarted = performance.now();
+  const dcResponse = await mf.dispatchFetch('https://local.test/dc-size');
+  assert.equal(dcResponse.status, 200);
+  const dc = await dcResponse.json();
+  const dcElapsed = performance.now() - dcStarted;
+  assert.equal(dc.sources.length, 3);
+  for (const source of dc.sources) {
+    assert.equal(source.state, 'complete');
+    assert.equal(source.bytes, 524288);
+    assert.equal(source.requests, source.expected_requests);
+    assert.equal(source.observations, source.expected_requests - 1);
+    assert(source.evidence_bytes < 131072);
+    assert.equal(source.retained_body, false);
+  }
+  assert.equal(dc.malformed_title, null);
+  assert.equal(dc.external_http_requests, 0);
+  await writeFile(
+    'work/runtime-dc-size-report.json',
+    JSON.stringify(
+      { ...dc, local_workerd_elapsed_ms: dcElapsed, cloud_cpu_measured: false },
+      null,
+      2,
+    ) + '\n',
+  );
+  console.log(
+    'DC workerd passed: 3 sources at 512 KiB, HTML/PDF hashes, bounded metadata evidence and malformed title. Synthetic only.',
+  );
   await writeFile(
     'work/runtime-recovery-report.json',
     JSON.stringify(

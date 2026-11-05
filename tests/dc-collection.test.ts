@@ -3,6 +3,9 @@ import { localEnv } from '../scripts/local-env';
 import { collectResearchPage } from '../src/research/pipeline';
 import { dcResearchConfigs } from '../src/research/dc-sources';
 import { readDCTracker } from '../src/research/dc-tracker';
+import { hash } from '../src/util';
+import { runResearchConfigAdoption } from '../scripts/research-config-adopt-core';
+import { dcSizeBody, dcSizeCases, dcSizeMarker } from './dc-size-helpers';
 
 const monday = '2026-10-26T18:17:00.000Z';
 const query = { kind: 'dc_tracker' } as const;
@@ -11,6 +14,90 @@ const response = (body: string, status = 200, type = 'text/html') =>
   new Response(body, { status, headers: { 'content-type': type } });
 
 describe('DC weekly runs and durable HTTP budget (synthetic fetch only)', () => {
+  it('requires explicit adoption and retains only small metadata envelopes for the three larger sources', async () => {
+    const { env, mf } = await localEnv();
+    try {
+      for (const sample of dcSizeCases) {
+        const c = dcResearchConfigs.find((c) => c.source.source_id === sample.source)!;
+        const at = '2026-11-09T18:17:00.000Z';
+        const oldHash = await hash('synthetic previous config: ' + sample.source);
+        await env.PRIVATE_DB.prepare(
+          'INSERT INTO research_sources(source_id,policy_version,config_hash) VALUES (?,?,?)',
+        )
+          .bind(sample.source, sample.source + '-20261022-private-v1', oldHash)
+          .run();
+        const body = dcSizeBody(sample.bytes, sample.type);
+        const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+          String(url).endsWith('/robots.txt')
+            ? response('', 404, 'text/plain')
+            : new Response(body, { headers: { 'content-type': sample.type } }),
+        );
+        const opt = {
+          current_terms_version: c.terms.version,
+          now: () => at,
+          allow_network: true,
+          fetcher,
+        };
+        await expect(collectResearchPage(env, c, query, at, opt)).rejects.toThrow(
+          'research_policy_changed',
+        );
+        expect(fetcher).not.toHaveBeenCalled();
+        const dry = await runResearchConfigAdoption({
+          env,
+          config: c,
+          expectedCurrentHash: oldHash,
+          now: at,
+        });
+        expect(dry.status).toBe('dry-run');
+        await expect(collectResearchPage(env, c, query, at, opt)).rejects.toThrow(
+          'research_policy_changed',
+        );
+        const adopted = await runResearchConfigAdoption({
+          env,
+          config: c,
+          expectedCurrentHash: oldHash,
+          now: at,
+          apply: true,
+        });
+        expect(adopted.new_hash).toBe(dry.new_hash);
+        const result = await collectResearchPage(env, c, query, at, opt);
+        expect(result.state).toBe('complete');
+        expect(fetcher).toHaveBeenCalledTimes(1 + c.dc_access!.projects.length);
+        const key = `research/${sample.source}/${result.run_id}/0.json`;
+        const stored = (await env.EVIDENCE.get(key))!;
+        expect(stored.size).toBeLessThan(131072);
+        const encoded = await stored.text();
+        const envelope = JSON.parse(encoded);
+        expect(Object.keys(envelope).sort()).toEqual(
+          [
+            'version',
+            'config_hash',
+            'query_hash',
+            'source_id',
+            'source_policy_version',
+            'terms_version',
+            'method_version',
+            'observed_at',
+            'synthetic',
+            'payload_hash',
+            'page',
+          ].sort(),
+        );
+        expect(envelope.page.records[0].evidence_sha256).toBe(
+          Buffer.from(await crypto.subtle.digest('SHA-256', body)).toString('hex'),
+        );
+        expect(encoded).not.toContain(dcSizeMarker);
+        expect(encoded).not.toContain(Buffer.from(body.subarray(0, 100)).toString('base64'));
+        expect(await readDCTracker(env, c, result.run_id, opt)).toHaveLength(
+          c.dc_access!.projects.length,
+        );
+        expect(await collectResearchPage(env, c, query, at, opt)).toEqual(result);
+        expect(fetcher).toHaveBeenCalledTimes(1 + c.dc_access!.projects.length);
+      }
+    } finally {
+      await mf.dispose();
+    }
+  });
   it('rejects other UTC slots before creating runs or fetching', async () => {
     const { env, mf } = await localEnv();
     try {
