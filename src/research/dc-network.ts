@@ -3,6 +3,31 @@ import { hash, stable } from '../util';
 import { PUBLIC_GPU_UA } from './public-gpu-contract';
 import { assertResearchAllowed, ResearchConfigSchema, type ResearchConfig } from './schema';
 import { DCTrackerRecordSchema, type DCTrackerRecord } from './dc-tracker-schema';
+import { DC_MAX_RESPONSE_BYTES } from './dc-contract';
+
+// Consume each header/text span once. A greedy whole-page title regex can rescan
+// an unterminated tag for every '<title', exceeding the CPU budget on bounded input.
+function pageTitle(html: string): string | null {
+  const opening = /<title\b/gi;
+  const closing = /<\/title\s*>/iy;
+  let match: RegExpExecArray | null;
+  while ((match = opening.exec(html))) {
+    const start = html.indexOf('>', match.index + match[0].length);
+    if (start < 0) return null;
+    const end = html.indexOf('<', start + 1);
+    if (end < 0) return null;
+    closing.lastIndex = end;
+    if (closing.test(html))
+      return (
+        html
+          .slice(start + 1, end)
+          .trim()
+          .slice(0, 500) || null
+      );
+    opening.lastIndex = end;
+  }
+  return null;
+}
 
 // RFC 9309 group selection, longest matching path, Allow wins ties. Unknown/error robots fail closed.
 export function dcRobotsAllowed(text: string, url: string) {
@@ -96,7 +121,7 @@ async function read(config: ResearchConfig, url: string, robots: boolean, opt: N
     const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
     if (!(robots ? type === 'text/plain' : ['text/html', 'application/pdf'].includes(type)))
       return await fail('unexpected_content_type');
-    const cap = Math.min(config.source.max_bytes, robots ? 16384 : 131072);
+    const cap = Math.min(config.source.max_bytes, robots ? 16384 : DC_MAX_RESPONSE_BYTES);
     if (Number(response.headers.get('content-length') ?? 0) > cap)
       return await fail('response_too_large');
     if (!response.body) throw new FetchFailure('empty_response');
@@ -162,7 +187,7 @@ export async function fetchDCTrackerPage(config: ResearchConfig, opt: NetworkOpt
     // Conservative title capture, never a factual capacity/status/financial claim.
     if (page.type === 'text/html') {
       const html = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(page.bytes);
-      title = /<title\b[^>]*>([^<]*)<\/title\s*>/i.exec(html)?.[1]?.trim().slice(0, 500) || null;
+      title = pageTitle(html);
     } else if (new TextDecoder().decode(page.bytes.slice(0, 5)) !== '%PDF-')
       throw new Error('dc_pdf_invalid');
     const disclosure = await hash(project.url);

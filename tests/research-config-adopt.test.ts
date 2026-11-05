@@ -6,6 +6,7 @@ import { runResearchConfigAdoption } from '../scripts/research-config-adopt-core
 import oldConfig from '../config/history/highreso_public.v4.json';
 import newConfig from '../config/proposals/research/highreso_public.json';
 import identityConfig from '../config/proposals/highreso-stable-key.json';
+import { dcResearchConfigs } from '../src/research/dc-sources';
 
 const now = '2026-11-01T03:50:00.000Z';
 type Version = {
@@ -15,8 +16,8 @@ type Version = {
   config_json: string;
 };
 
-async function fake() {
-  const old = ResearchConfigSchema.parse(oldConfig);
+async function fake(input: unknown = oldConfig) {
+  const old = ResearchConfigSchema.parse(input);
   const oldHash = await hash(stable(old));
   const state = {
     current: { config_hash: oldHash, policy_version: old.source.policy.version, suspended: 0 },
@@ -99,6 +100,35 @@ async function fake() {
 }
 
 describe('reviewed research config adoption runner', () => {
+  it.each(dcResearchConfigs.map((config) => [config.source.source_id, config] as const))(
+    'supports %s in production dry-run with the independent DC flag',
+    async (_id, config) => {
+      const old = structuredClone(config);
+      // Model an already registered, earlier policy without granting historical access.
+      old.source.policy.version += '-synthetic-prior';
+      const { env, state, oldHash } = await fake(old);
+      env.PRIVATE_GPU_RESEARCH_ENABLED = 'false';
+      env.DC_TRACKER_ENABLED = 'true';
+      const result = await runResearchConfigAdoption({
+        env,
+        config,
+        expectedCurrentHash: oldHash,
+        now,
+      });
+      expect(result.status).toBe('dry-run');
+      expect(result.new_hash).toBe(await hash(stable(ResearchConfigSchema.parse(config))));
+      expect(result.statements).toHaveLength(2);
+      expect(result.statements[1].bindings).toEqual([
+        config.source.policy.version,
+        result.new_hash,
+        config.source.source_id,
+        oldHash,
+      ]);
+      expect(state.heads).toContain(`research-control/revocations/${config.source.source_id}.json`);
+      expect(state.writes).toBe(0);
+      expect(state.current.config_hash).toBe(oldHash);
+    },
+  );
   it('runs the gates and reports exact parameterized writes without changing the database', async () => {
     const { env, state, oldHash } = await fake();
     const result = await runResearchConfigAdoption({

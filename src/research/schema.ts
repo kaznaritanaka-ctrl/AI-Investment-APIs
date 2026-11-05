@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { SourceSchema } from '../schema';
 import { canCollect, validPolicy } from '../policy';
 import { D, isoDate, isoTime } from '../util';
-import { isDCSource } from './dc-contract';
+import { DC_MAX_RESPONSE_BYTES, isDCSource } from './dc-contract';
 import {
   isPublicGpu,
   publicGpuEndpoints,
@@ -210,7 +210,7 @@ export const ResearchConfigSchema = z
         v.source.authentication_required ||
         v.source.endpoint !== v.source.source_url ||
         projects[0]?.url !== v.source.source_url ||
-        v.source.max_bytes > 131072 ||
+        v.source.max_bytes > DC_MAX_RESPONSE_BYTES ||
         projects.length !== v.scope.project_ids.length ||
         projects.some((p) => {
           const target = new URL(p.url);

@@ -284,6 +284,8 @@ export async function collectResearchPage(
             ? await parsePublicGpu(config, text, observed, synthetic)
             : parseElectricity(config, query, text, pageNumber);
       if (page.records.length > config.limits.page_size) throw new Error('research_page_limit');
+      // DC text/page contain only the reviewed metadata projection and raw-byte hash.
+      // Response bodies (including PDF base64) never enter the retained envelope.
       encoded = stable(
         envelopeSchema.parse({
           version:

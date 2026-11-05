@@ -3,6 +3,7 @@ import { DCEvidenceSchema, DCPhaseSchema, DCProjectSchema, DCSiteSchema } from '
 import { DecimalString } from '../schema';
 import { hash, stable } from '../util';
 import type { ResearchConfig } from './schema';
+import { DC_MAX_PROJECTION_BYTES } from './dc-contract';
 
 const id = z.string().trim().min(1).max(120);
 const quote = z.string().trim().min(1).max(500);
@@ -165,7 +166,11 @@ export const DCTrackerPageSchema = z
 export async function parseDCTracker(config: ResearchConfig, text: string, pageNumber: number) {
   if (config.scope.kind !== 'dc_tracker' || pageNumber < 0 || pageNumber >= config.limits.max_pages)
     throw new Error('dc_tracker_scope_invalid');
-  if (new TextEncoder().encode(text).length > Math.min(config.source.max_bytes, 131072))
+  // This text is the metadata projection, never the downloaded HTML/PDF response.
+  if (
+    new TextEncoder().encode(text).length >
+    Math.min(config.source.max_bytes, DC_MAX_PROJECTION_BYTES)
+  )
     throw new Error('response_too_large');
   const page = DCTrackerPageSchema.parse(JSON.parse(text));
   const offset = pageNumber * config.limits.page_size;

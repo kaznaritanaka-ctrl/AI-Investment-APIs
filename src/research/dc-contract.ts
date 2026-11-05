@@ -1,6 +1,10 @@
 import { isoTime } from '../util';
 import { minuteSlot } from '../run-identity';
 
+// DC response bytes are transient; the retained projection keeps its separate 128 KiB cap.
+export const DC_MAX_RESPONSE_BYTES = 524288;
+export const DC_MAX_PROJECTION_BYTES = 131072;
+
 export const dcSourceIds = [
   'dc_softbank',
   'dc_kddi',
