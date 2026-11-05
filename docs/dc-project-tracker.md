@@ -201,4 +201,4 @@ Node v24.22.1の合成計測（1 runに512KiBの2ページ、各20回）では�
 
 `pnpm check`、`pnpm test`（60ファイル・695件＋Node 13件）、`pnpm test:runtime`、`pnpm build`（Collector/API dry-runのみ）、`pnpm preflight`（offline、ready=true、network_performed=false）、生成schema/OpenAPI再生成一致、`git diff --check`が成功。最終設定で関連3ファイル38件も再確認した。139/186-PDF/162KiBの合成応答、HTML/PDF各512KiBの成功、512KiB超のContent-Length拒否とstream即時cancel、設定上限、robots16KiB、他5社128KiB、登録hash不一致のHTTP前停止、明示adopt後の保存・再配送、全8社のproduction dry-runを含む。workerdでは3社の512KiB応答と証跡の小ささ・本文非保存を確認し、既存の1051 GPU listingsと50/250/1000 Modelsの検証も通過した。実sourceへのHTTPとCloudflareへの照会はゼロ。
 
-Claude Code `claude-sonnet-5-5`の相互レビューは認証未設定（`Not logged in`）で未完了。追加API課金への切替は行わず、レビュー承認・merge・deployは後続作業に残す。
+Codex作業環境内ではClaude Codeが`Not logged in`だったため、作業後に別途Claude Code `claude-sonnet-5-5`（read-only、Opus不使用）で相互レビューを実施し、VERDICT: APPROVE（blockingなし）。非blockingの指摘: Collector deployと3社の`--apply` adoptを2026-11-09 18:17 UTC前に両方完了すること、adopt前に本番`config_hash`が旧hashと一致することを確認すること。
