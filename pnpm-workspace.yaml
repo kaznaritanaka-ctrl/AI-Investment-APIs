@@ -3,5 +3,7 @@ allowBuilds:
   workerd: true
 
 overrides:
-  miniflare>undici: 7.29.1
-  miniflare>sharp: 0.35.4
+  miniflare>undici: 7.30.2
+  miniflare>sharp: 0.35.5
+  vite: 8.3.8
+  source-map-js: 1.2.2
